@@ -1,0 +1,5 @@
+-r requirements.txt
+
+# test requirements
+pytest
+absl-py
