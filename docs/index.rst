@@ -1,5 +1,5 @@
 BrainScale documentation
-=====================
+========================
 
 `BrainScale <https://github.com/brainscale/brainscale>`_ is designed for the scalable online learning of biological spiking neural networks..
 

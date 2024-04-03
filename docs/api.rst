@@ -8,5 +8,6 @@ API Documentation
    apis/base.rst
    apis/layers.rst
    apis/dynamics.rst
+   apis/online_concepts.rst
    apis/online_algorithms.rst
 
