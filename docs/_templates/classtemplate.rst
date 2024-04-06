@@ -7,4 +7,3 @@
 
 .. autoclass:: {{ name }}
     :members:
-

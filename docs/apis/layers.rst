@@ -66,7 +66,7 @@ Activations
     Softmax2d
     LogSoftmax
     Identity
-    SpikeBitwiseOp
+    SpikeBitwise
 
 
 

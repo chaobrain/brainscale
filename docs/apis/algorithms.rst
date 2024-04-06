@@ -13,4 +13,5 @@ Online Learning Algorithms
    :nosignatures:
    :template: classtemplate.rst
 
+    ETraceAlgorithm
     ExpSmDiagRTRL

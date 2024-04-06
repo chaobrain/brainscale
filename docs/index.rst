@@ -39,8 +39,8 @@ Installation
 ----
 
 
-See also the BrainPy ecosystem
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+See also the BDP ecosystem
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 
 - `brainpy <https://github.com/brainpy/BrainPy>`_: The solution for the general-purpose brain dynamics programming.
