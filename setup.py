@@ -74,5 +74,5 @@ setup(
     'Topic :: Scientific/Engineering :: Artificial Intelligence',
     'Topic :: Software Development :: Libraries',
   ],
-  license='GPL-3.0 license',
+  license='Apache-2.0 license',
 )
