@@ -89,21 +89,21 @@ class ETraceOp(object):
     self._fun = fun
     self.stop_behavior: Optional[Callable] = None
 
-  def call(self, x, weight):
+  @functools.partial(jax.jit, static_argnums=0)
+  @wrap_etrace_fun
+  def _call(self, x, weight):
+    return self._fun(x, weight)
+
+  def __call__(self, x: jax.Array, weight: PyTree) -> jax.Array:
     if _stop_param_gradient:
       if self.stop_behavior is None:
-        y = self._fun(x, weight)
+        y = self._call(x, weight)
         y = jax.lax.stop_gradient(y)
       else:
         y = self.stop_behavior(x, weight)
     else:
-      y = self._fun(x, weight)
+      y = self._call(x, weight)
     return y
-
-  @functools.partial(jax.jit, static_argnums=0)
-  @wrap_etrace_fun
-  def __call__(self, x: jax.Array, weight: PyTree) -> jax.Array:
-    return self.call(x, weight)
 
 
 class ETraceParamOp(ETraceParam):

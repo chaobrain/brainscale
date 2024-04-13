@@ -14,4 +14,5 @@ Online Learning Algorithms
    :template: classtemplate.rst
 
     ETraceAlgorithm
-    ExpSmDiagRTRL
+    ExpSmDiagOnAlgorithm
+    DiagOn2Algorithm
