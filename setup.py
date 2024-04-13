@@ -1,3 +1,18 @@
+# Copyright 2024 BDP Ecosystem Limited. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ==============================================================================
+
 # -*- coding: utf-8 -*-
 
 import io
@@ -24,9 +39,9 @@ with io.open(os.path.join(here, 'README.md'), 'r', encoding='utf-8') as f:
   README = f.read()
 
 # installation packages
-packages = find_packages(exclude=["docs*", "tests*", "examples*", "build*",
+packages = find_packages(exclude=["docs*", "tests*", "examples*", "build*", "dev*",
                                   "dist*", "brainscale.egg-info*", "brainscale/__pycache__*",
-                                  "brainscale/__init__.py"])
+                                  "brainscale/__init__.py", ])
 
 # setup
 setup(
@@ -35,7 +50,7 @@ setup(
   description='The Scalable Online Learning Algorithm and Framework for Biological Spiking Neural Networks.',
   long_description=README,
   long_description_content_type="text/markdown",
-  author='BrainPy Team',
+  author='BrainPy Team, Chaoming Wang',
   author_email='chao.brain@qq.com',
   packages=packages,
   python_requires='>=3.9',

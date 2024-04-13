@@ -1,5 +1,5 @@
 <p align="center">
-  	<img alt="Header image of BrainPy - brain dynamics programming in Python." src="https://github.com/brainpy/BrainPy/blob/master/images/logo.png" width=80%>
+  	<img alt="Header image of brainscale." src="https://github.com/brainpy/brainscale/blob/main/docs/_static/brainscale.jpg" width=50%>
 </p> 
 
 
@@ -13,9 +13,7 @@
 </p>
 
 
-[``brainscale``](https://github.com/brainpy/brainscale) implements the core system for the next generation of [``BrainPy``](https://github.com/brainpy/BrainPy) framework. 
-
-
+[``brainscale``](https://github.com/brainpy/brainscale) implements the scalable online learning algorithm and framework for biological spiking neural networks.
 
 ## Installation
 
@@ -29,4 +27,15 @@ pip install brainscale --upgrade
 ## Documentation
 
 The official documentation is hosted on Read the Docs: [https://brainscale.readthedocs.io](https://brainscale.readthedocs.io)
+
+
+## See also the BDP ecosystem
+
+- [``brainpy``](https://github.com/brainpy/BrainPy): The solution for the general-purpose brain dynamics programming.
+
+- [``braincore``](https://github.com/brainpy/braincore): The core system for the next generation of BrainPy framework.
+
+- [``braintools``](https://github.com/brainpy/braintools): The tools for the brain dynamics simulation and analysis.
+
+- [``brainscale``](https://github.com/brainpy/brainscale): The scalable online learning for biological spiking neural networks.
 
