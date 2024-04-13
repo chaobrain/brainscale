@@ -28,8 +28,8 @@ Connections
 
 
 
-Activations
------------
+Activation Layers
+-----------------
 
 .. autosummary::
    :toctree: generated/
@@ -70,8 +70,8 @@ Activations
 
 
 
-Dropout
--------
+Dropout Layers
+--------------
 
 .. autosummary::
    :toctree: generated/
@@ -89,8 +89,8 @@ Dropout
 
 
 
-Normalizations
---------------
+Normalization Layers
+--------------------
 
 .. autosummary::
    :toctree: generated/
@@ -103,8 +103,8 @@ Normalizations
     BatchNorm3d
 
 
-Poolings
---------
+Pooling Layers
+--------------
 
 .. autosummary::
    :toctree: generated/
