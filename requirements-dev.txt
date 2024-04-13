@@ -1,4 +1,5 @@
 -r requirements.txt
+brainpy
 
 # test requirements
 pytest
