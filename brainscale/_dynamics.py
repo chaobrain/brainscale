@@ -15,6 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
+from __future__ import annotations
 from typing import Callable, Union, Optional
 
 import braincore as bc

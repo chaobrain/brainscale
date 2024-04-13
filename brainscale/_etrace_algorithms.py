@@ -19,6 +19,7 @@
 
 # -*- coding: utf-8 -*-
 
+from __future__ import annotations
 import functools
 from typing import Dict, Tuple, Any, Callable, Union, List
 

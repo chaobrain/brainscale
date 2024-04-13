@@ -13,6 +13,7 @@
 # limitations under the License.
 # ==============================================================================
 
+from __future__ import annotations
 import numbers
 import unittest
 from typing import Callable

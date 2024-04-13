@@ -15,6 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
+from __future__ import annotations
 import functools
 from typing import Sequence, Optional
 from typing import Union, Tuple, Callable, List

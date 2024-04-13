@@ -14,6 +14,7 @@
 # ==============================================================================
 
 
+from __future__ import annotations
 import braincore as bc
 from typing import Sequence
 

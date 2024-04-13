@@ -15,6 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
+from __future__ import annotations
 from typing import Any, Dict, Sequence, Union
 
 import braincore as bc

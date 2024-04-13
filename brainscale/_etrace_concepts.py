@@ -16,6 +16,7 @@
 # -*- coding: utf-8 -*-
 
 
+from __future__ import annotations
 import contextlib
 import functools
 from typing import Callable, Sequence, Tuple, List, Optional
