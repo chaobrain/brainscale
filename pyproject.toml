@@ -1,13 +1,13 @@
 [build-system]
-requires = ["setuptools", 'brainscale', 'braintools']
+requires = ["setuptools", 'braincore', 'braintools']
 build-backend = "setuptools.build_meta"
 
 
 [tool.setuptools.packages.find]
 exclude = [
-    "docs*", "tests*", "examples*", "build*", "dist*",
+    "docs*", "tests*", "examples*", "build*", "dist*", "dev*",
     "brainscale.egg-info*", "brainscale/__pycache__*",
-    "brainscale/__init__.py"
+    "brainscale/__init__.py",
 ]
 
 
@@ -19,7 +19,7 @@ universal = true
 name = "brainscale"
 description = "The Scalable Online Learning Algorithm and Framework for Biological Spiking Neural Networks."
 readme = 'README.md'
-license = { text = 'GPL-3.0 license' }
+license = { text = 'Apache-2.0 license' }
 requires-python = '>=3.9'
 authors = [{ name = 'BrainPy Team', email = 'chao.brain@qq.com' }]
 classifiers = [

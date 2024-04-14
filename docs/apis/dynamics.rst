@@ -16,6 +16,7 @@ Neurons
    :nosignatures:
    :template: classtemplate.rst
 
+    Neuron
     IF
     LIF
     ALIF
@@ -30,6 +31,7 @@ Synapses
    :nosignatures:
    :template: classtemplate.rst
 
+    Synapse
     Expon
     STP
     STD

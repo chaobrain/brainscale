@@ -1,7 +1,7 @@
 BrainScale documentation
 ========================
 
-`BrainScale <https://github.com/brainscale/brainscale>`_ is designed for the scalable online learning of biological spiking neural networks..
+`BrainScale <https://github.com/brainpy/brainscale>`_ is designed for the scalable online learning of biological spiking neural networks.
 
 ----
 
@@ -39,8 +39,8 @@ Installation
 ----
 
 
-See also the BrainPy ecosystem
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+See also the BDP ecosystem
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 
 - `brainpy <https://github.com/brainpy/BrainPy>`_: The solution for the general-purpose brain dynamics programming.
@@ -49,7 +49,7 @@ See also the BrainPy ecosystem
 
 - `braintools <https://github.com/brainpy/braintools>`_: The tools for the brain dynamics simulation and analysis.
 
-- `brainscale <https://github.com/brainscale/brainscale>`_: The scalable online learning for biological spiking neural networks.
+- `brainscale <https://github.com/brainpy/brainscale>`_: The scalable online learning for biological spiking neural networks.
 
 
 

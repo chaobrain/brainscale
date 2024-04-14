@@ -13,4 +13,6 @@ Online Learning Algorithms
    :nosignatures:
    :template: classtemplate.rst
 
-    ExpSmDiagRTRL
+    ETraceAlgorithm
+    ExpSmDiagOnAlgorithm
+    DiagOn2Algorithm

@@ -28,8 +28,8 @@ Connections
 
 
 
-Activations
------------
+Activation Layers
+-----------------
 
 .. autosummary::
    :toctree: generated/
@@ -66,12 +66,12 @@ Activations
     Softmax2d
     LogSoftmax
     Identity
-    SpikeBitwiseOp
+    SpikeBitwise
 
 
 
-Dropout
--------
+Dropout Layers
+--------------
 
 .. autosummary::
    :toctree: generated/
@@ -83,14 +83,15 @@ Dropout
     Dropout1d
     Dropout2d
     Dropout3d
+    DropoutFixed
     AlphaDropout
     FeatureAlphaDropout
 
 
 
 
-Normalizations
---------------
+Normalization Layers
+--------------------
 
 .. autosummary::
    :toctree: generated/
@@ -103,8 +104,8 @@ Normalizations
     BatchNorm3d
 
 
-Poolings
---------
+Pooling Layers
+--------------
 
 .. autosummary::
    :toctree: generated/

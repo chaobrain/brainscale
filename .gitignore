@@ -192,3 +192,5 @@ cython_debug/
 #.idea/
 
 /docs/apis/generated/
+/examples/online-based-training/data/
+/examples/online-based-training/figs/

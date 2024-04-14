@@ -18,9 +18,10 @@ Model Definition
    :template: classtemplate.rst
 
     ETraceVar
-    ETraceWeight
+    ETraceParam
     ETraceOp
-    ETraceWeightOp
+    ETraceParamOp
+    NormalParamOp
 
 
 Model Compilation
