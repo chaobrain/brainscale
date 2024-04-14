@@ -33,6 +33,7 @@ __all__ = [
   'ETraceOp',  # the operator for ETrace
   'ETraceParamOp',  # the parameter with an associated operator for ETrace, combining ETraceParam and ETraceOp
   'NormalParamOp',  # the parameter state with an associated operator
+  'stop_param_gradients',
 ]
 
 _stop_param_gradient = False

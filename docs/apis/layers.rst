@@ -83,6 +83,7 @@ Dropout Layers
     Dropout1d
     Dropout2d
     Dropout3d
+    DropoutFixed
     AlphaDropout
     FeatureAlphaDropout
 

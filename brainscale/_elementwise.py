@@ -15,7 +15,6 @@
 
 # -*- coding: utf-8 -*-
 
-
 from __future__ import annotations
 from typing import Optional
 
@@ -337,7 +336,7 @@ class Tanh(bc.Module, ElementWiseBlock):
   __module__ = 'brainscale'
 
   def __call__(self, x: ArrayLike) -> ArrayLike:
-    return jnp.tanh(x)
+    return F.tanh(x)
 
 
 class SiLU(bc.Module, ElementWiseBlock):
