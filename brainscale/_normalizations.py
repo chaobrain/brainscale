@@ -258,6 +258,9 @@ class _BatchNorm(DnnLayer):
   ):
     super().__init__(name=name, mode=mode)
 
+    if not self.mode.has(bc.mixin.Batching):
+      raise ValueError('BatchNorm layers require the Batching mode.')
+
     # parameters
     self.in_size = tuple(in_size)
     self.out_size = tuple(in_size)

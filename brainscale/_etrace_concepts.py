@@ -133,7 +133,11 @@ class ETraceParamOp(ETraceParam):
 
 class NormalParamOp(bc.ParamState):
   """
-  The Parameter State with an Associated Operator.
+  The Normal Parameter State with an Associated Operator.
+
+  This class behaves the same as :py:class:`ETraceParamOp`, but will not build the
+  eligibility trace graph when using online learning. Therefore, in a sequence
+  learning task, the weight can only be trained with the spatial gradients.
 
   Args:
     value: The value of the parameter.
