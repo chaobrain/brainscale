@@ -61,6 +61,7 @@ dG_State = Sequence[PyTree]  # gradients of other states
 
 # --- data --- #
 WeightXVar = jax.core.Var
+WeightYVar = jax.core.Var
 WeightXs = Dict[jax.core.Var, jax.Array]
 WeightDfs = Dict[jax.core.Var, jax.Array]
 TempData = Dict[jax.core.Var, jax.Array]

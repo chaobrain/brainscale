@@ -35,7 +35,7 @@ from ._errors import NotSupportedError, CompilationError
 from ._etrace_concepts import _etrace_op_name, ETraceParam, ETraceVar
 from ._etrace_concepts import assign_state_values, split_states_v2
 from ._misc import git_issue_addr, state_traceback, set_module_as
-from .typing import (PyTree, StateID, WeightID, WeightXVar, HiddenVar,
+from .typing import (PyTree, StateID, WeightID, WeightXVar, WeightYVar, HiddenVar,
                      ETraceVals, TempData, Outputs, HiddenVals, StateVals, WeightVals)
 
 # TODO
@@ -1085,22 +1085,9 @@ class ETraceGraph:
     assign_state_values(non_etrace_weight_states, non_etrace_weight_vals)
     return out, hidden_vals, other_vals, temps, Residuals(jaxpr, in_tree(), out_tree, consts)
 
-  # def _compute_current_etrace_data(self, intermediate_values: dict) -> Any:
-  #   """
-  #   Computing the weight x and df values for the spatial gradients.
-  #
-  #   Args:
-  #     intermediate_values: The intermediate values of the model.
-  #
-  #   Returns:
-  #     The eligibility trace data.
-  #   """
-  #   raise NotImplementedError
-
-  def _compute_current_etrace_data(
-      self,
-      intermediate_values: dict
-  ) -> List[Dict[jax.core.Var, jax.Array]]:
+  def _compute_hid2weight_jacobian(
+      self, intermediate_values: dict
+  ) -> Tuple[Dict[WeightXVar, jax.Array], Dict[WeightYVar, jax.Array]]:
     """
     Computing the weight x and df values for the spatial gradients.
 
@@ -1143,7 +1130,7 @@ class ETraceGraph:
       dfs[relation.y] = df
 
     # all x and df values
-    return [xs, dfs]
+    return xs, dfs
 
   def solve_spatial_gradients(
       self, *args
@@ -1163,8 +1150,8 @@ class ETraceGraph:
 
     # --- call the model --- #
     out, hiddens, others, temps = self._jaxpr_compute_model(*args)
-    etrace_data = self._compute_current_etrace_data(temps)
-    return out, hiddens, others, etrace_data
+    hid2weight_jac = self._compute_hid2weight_jacobian(temps)
+    return out, hiddens, others, hid2weight_jac
 
   def solve_spatial_gradients_and_vjp_jaxpr(
       self, *args,
@@ -1183,100 +1170,8 @@ class ETraceGraph:
 
     # --- call the model --- #
     out, hidden_vals, other_vals, temps, vjp_residual = self._jaxpr_compute_vjp_model(*args)
-    etrace_data = self._compute_current_etrace_data(temps)
-    return out, hidden_vals, other_vals, etrace_data, vjp_residual
-
-
-# class ETraceGraphForOnAlgorithm(ETraceGraph):
-#
-#   def _compute_current_etrace_data(
-#       self,
-#       intermediate_values: dict
-#   ) -> List[Dict[jax.core.Var, jax.Array]]:
-#     """
-#     Computing the weight x and df values for the spatial gradients.
-#
-#     Args:
-#       intermediate_values: The intermediate values of the model.
-#
-#     Returns:
-#       The weight x and df values.
-#     """
-#     # the weight x
-#     xs = {v: intermediate_values[v] for v in self.out_wx_jaxvars}
-#
-#     # the weight df
-#     dfs = dict()
-#     for relation in self.weight_hidden_relations:
-#       consts = [intermediate_values[var] for var in relation.jaxpr_y2hid.constvars]
-#       invars = [intermediate_values[var] for var in relation.jaxpr_y2hid.invars]  # weight y
-#       outvar_grads = [jnp.ones(v.aval.shape, v.aval.dtype) for v in relation.jaxpr_y2hid.outvars]  # hidden states
-#
-#       # [ KEY ]
-#       #
-#       # # ---- Method 1: using ``backward_pass`` ---- #
-#       # Assuming the function is linear.
-#       # The backward pass for computing the gradients of the hidden states.
-#       # For most situations, the ``y --> hidden`` relation is linear. Therefore,
-#       # we use ``backward_pass`` to compute the ``Df`` while avoids the overhead
-#       # of computing the forward pass. Otherwise, we should use ``jax.vjp`` instead.
-#       # Please also see ``jax.linear_transpose()`` for the same purpose.
-#       #
-#       # [df] = backward_pass(relation.jaxpr_y2hid, [], True, consts, invars, outvars)
-#       #
-#       # # ---- Method 2: using ``jax.vjp`` ---- #
-#       # However, for general cases, we choose to use ``jax.vjp`` to compute the gradients.
-#
-#       assert len(invars) == 1
-#       _, f_vjp = jax.vjp(lambda x: jax.core.eval_jaxpr(relation.jaxpr_y2hid, consts, x), invars[0])
-#       df = f_vjp(outvar_grads)[0]
-#       # get the df we want
-#       dfs[relation.y] = df
-#
-#     # all x and df values
-#     return [xs, dfs]
-
-
-# class ETraceGraphForOn2Algorithm(ETraceGraph):
-#   def _compute_current_etrace_data(
-#       self,
-#       intermediate_values: Dict,
-#   ) -> Dict[Tuple[WeightID, WeightXVar, HiddenVar], jax.Array]:
-#     """
-#     Computing the weight gradients for the spatial gradients.
-#
-#     Args:
-#       intermediate_values: The intermediate values of the model.
-#
-#     Returns:
-#       The weight x and df values.
-#     """
-#     weight_grads = dict()
-#     for relation in self.weight_hidden_relations:
-#       # invars are the weight x and the weight itself
-#       weight_id = id(relation.weight)
-#       invars = [relation.x] + self.eweight_id_to_invar[weight_id]
-#
-#       # the jaxpr for computing:
-#       #     f[x, weights] -> hidden states
-#       jaxpr_x2hid = jax.core.Jaxpr(
-#         constvars=relation.jaxpr_y2hid.constvars,
-#         invars=invars,
-#         outvars=relation.jaxpr_y2hid.outvars,  # hidden states
-#         eqns=relation.op_jaxpr.eqns + relation.jaxpr_y2hid.eqns
-#       )
-#       # collect the required data
-#       consts = [intermediate_values[var] for var in jaxpr_x2hid.constvars]
-#       x = intermediate_values[relation.x]
-#
-#       # compute the weight gradient with respect to the hidden states
-#       for hidden_i, hidden_var in enumerate(relation.jaxpr_y2hid.outvars):
-#         # the function to compute the weight gradients
-#         hidden_var_grad = jnp.ones(hidden_var.aval.shape, hidden_var.aval.dtype)
-#         d_weights = _fun_to_weight(jaxpr_x2hid, relation.weight.value, hidden_i, hidden_var_grad, consts, x)
-#         key = (weight_id, relation.x, hidden_var)
-#         weight_grads[key] = d_weights
-#     return weight_grads
+    hid2weight_jac = self._compute_hid2weight_jacobian(temps)
+    return out, hidden_vals, other_vals, hid2weight_jac, vjp_residual
 
 
 @set_module_as('brainscale')

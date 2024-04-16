@@ -135,6 +135,26 @@ def try_if_delta_etrace_update_On2():
   print(outs.shape)
 
 
+def try_if_delta_etrace_update_batched_On2():
+  n_batch, n_in, n_rec = 16, 4, 10
+  bc.environ.set(mode=bc.mixin.JointMode(bc.mixin.Batching(), bc.mixin.Training()))
+  snn = IF_Delta_Dense_Layer(n_in, n_rec)
+  snn = bc.init_states(snn, n_batch)
+
+  algorithm = nn.DiagOn2Algorithm(snn)
+  algorithm.compile_graph(jax.ShapeDtypeStruct((n_batch, n_in,), bc.environ.dftype()))
+
+  def run_snn(i, inp_spk):
+    bc.share.set(i=i, t=i * bc.environ.get_dt())
+    out = algorithm.update_model_and_etrace(inp_spk)
+    return out
+
+  nt = 100
+  inputs = jnp.asarray(bc.random.rand(nt, n_batch, n_in) < 0.2, dtype=bc.environ.dftype())
+  outs = bc.transform.for_loop(run_snn, np.arange(nt), inputs)
+  print(outs.shape)
+
+
 def try_if_delta_etrace_update_and_grad():
   n_batch, n_in, n_rec = 16, 4, 10
   bc.environ.set(mode=bc.mixin.JointMode(bc.mixin.Batching(), bc.mixin.Training()))
@@ -214,7 +234,8 @@ if __name__ == '__main__':
   pass
   # try1()
   # try_if_delta_etrace_update()
-  try_if_delta_etrace_update_On2()
+  # try_if_delta_etrace_update_On2()
+  try_if_delta_etrace_update_batched_On2()
   # try_if_delta_etrace_update_and_grad()
   # try_if_delta_etrace_grad_vs_bptt_grad()
   # try_traceback()

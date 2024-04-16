@@ -20,6 +20,7 @@ from __future__ import annotations
 import contextlib
 import functools
 from typing import Callable, Sequence, Tuple, List, Optional
+from enum import Enum
 
 import braincore as bc
 import jax.lax
@@ -107,6 +108,27 @@ class ETraceOp(object):
     return y
 
 
+class ETraceGrad(Enum):
+  full = 'full'
+  approx = 'approx'
+
+  @classmethod
+  def get(cls, type_: str | Enum):
+    if isinstance(type_, cls):
+      return type_
+    elif isinstance(type_, str):
+      return cls.get_by_name(type_)
+    else:
+      raise ValueError(f'Cannot find the {cls.__name__} type {type_}.')
+
+  @classmethod
+  def get_by_name(cls, name: str):
+    for item in cls:
+      if item.name == name:
+        return item
+    raise ValueError(f'Cannot find the {cls.__name__} type {name}.')
+
+
 class ETraceParamOp(ETraceParam):
   """
   The Eligibility Trace Weight and its Associated Operator.
@@ -118,8 +140,12 @@ class ETraceParamOp(ETraceParam):
   __module__ = 'brainscale'
   op: ETraceOp  # operator
 
-  def __init__(self, weight: PyTree, op: Callable):
+  def __init__(self, weight: PyTree, op: Callable, gradient: str = 'approx'):
+    # weight value
     super().__init__(weight)
+
+    # gradient
+    self.gradient = ETraceGrad.get(gradient)
 
     # operation
     if isinstance(op, ETraceOp):
