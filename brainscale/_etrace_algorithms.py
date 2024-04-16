@@ -30,7 +30,7 @@ import jax.numpy as jnp
 from braincore.transform._autograd import functional_vector_grad as vector_grad
 
 from ._errors import NotSupportedError
-from ._etrace_compiler import ETraceGraph, TracedWeightOp
+from ._etrace_compiler import ETraceGraph, ETraceGraphForOnAlgorithm, ETraceGraphForOn2Algorithm, TracedWeightOp
 from ._etrace_concepts import (assign_state_values, split_states, split_states_v2,
                                stop_param_gradients, ETraceVar)
 from .typing import (PyTree, Outputs, WeightID, HiddenVar,
@@ -158,16 +158,6 @@ def hidden_to_weight(relation: TracedWeightOp,
   return dg_weight
 
 
-def _diag_hidden_update(self: 'ETraceAlgorithm', hiddens, others, *params):
-  # [ KEY: assuming the weight are not changed ]
-  assign_state_values(self.hidden_states, hiddens)
-  assign_state_values(self.other_states, others)
-  with stop_param_gradients():
-    self.graph._call_org_model(*params)
-  hiddens = [st.value for st in self.hidden_states]
-  return hiddens
-
-
 class ETraceAlgorithm(bc.Module):
   """
   The base class for the eligibility trace algorithm.
@@ -192,22 +182,6 @@ class ETraceAlgorithm(bc.Module):
   hidden_states: List[ETraceVar]  # the hidden states
   other_states: List[bc.State]  # the other states
   is_compiled: bool  # whether the etrace algorithm has been compiled
-
-  def __init__(self,
-               model_or_graph: Callable | ETraceGraph,
-               name: str | None = None,
-               mode: bc.mixin.Mode | None = None):
-    super().__init__(name=name, mode=mode)
-
-    # the model and the graph
-    if isinstance(model_or_graph, ETraceGraph):
-      self.graph = model_or_graph
-      self.is_compiled = model_or_graph.revised_jaxpr is not None
-    else:
-      if not callable(model_or_graph):
-        raise ValueError('The model should be a callable function. ')
-      self.graph = ETraceGraph(model_or_graph)
-      self.is_compiled = False
 
   def compile_graph(self, *args, **kwargs) -> None:
     """
@@ -247,6 +221,16 @@ class ETraceAlgorithm(bc.Module):
     This method is needed after compiling the etrace graph. See `.compile_graph()` for the details.
     """
     raise NotImplementedError
+
+
+def _diag_hidden_update(self: ETraceAlgorithm, hiddens, others, *params):
+  # [ KEY: assuming the weight are not changed ]
+  assign_state_values(self.hidden_states, hiddens)
+  assign_state_values(self.other_states, others)
+  with stop_param_gradients():
+    self.graph._call_org_model(*params)
+  hiddens = [st.value for st in self.hidden_states]
+  return hiddens
 
 
 class _DiagETraceAlgorithmForVJP(ETraceAlgorithm):
@@ -500,12 +484,22 @@ class DiagExpSmOnAlgorithm(_DiagETraceAlgorithmForVJP):
   num_rank: int  # the number of approximation rank
 
   def __init__(self,
-               model_or_graph: Callable | ETraceGraph,
+               model_or_graph: Callable | ETraceGraphForOnAlgorithm,
                decay: float = None,
                num_rank: int = None,
                name: str | None = None,
                mode: bc.mixin.Mode | None = None):
-    super().__init__(model_or_graph, name=name, mode=mode)
+    super().__init__(name=name, mode=mode)
+
+    # the model and the graph
+    if isinstance(model_or_graph, ETraceGraphForOnAlgorithm):
+      self.graph = model_or_graph
+      self.is_compiled = model_or_graph.revised_jaxpr is not None
+    else:
+      if not callable(model_or_graph):
+        raise ValueError('The model should be a callable function. ')
+      self.graph = ETraceGraphForOnAlgorithm(model_or_graph)
+      self.is_compiled = False
 
     # the learning parameters
     self.decay, self.num_rank = _format_decay_and_rank(decay, num_rank)
@@ -617,16 +611,26 @@ class DiagOn2Algorithm(_DiagETraceAlgorithmForVJP):
   num_rank: int  # the number of approximation rank
 
   def __init__(self,
-               model_or_graph: Callable | ETraceGraph,
+               model_or_graph: Callable | ETraceGraphForOn2Algorithm,
                name: str | None = None,
                mode: bc.mixin.Mode | None = None):
-    super().__init__(model_or_graph, name=name, mode=mode)
+    super().__init__(name=name, mode=mode)
 
     # [KEY]
     # It is important to know that this algorithm does not support the batching mode.
     # Models should be executed in the non-batching mode.
     if self.mode.has(bc.mixin.Batching):
       raise NotSupportedError(f'The {DiagOn2Algorithm.__name__} does not support the batching mode. ')
+
+    # initialize the model and the graph
+    if isinstance(model_or_graph, ETraceGraphForOn2Algorithm):
+      self.graph = model_or_graph
+      self.is_compiled = model_or_graph.revised_jaxpr is not None
+    else:
+      if not callable(model_or_graph):
+        raise ValueError('The model should be a callable function. ')
+      self.graph = ETraceGraphForOn2Algorithm(model_or_graph)
+      self.is_compiled = False
 
   def init_state(self, batch_size: int = None, *args, **kwargs):
     # The states of batched weight gradients:
