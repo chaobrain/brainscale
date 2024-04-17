@@ -852,7 +852,6 @@ class ETraceGraph:
   It is important to note that the graph is built no matter whether the model is
   batched or not. This means that this graph can be applied to any kind of models.
 
-
   """
   __module__ = 'brainscale'
 
