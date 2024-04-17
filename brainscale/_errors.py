@@ -20,4 +20,3 @@ class NotSupportedError(Exception):
 
 class CompilationError(Exception):
   __module__ = 'brainscale'
-

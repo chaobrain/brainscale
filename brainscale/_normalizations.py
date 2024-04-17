@@ -16,6 +16,7 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import annotations
+
 import numbers
 from typing import Callable, Union, Sequence, Optional, Any
 
@@ -224,20 +225,14 @@ _bn_doc = r'''
 '''
 
 
-def _bn_op(x, param):
-  if 'scale' in param:
-    x = x * param['scale']
-  if 'bias' in param:
-    x = x + param['bias']
-  return x
-
-
 class _BatchNorm(DnnLayer):
   r"""Batch Normalization layer [1]_.
 
   %s
   """
   __module__ = 'brainscale'
+
+  num_spatial_dims: int = None
 
   def __init__(
       self,
@@ -252,6 +247,7 @@ class _BatchNorm(DnnLayer):
       axis_name: Optional[Union[str, Sequence[str]]] = None,
       axis_index_groups: Optional[Sequence[Sequence[int]]] = None,
       as_etrace_weight: bool = False,
+      full_etrace: bool = False,
       mode: Optional[bc.mixin.Mode] = None,
       name: Optional[str] = None,
       dtype: Any = None,
@@ -294,13 +290,33 @@ class _BatchNorm(DnnLayer):
       scale = init.parameter(self.scale_initializer, feature_shape)
       weight = dict(bias=bias, scale=scale)
       if as_etrace_weight:
-        self.weight = ETraceParamOp(weight, _bn_op)
+        self.weight = ETraceParamOp(weight, op=self._operation, full_grad=full_etrace)
       else:
-        self.weight = NormalParamOp(weight, _bn_op)
+        self.weight = NormalParamOp(weight, op=self._operation)
     else:
       self.weight = None
 
+  def _operation(self, x, param):
+    if 'scale' in param:
+      x = x * param['scale']
+    if 'bias' in param:
+      x = x + param['bias']
+    return x
+
+  def _check_input_dim(self, x):
+    if isinstance(self.num_spatial_dims, int):
+      if x.ndim == self.num_spatial_dims + 2:
+        x_shape = x.shape[1:]
+      elif x.ndim == self.num_spatial_dims + 1:
+        x_shape = x.shape
+      else:
+        raise ValueError(f"expected {self.num_spatial_dims + 2}D (with batch) or "
+                         f"{self.num_spatial_dims + 1}D (without batch) input (got {x.ndim}D input, {x.shape})")
+      if self.in_size != x_shape:
+        raise ValueError(f"The expected input shape is {self.in_size}, while we got {x_shape}.")
+
   def update(self, x):
+    self._check_input_dim(x)
     fit_phase = bc.share.get('fit', desc='Whether this is a fitting process. Bool.')
 
     # reduce the feature axis
@@ -341,35 +357,7 @@ class BatchNorm1d(_BatchNorm):
   """
   __module__ = 'brainscale'
 
-  def __init__(
-      self,
-      in_size: Size,
-      feature_axis: Axes = -1,
-      track_running_stats: bool = True,
-      epsilon: float = 1e-5,
-      momentum: float = 0.99,
-      affine: bool = True,
-      bias_initializer: Union[ArrayLike, Callable] = init.Constant(0.),
-      scale_initializer: Union[ArrayLike, Callable] = init.Constant(1.),
-      axis_name: Optional[Union[str, Sequence[str]]] = None,
-      axis_index_groups: Optional[Sequence[Sequence[int]]] = None,
-      as_etrace_weight: bool = False,
-      mode: Optional[bc.mixin.Mode] = None,
-      name: Optional[str] = None,
-  ):
-    super().__init__(in_size=in_size,
-                     feature_axis=feature_axis,
-                     track_running_stats=track_running_stats,
-                     epsilon=epsilon,
-                     momentum=momentum,
-                     affine=affine,
-                     bias_initializer=bias_initializer,
-                     scale_initializer=scale_initializer,
-                     axis_name=axis_name,
-                     axis_index_groups=axis_index_groups,
-                     as_etrace_weight=as_etrace_weight,
-                     mode=mode,
-                     name=name)
+  num_spatial_dims: int = 1
 
 
 class BatchNorm2d(_BatchNorm):
@@ -383,35 +371,7 @@ class BatchNorm2d(_BatchNorm):
   """
   __module__ = 'brainscale'
 
-  def __init__(
-      self,
-      in_size: Size,
-      feature_axis: Axes = -1,
-      track_running_stats: bool = True,
-      epsilon: float = 1e-5,
-      momentum: float = 0.99,
-      affine: bool = True,
-      bias_initializer: Union[ArrayLike, Callable] = init.Constant(0.),
-      scale_initializer: Union[ArrayLike, Callable] = init.Constant(1.),
-      axis_name: Optional[Union[str, Sequence[str]]] = None,
-      axis_index_groups: Optional[Sequence[Sequence[int]]] = None,
-      as_etrace_weight: bool = False,
-      mode: Optional[bc.mixin.Mode] = None,
-      name: Optional[str] = None,
-  ):
-    super().__init__(in_size=in_size,
-                     feature_axis=feature_axis,
-                     track_running_stats=track_running_stats,
-                     epsilon=epsilon,
-                     momentum=momentum,
-                     affine=affine,
-                     bias_initializer=bias_initializer,
-                     scale_initializer=scale_initializer,
-                     axis_name=axis_name,
-                     axis_index_groups=axis_index_groups,
-                     as_etrace_weight=as_etrace_weight,
-                     mode=mode,
-                     name=name)
+  num_spatial_dims: int = 2
 
 
 class BatchNorm3d(_BatchNorm):
@@ -425,35 +385,7 @@ class BatchNorm3d(_BatchNorm):
   """
   __module__ = 'brainscale'
 
-  def __init__(
-      self,
-      in_size: Size,
-      feature_axis: Axes = -1,
-      track_running_stats: bool = True,
-      epsilon: float = 1e-5,
-      momentum: float = 0.99,
-      affine: bool = True,
-      bias_initializer: Union[ArrayLike, Callable] = init.Constant(0.),
-      scale_initializer: Union[ArrayLike, Callable] = init.Constant(1.),
-      axis_name: Optional[Union[str, Sequence[str]]] = None,
-      axis_index_groups: Optional[Sequence[Sequence[int]]] = None,
-      as_etrace_weight: bool = False,
-      mode: Optional[bc.mixin.Mode] = None,
-      name: Optional[str] = None,
-  ):
-    super().__init__(in_size=in_size,
-                     feature_axis=feature_axis,
-                     track_running_stats=track_running_stats,
-                     epsilon=epsilon,
-                     momentum=momentum,
-                     affine=affine,
-                     bias_initializer=bias_initializer,
-                     scale_initializer=scale_initializer,
-                     axis_name=axis_name,
-                     axis_index_groups=axis_index_groups,
-                     as_etrace_weight=as_etrace_weight,
-                     mode=mode,
-                     name=name)
+  num_spatial_dims: int = 3
 
 
 _BatchNorm.__doc__ = _BatchNorm.__doc__ % _bn_doc

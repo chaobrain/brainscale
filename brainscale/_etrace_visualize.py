@@ -20,11 +20,9 @@ from typing import Tuple, Union, List
 import jax
 import pydot
 
-
 __all__ = [
   'draw', 'view_pydot', 'draw_dot_graph'
 ]
-
 
 sub_graph_return = Tuple[
   Union[pydot.Node, pydot.Subgraph],

@@ -154,18 +154,16 @@ def dy_to_weight(mode: bc.mixin.Mode,
                             f'While we got {type(relation.weight)}. ')
 
   # input
-  if mode.has(bc.mixin.Batching):
-    # TODO: Assuming the batch size is the first dimension
-    x_data = jnp.ones(relation.x.aval.shape[1:], relation.x.aval.dtype)
-  else:
-    x_data = jnp.ones(relation.x.aval.shape, relation.x.aval.dtype)
+  x_data = jnp.ones(relation.x.aval.shape, relation.x.aval.dtype)
 
   # transform
-  fun = lambda dh: jax.vjp(partial(relation.weight.op, x_data), weight_vals)[1](dh)[0]
+  fun = lambda dh, x: jax.vjp(partial(relation.weight.op, x), weight_vals)[1](dh)[0]
   if mode.has(bc.mixin.Batching):
-    dG_hidden_like_weight = jax.vmap(fun)(dg_hidden)
+    x_data = jnp.expand_dims(x_data, axis=1)
+    dg_hidden = jnp.expand_dims(dg_hidden, axis=1)
+    dG_hidden_like_weight = jax.vmap(fun)(dg_hidden, x_data)
   else:
-    dG_hidden_like_weight = fun(dg_hidden)
+    dG_hidden_like_weight = fun(dg_hidden, x_data)
 
   return dG_hidden_like_weight
 
@@ -186,7 +184,7 @@ def dx_dy_to_weight(mode: bc.mixin.Mode,
                             f'While we got {type(relation.weight)}. ')
   fun = lambda dx, dy: jax.vjp(partial(relation.weight.op, dx), weight_vals)[1](dy)[0]
   if mode.has(bc.mixin.Batching):
-    dG_weight = jax.vmap(fun)(dg_x, dg_y)
+    dG_weight = jax.vmap(fun)(jnp.expand_dims(dg_x, axis=1), jnp.expand_dims(dg_y, axis=1))
   else:
     dG_weight = fun(dg_x, dg_y)
   return dG_weight

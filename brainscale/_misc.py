@@ -20,7 +20,6 @@ from typing import Sequence
 
 import braincore as bc
 
-
 git_issue_addr = 'https://github.com/brainpy/brainscale/issues'
 
 
@@ -52,4 +51,3 @@ def set_module_as(module: str = 'brainscale'):
     return fun
 
   return wrapper
-

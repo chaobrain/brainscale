@@ -22,7 +22,6 @@ import jax.numpy as jnp
 from braintools import init
 
 import brainscale as nn
-from brainscale._errors import NotSupportedError
 
 
 class IF_Delta_Dense_Layer(bc.Module):
@@ -40,7 +39,6 @@ class IF_Delta_Dense_Layer(bc.Module):
 
 def try_if_delta_etrace_update_On2():
   bc.environ.set(mode=bc.mixin.Training())
-
 
   n_in, n_rec = 4, 10
   snn = IF_Delta_Dense_Layer(n_in, n_rec)
@@ -74,5 +72,3 @@ class TestDiagOn2(unittest.TestCase):
       snn = IF_Delta_Dense_Layer(n_in, n_rec)
       snn = bc.init_states(snn)
       algorithm = nn.DiagOn2Algorithm(snn)
-
-

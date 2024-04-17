@@ -29,7 +29,6 @@ from braintools import init
 
 from ._base import DnnLayer
 from ._etrace_concepts import ETraceParamOp, NormalParamOp
-from ._normalizations import _canonicalize_axes, _compute_stats
 from .typing import ArrayLike
 
 T = TypeVar('T')
@@ -333,10 +332,13 @@ class _BaseConv(DnnLayer):
     self.w_mask = init.parameter(w_mask, kernel_shape, allow_none=True)
 
   def _check_input_dim(self, x):
-    if x.ndim != self.num_spatial_dims + 2 and x.ndim != self.num_spatial_dims + 1:
+    if x.ndim == self.num_spatial_dims + 2:
+      x_shape = x.shape[1:]
+    elif x.ndim == self.num_spatial_dims + 1:
+      x_shape = x.shape
+    else:
       raise ValueError(f"expected {self.num_spatial_dims + 2}D (with batch) or "
                        f"{self.num_spatial_dims + 1}D (without batch) input (got {x.ndim}D input, {x.shape})")
-    x_shape = x.shape[1:]
     if self.in_size != x_shape:
       raise ValueError(f"The expected input shape is {self.in_size}, while we got {x_shape}.")
 
@@ -932,4 +934,3 @@ class ScaledWSConv3d(_ScaledWSConv):
   __module__ = 'brainscale'
 
   num_spatial_dims: int = 3
-

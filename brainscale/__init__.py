@@ -17,6 +17,7 @@
 
 __version__ = "0.0.1"
 
+from brainscale import typing
 from brainscale._base import *
 from brainscale._base import __all__ as base_all
 from brainscale._connections import *
@@ -41,7 +42,6 @@ from brainscale._readout import *
 from brainscale._readout import __all__ as readout_all
 from brainscale._synouts import *
 from brainscale._synouts import __all__ as synouts_all
-from brainscale import typing
 
 __all__ = (['typing'] +
            base_all +
