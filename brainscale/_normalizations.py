@@ -92,15 +92,17 @@ def _compute_stats(
     dtype = jax.numpy.result_type(x)
   # promote x to at least float32, this avoids half precision computation
   # but preserves double or complex floating points
-  dtype = jax.numpy.promote_types(dtype, jnp.float32)
+  dtype = jax.numpy.promote_types(dtype, bc.environ.dftype())
   x = jnp.asarray(x, dtype)
 
+  # Compute mean and mean of squared values.
   mean2 = jnp.mean(_abs_sq(x), axes)
   if use_mean:
     mean = jnp.mean(x, axes)
   else:
     mean = jnp.zeros(mean2.shape, dtype=dtype)
 
+  # If axis_name is provided, we need to average the mean and mean2 across
   if axis_name is not None:
     concatenated_mean = jnp.concatenate([mean, mean2])
     mean, mean2 = jnp.split(
@@ -111,6 +113,7 @@ def _compute_stats(
       ),
       2,
     )
+
   # mean2 - _abs_sq(mean) is not guaranteed to be non-negative due
   # to floating point round-off errors.
   var = jnp.maximum(0.0, mean2 - _abs_sq(mean))
@@ -159,79 +162,8 @@ def _normalize(
   return jnp.asarray(y, dtype)
 
 
-_bn_doc = r'''
-
-  This layer aims to reduce the internal covariant shift of data. It
-  normalizes a batch of data by fixing the mean and variance of inputs
-  on each feature (channel). Most commonly, the first axis of the data
-  is the batch, and the last is the channel. However, users can specify
-  the axes to be normalized.
-
-  .. math::
-     y=\frac{x-\mathrm{E}[x]}{\sqrt{\operatorname{Var}[x]+\epsilon}} * \gamma+\beta
-
-  .. note::
-      This :attr:`momentum` argument is different from one used in optimizer
-      classes and the conventional notion of momentum. Mathematically, the
-      update rule for running statistics here is
-      :math:`\hat{x}_\text{new} = \text{momentum} \times \hat{x} + (1-\text{momentum}) \times x_t`,
-      where :math:`\hat{x}` is the estimated statistic and :math:`x_t` is the
-      new observed value.
-
-  Parameters
-  ----------
-  in_size: sequence of int
-    The input shape, without batch size.
-  feature_axis: int, tuple, list
-    The feature or non-batch axis of the input.
-  track_running_stats: bool
-    A boolean value that when set to ``True``, this module tracks the running mean and variance, 
-    and when set to ``False``, this module does not track such statistics, and initializes 
-    statistics buffers ``running_mean`` and ``running_var`` as ``None``. When these buffers are ``None``, 
-    this module always uses batch statistics. in both training and eval modes. Default: ``True``.
-  momentum: float
-    The value used for the ``running_mean`` and ``running_var`` computation. Default: 0.99
-  epsilon: float
-    A value added to the denominator for numerical stability. Default: 1e-5
-  affine: bool
-    A boolean value that when set to ``True``, this module has
-    learnable affine parameters. Default: ``True``
-  bias_initializer: ArrayLike, Callable
-    An initializer generating the original translation matrix. If not ``None``, bias (beta) is added. 
-    Default: ``init.Constant(0.)``
-  scale_initializer: ArrayLike, Callable
-    An initializer generating the original scaling matrix. If not ``None``, multiply by scale (gamma).
-    Default: ``init.Constant(1.)``
-  axis_name: optional, str, sequence of str
-    If not ``None``, it should be a string (or sequence of
-    strings) representing the axis name(s) over which this module is being
-    run within a jax map (e.g. ``jax.pmap`` or ``jax.vmap``). Supplying this
-    argument means that batch statistics are calculated across all replicas
-    on the named axes.
-  axis_index_groups: optional, sequence
-    Specifies how devices are grouped. Valid
-    only within ``jax.pmap`` collectives.
-    Groups of axis indices within that named axis
-    representing subsets of devices to reduce over (default: None). For
-    example, `[[0, 1], [2, 3]]` would independently batch-normalize over
-    the examples on the first two and last two devices. See `jax.lax.psum`
-    for more details.
-
-  References
-  ----------
-  .. [1] Ioffe, Sergey and Christian Szegedy. “Batch Normalization: Accelerating Deep Network Training
-         by Reducing Internal Covariate Shift.” ArXiv abs/1502.03167 (2015): n. pag.
-
-'''
-
-
 class _BatchNorm(DnnLayer):
-  r"""Batch Normalization layer [1]_.
-
-  %s
-  """
   __module__ = 'brainscale'
-
   num_spatial_dims: int = None
 
   def __init__(
@@ -356,7 +288,6 @@ class BatchNorm1d(_BatchNorm):
   %s
   """
   __module__ = 'brainscale'
-
   num_spatial_dims: int = 1
 
 
@@ -370,7 +301,6 @@ class BatchNorm2d(_BatchNorm):
   %s
   """
   __module__ = 'brainscale'
-
   num_spatial_dims: int = 2
 
 
@@ -384,11 +314,74 @@ class BatchNorm3d(_BatchNorm):
   %s
   """
   __module__ = 'brainscale'
-
   num_spatial_dims: int = 3
 
 
-_BatchNorm.__doc__ = _BatchNorm.__doc__ % _bn_doc
+_bn_doc = r'''
+
+  This layer aims to reduce the internal covariant shift of data. It
+  normalizes a batch of data by fixing the mean and variance of inputs
+  on each feature (channel). Most commonly, the first axis of the data
+  is the batch, and the last is the channel. However, users can specify
+  the axes to be normalized.
+
+  .. math::
+     y=\frac{x-\mathrm{E}[x]}{\sqrt{\operatorname{Var}[x]+\epsilon}} * \gamma+\beta
+
+  .. note::
+      This :attr:`momentum` argument is different from one used in optimizer
+      classes and the conventional notion of momentum. Mathematically, the
+      update rule for running statistics here is
+      :math:`\hat{x}_\text{new} = \text{momentum} \times \hat{x} + (1-\text{momentum}) \times x_t`,
+      where :math:`\hat{x}` is the estimated statistic and :math:`x_t` is the
+      new observed value.
+
+  Parameters
+  ----------
+  in_size: sequence of int
+    The input shape, without batch size.
+  feature_axis: int, tuple, list
+    The feature or non-batch axis of the input.
+  track_running_stats: bool
+    A boolean value that when set to ``True``, this module tracks the running mean and variance, 
+    and when set to ``False``, this module does not track such statistics, and initializes 
+    statistics buffers ``running_mean`` and ``running_var`` as ``None``. When these buffers are ``None``, 
+    this module always uses batch statistics. in both training and eval modes. Default: ``True``.
+  momentum: float
+    The value used for the ``running_mean`` and ``running_var`` computation. Default: 0.99
+  epsilon: float
+    A value added to the denominator for numerical stability. Default: 1e-5
+  affine: bool
+    A boolean value that when set to ``True``, this module has
+    learnable affine parameters. Default: ``True``
+  bias_initializer: ArrayLike, Callable
+    An initializer generating the original translation matrix. If not ``None``, bias (beta) is added. 
+    Default: ``init.Constant(0.)``
+  scale_initializer: ArrayLike, Callable
+    An initializer generating the original scaling matrix. If not ``None``, multiply by scale (gamma).
+    Default: ``init.Constant(1.)``
+  axis_name: optional, str, sequence of str
+    If not ``None``, it should be a string (or sequence of
+    strings) representing the axis name(s) over which this module is being
+    run within a jax map (e.g. ``jax.pmap`` or ``jax.vmap``). Supplying this
+    argument means that batch statistics are calculated across all replicas
+    on the named axes.
+  axis_index_groups: optional, sequence
+    Specifies how devices are grouped. Valid
+    only within ``jax.pmap`` collectives.
+    Groups of axis indices within that named axis
+    representing subsets of devices to reduce over (default: None). For
+    example, `[[0, 1], [2, 3]]` would independently batch-normalize over
+    the examples on the first two and last two devices. See `jax.lax.psum`
+    for more details.
+
+  References
+  ----------
+  .. [1] Ioffe, Sergey and Christian Szegedy. “Batch Normalization: Accelerating Deep Network Training
+         by Reducing Internal Covariate Shift.” ArXiv abs/1502.03167 (2015): n. pag.
+
+'''
+
 BatchNorm1d.__doc__ = BatchNorm1d.__doc__ % _bn_doc
 BatchNorm2d.__doc__ = BatchNorm2d.__doc__ % _bn_doc
 BatchNorm3d.__doc__ = BatchNorm3d.__doc__ % _bn_doc

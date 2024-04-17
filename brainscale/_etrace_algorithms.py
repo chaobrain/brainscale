@@ -688,21 +688,22 @@ class DiagOn2Algorithm(_DiagETraceAlgorithmForVJP):
       hid2weight_jac: Tuple[Dict[WeightXVar, jax.Array], Dict[Tuple[WeightYVar, HiddenVar], jax.Array]],
       weight_id_to_its_val: Dict[WeightID, PyTree]
   ) -> Dict[Tuple[WeightID, WeightXVar, HiddenVar], PyTree]:
-    # 1. "hist_etrace_vals" has the following structure:
+    #
+    # 1. "temporal_jacobian" has the following structure:
+    #    - key: the hidden state jax var
+    #    - value: the hidden state jacobian gradients
+    #
+    # 2. "hist_etrace_vals" has the following structure:
     #    - key: the weight id, the weight-x jax var, the hidden state var
     #    - value: the batched weight gradients
     #
-    # 2. "hid2weight_jac" has the following structure:
+    # 3. "hid2weight_jac" has the following structure:
     #    - a dict of weight x gradients
     #       * key: the weight x jax var
     #       * value: the weight x gradients
     #    - a dict of weight y gradients
     #       * key: the tuple of the weight y jax var and the hidden state jax var
     #       * value: the weight y gradients
-    #
-    # 3. "temporal_jacobian" has the following structure:
-    #    - key: the hidden state jax var
-    #    - value: the hidden state jacobian gradients
 
     cur_etrace_xs, cur_etrace_ys = hid2weight_jac
 
@@ -843,6 +844,8 @@ class DiagHybridAlgorithm(_DiagETraceAlgorithmForVJP):
     # the new etrace values
     new_etrace_xs, new_etrace_dfs, new_etrace_bwg = dict(), dict(), dict()
 
+    # ---- bacthed weight gradients ---- #
+
     # update the etrace weight gradients
     for relation in self.graph.weight_hidden_relations:
       if isinstance(relation.weight, ETraceParamOp) and relation.weight.gradient == ETraceGrad.full:
@@ -861,22 +864,18 @@ class DiagHybridAlgorithm(_DiagETraceAlgorithmForVJP):
                                              dg_weight,
                                              current_etrace)
 
+    # ---- O(n) etrace gradients ---- #
+
     # update the weight x
     for x in hist_xs.keys():
-      new_etrace_xs[x] = low_pass_filter(hist_xs[x],
-                                         cur_etrace_xs[x],
-                                         self.decay)
-
+      new_etrace_xs[x] = low_pass_filter(hist_xs[x], cur_etrace_xs[x], self.decay)
     # update the weight df * diagonal
     for dfkey in hist_dfs.keys():
       df_var, hidden_var = dfkey
       new_etrace_dfs[dfkey] = hist_dfs[dfkey] * temporal_jacobian[hidden_var]
-
     # update the weight df
     for dfkey in hist_dfs.keys():
-      new_etrace_dfs[dfkey] = expon_smooth(new_etrace_dfs[dfkey],
-                                           cur_etrace_ys[dfkey],
-                                           self.decay)
+      new_etrace_dfs[dfkey] = expon_smooth(new_etrace_dfs[dfkey], cur_etrace_ys[dfkey], self.decay)
     return new_etrace_xs, new_etrace_dfs, new_etrace_bwg
 
   def _solve_weight_gradients(self,
@@ -920,7 +919,7 @@ class DiagHybridAlgorithm(_DiagETraceAlgorithmForVJP):
     if self.mode.has(bc.mixin.Batching):
       # average the batched weight gradients
       for key, val in temp_data.items():
-        temp_data[key] = jax.tree_map(lambda x: jnp.mean(x, axis=0), val)
+        temp_data[key] = jax.tree_map(lambda x: jnp.sum(x, axis=0), val)
     for key, val in temp_data.items():
       update_dict(dG_weights, key, val)
 
