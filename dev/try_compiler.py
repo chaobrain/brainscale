@@ -28,8 +28,8 @@ class ALIF_ExpCu_Dense_Layer(bc.Module):
     )
     self.syn = bc.HalfProjAlignPostMg(
       comm=nn.Linear(n_in + n_rec, n_rec, jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0)),
-      syn=nn.Expon.desc(size=n_rec, tau=tau_syn),
-      out=nn.CUBA.desc(),
+      syn=nn.Expon.delayed(size=n_rec, tau=tau_syn),
+      out=nn.CUBA.delayed(),
       post=self.neu
     )
     self.out = nn.LeakyRateReadout(
@@ -84,7 +84,7 @@ def try_alif_etrace_single_step():
 
   out = snn(inp_spk)
 
-  algorithm = nn.ExpSmDiagOnAlgorithm(snn, decay=0.99)
+  algorithm = nn.DiagExpSmOnAlgorithm(snn, decay=0.99)
   algorithm.compile_graph(inp_spk)
   out = algorithm(inp_spk, 0)
 
@@ -101,8 +101,48 @@ def try_if_delta_etrace_update():
   snn = IF_Delta_Dense_Layer(n_in, n_rec)
   snn = bc.init_states(snn, n_batch)
 
-  algorithm = nn.ExpSmDiagOnAlgorithm(snn, decay=0.99)
+  algorithm = nn.DiagExpSmOnAlgorithm(snn, decay=0.99)
   algorithm.compile_graph(jax.ShapeDtypeStruct((n_batch, n_in), bc.environ.dftype()))
+
+  def run_snn(i, inp_spk):
+    bc.share.set(i=i, t=i * bc.environ.get_dt())
+    out = algorithm.update_model_and_etrace(inp_spk)
+    return out
+
+  nt = 100
+  inputs = jnp.asarray(bc.random.rand(nt, n_batch, n_in) < 0.2, dtype=bc.environ.dftype())
+  outs = bc.transform.for_loop(run_snn, np.arange(nt), inputs)
+  print(outs.shape)
+
+
+def try_if_delta_etrace_update_On2():
+  n_in, n_rec = 4, 10
+  bc.environ.set(mode=bc.mixin.Training())
+  snn = IF_Delta_Dense_Layer(n_in, n_rec)
+  snn = bc.init_states(snn)
+
+  algorithm = nn.DiagOn2Algorithm(snn)
+  algorithm.compile_graph(jax.ShapeDtypeStruct((n_in,), bc.environ.dftype()))
+
+  def run_snn(i, inp_spk):
+    bc.share.set(i=i, t=i * bc.environ.get_dt())
+    out = algorithm.update_model_and_etrace(inp_spk)
+    return out
+
+  nt = 100
+  inputs = jnp.asarray(bc.random.rand(nt, n_in) < 0.2, dtype=bc.environ.dftype())
+  outs = bc.transform.for_loop(run_snn, np.arange(nt), inputs)
+  print(outs.shape)
+
+
+def try_if_delta_etrace_update_batched_On2():
+  n_batch, n_in, n_rec = 16, 4, 10
+  bc.environ.set(mode=bc.mixin.JointMode(bc.mixin.Batching(), bc.mixin.Training()))
+  snn = IF_Delta_Dense_Layer(n_in, n_rec)
+  snn = bc.init_states(snn, n_batch)
+
+  algorithm = nn.DiagOn2Algorithm(snn)
+  algorithm.compile_graph(jax.ShapeDtypeStruct((n_batch, n_in,), bc.environ.dftype()))
 
   def run_snn(i, inp_spk):
     bc.share.set(i=i, t=i * bc.environ.get_dt())
@@ -122,7 +162,7 @@ def try_if_delta_etrace_update_and_grad():
   weights = snn.states().subset(nn.ETraceParam)
   snn = bc.init_states(snn, n_batch)
 
-  algorithm = nn.ExpSmDiagOnAlgorithm(snn, decay=0.99)
+  algorithm = nn.DiagExpSmOnAlgorithm(snn, decay=0.99)
   algorithm.compile_graph(jax.ShapeDtypeStruct((n_batch, n_in), bc.environ.dftype()))
 
   def run_snn(last_grads, inputs):
@@ -150,7 +190,7 @@ def try_if_delta_etrace_grad_vs_bptt_grad():
 
   def etrace_grad(x):
     bc.init_states(snn, n_batch)
-    algorithm = nn.ExpSmDiagOnAlgorithm(snn, decay=0.99)
+    algorithm = nn.DiagExpSmOnAlgorithm(snn, decay=0.99)
     algorithm.compile_graph(jax.ShapeDtypeStruct((n_batch, n_in), bc.environ.dftype()))
 
     def run_snn(last_grads, inputs):
@@ -164,7 +204,7 @@ def try_if_delta_etrace_grad_vs_bptt_grad():
       return grads, out
 
     grads = jax.tree.map(lambda x: jnp.zeros_like(x), weights.to_dict_values())
-    grads, outs = bc.transform.scan(run_snn, grads, (np.arange(nt), inp_spks))
+    grads, outs = bc.transform.scan(run_snn, grads, (np.arange(nt), x))
     return grads, outs
 
   def bptt_grad(x):
@@ -190,20 +230,12 @@ def try_if_delta_etrace_grad_vs_bptt_grad():
   print(bptt_grads)
 
 
-def try_traceback():
-  n_batch, n_in, n_rec = 16, 4, 10
-  bc.environ.set(mode=bc.mixin.JointMode(bc.mixin.Batching(), bc.mixin.Training()))
-  snn = IF_Delta_Dense_Layer(n_in, n_rec)
-  weights = snn.states().subset(nn.ETraceParam)
-
-  for we in weights.values():
-    print(we._source_info.traceback)
-
-
 if __name__ == '__main__':
   pass
   # try1()
-  try_if_delta_etrace_update()
+  # try_if_delta_etrace_update()
+  # try_if_delta_etrace_update_On2()
+  try_if_delta_etrace_update_batched_On2()
   # try_if_delta_etrace_update_and_grad()
   # try_if_delta_etrace_grad_vs_bptt_grad()
   # try_traceback()

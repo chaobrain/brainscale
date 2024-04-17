@@ -16,6 +16,7 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import annotations
+
 import numbers
 from typing import Callable
 
@@ -24,8 +25,8 @@ import jax
 import jax.numpy as jnp
 from braintools import init
 
-from ._dynamics import Neuron
 from ._base import DnnLayer
+from ._dynamics import Neuron
 from ._etrace_concepts import ETraceParamOp, ETraceVar
 from .typing import Size, ArrayLike, DTypeLike, Spike
 
@@ -128,4 +129,3 @@ class LeakySpikeReadout(Neuron):
     V = self.integral(V, None, self.weight_op.execute(x), bc.share.get('dt')) + self.sum_delta_inputs()
     self.V.value = V
     return self.get_spike(V)
-

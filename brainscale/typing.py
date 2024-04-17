@@ -16,6 +16,7 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import annotations
+
 from typing import Any, Dict, Sequence, Union
 
 import braincore as bc
@@ -24,9 +25,9 @@ import jax
 __all__ = [
   'PyTree', 'StateID', 'WeightID', 'Size', 'Axis', 'Axes',
   'Inputs', 'Outputs',
-  'HiddenVals', 'StateVals', 'WeightVals', 'EtraceVals',
+  'HiddenVals', 'StateVals', 'WeightVals', 'ETraceVals', 'HiddenVar',
   'dG_Inputs', 'dG_Weight', 'dG_Hidden', 'dG_State',
-  'ArrayLike', 'DType', 'DTypeLike',
+  'ArrayLike', 'DType', 'DTypeLike', 'WeightXVar', 'WeightYVar',
   'WeightXs', 'WeightDfs', 'TempData', 'Current', 'Conductance', 'Spike',
 ]
 
@@ -50,7 +51,8 @@ Outputs = PyTree
 HiddenVals = Sequence[PyTree]
 StateVals = Sequence[PyTree]
 WeightVals = Sequence[PyTree]
-EtraceVals = PyTree
+ETraceVals = PyTree
+HiddenVar = jax.core.Var
 
 # --- gradients --- #
 dG_Inputs = PyTree  # gradients of inputs
@@ -59,6 +61,8 @@ dG_Hidden = Sequence[PyTree]  # gradients of hidden states
 dG_State = Sequence[PyTree]  # gradients of other states
 
 # --- data --- #
+WeightXVar = jax.core.Var
+WeightYVar = jax.core.Var
 WeightXs = Dict[jax.core.Var, jax.Array]
 WeightDfs = Dict[jax.core.Var, jax.Array]
 TempData = Dict[jax.core.Var, jax.Array]

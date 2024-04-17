@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools", 'braincore', 'braintools']
+requires = ["setuptools", 'braincore', 'braintools', 'brainpy']
 build-backend = "setuptools.build_meta"
 
 
@@ -47,6 +47,7 @@ keywords = ["brainpy", "brain simulation", "brain-inspired computing"]
 dependencies = [
     'braincore',
     'braintools',
+    'brainpy',
 ]
 
 dynamic = ['version']

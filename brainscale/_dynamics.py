@@ -109,7 +109,7 @@ class IF(Neuron):
     x = self.sum_current_inputs(v, init=x)
     return (-v + x) / self.tau
 
-  def init_state(self, batch_size, **kwargs):
+  def init_state(self, batch_size: int = None, **kwargs):
     self.V = ETraceVar(bts.init.parameter(jnp.zeros, self.varshape, batch_size))
 
   @property
@@ -166,7 +166,7 @@ class LIF(Neuron):
     x = self.sum_current_inputs(v, init=x)
     return (-v + self.V_rest + x) / self.tau
 
-  def init_state(self, batch_size, **kwargs):
+  def init_state(self, batch_size: int = None, **kwargs):
     self.V = ETraceVar(bts.init.parameter(bts.init.Constant(self.V_reset), self.varshape, batch_size))
 
   @property
@@ -226,7 +226,7 @@ class ALIF(Neuron):
   def da(self, a, t):
     return -a / self.tau_a
 
-  def init_state(self, batch_size, **kwargs):
+  def init_state(self, batch_size: int = None, **kwargs):
     self.V = ETraceVar(bts.init.parameter(bts.init.Constant(0.), self.varshape, batch_size))
     self.a = ETraceVar(bts.init.parameter(bts.init.Constant(0.), self.varshape, batch_size))
 
@@ -292,7 +292,7 @@ class Expon(Synapse):
   def derivative(self, g, t):
     return -g / self.tau
 
-  def init_state(self, batch_size=None, **kwargs):
+  def init_state(self, batch_size: int = None, **kwargs):
     self.g = ETraceVar(bts.init.parameter(bts.init.Constant(0.), self.varshape, batch_size))
 
   def update(self, x: Spike = None):
@@ -345,7 +345,7 @@ class STP(Synapse):
     # integral function
     self.integral = bp.odeint(self.derivative, method=self.method)
 
-  def init_state(self, batch_size=None, **kwargs):
+  def init_state(self, batch_size: int = None, **kwargs):
     self.x = ETraceVar(bts.init.parameter(bts.init.Constant(1.), self.varshape, batch_size))
     self.u = ETraceVar(bts.init.parameter(bts.init.Constant(self.U), self.varshape, batch_size))
 
@@ -411,7 +411,7 @@ class STD(Synapse):
     # integral function
     self.integral = bp.odeint(lambda x, t: (1 - x) / self.tau, method=method)
 
-  def init_state(self, batch_size=None, **kwargs):
+  def init_state(self, batch_size: int = None, **kwargs):
     self.x = ETraceVar(bts.init.parameter(bts.init.Constant(1.), self.varshape, batch_size))
 
   def update(self, pre_spike: Spike):
@@ -487,7 +487,7 @@ class ValinaRNNCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
     self.Wi = ETraceParamOp(Wi, op=jnp.matmul)
     self.Wh = ETraceParamOp(Wh, op=jnp.matmul)
 
-  def init_state(self, batch_size=None, **kwargs):
+  def init_state(self, batch_size: int = None, **kwargs):
     self.state = ETraceVar(bts.init.parameter(self._state_initializer, self.num_out, batch_size))
 
   def update(self, x):
@@ -554,7 +554,7 @@ class GRUCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
       self.bz = ETraceParamOp(bts.init.parameter(b_initializer, (self.num_out * 2,)), op=jnp.add)
       self.ba = ETraceParamOp(bts.init.parameter(b_initializer, (self.num_out,)), op=jnp.add)
 
-  def init_state(self, batch_size=None, **kwargs):
+  def init_state(self, batch_size: int = None, **kwargs):
     self.state = ETraceVar(self._state_initializer(batch_size, self.num_out))
 
   def update(self, x):
@@ -686,7 +686,7 @@ class LSTMCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
     self.Who = ETraceParamOp(bts.init.parameter(self._Wh_initializer, (self.num_out, self.num_out)),
                              op=jnp.matmul)
 
-  def init_state(self, batch_size, **kwargs):
+  def init_state(self, batch_size: int = None, **kwargs):
     self.c = ETraceVar(bts.init.parameter(self._state_initializer, [self.num_out], batch_size))
     self.state = ETraceVar(bts.init.parameter(self._state_initializer, [self.num_out], batch_size))
 

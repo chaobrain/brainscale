@@ -16,6 +16,7 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import annotations
+
 import numbers
 from typing import Callable, Union, Sequence, Optional, Any
 
@@ -91,15 +92,17 @@ def _compute_stats(
     dtype = jax.numpy.result_type(x)
   # promote x to at least float32, this avoids half precision computation
   # but preserves double or complex floating points
-  dtype = jax.numpy.promote_types(dtype, jnp.float32)
+  dtype = jax.numpy.promote_types(dtype, bc.environ.dftype())
   x = jnp.asarray(x, dtype)
 
+  # Compute mean and mean of squared values.
   mean2 = jnp.mean(_abs_sq(x), axes)
   if use_mean:
     mean = jnp.mean(x, axes)
   else:
     mean = jnp.zeros(mean2.shape, dtype=dtype)
 
+  # If axis_name is provided, we need to average the mean and mean2 across
   if axis_name is not None:
     concatenated_mean = jnp.concatenate([mean, mean2])
     mean, mean2 = jnp.split(
@@ -110,6 +113,7 @@ def _compute_stats(
       ),
       2,
     )
+
   # mean2 - _abs_sq(mean) is not guaranteed to be non-negative due
   # to floating point round-off errors.
   var = jnp.maximum(0.0, mean2 - _abs_sq(mean))
@@ -156,6 +160,161 @@ def _normalize(
     assert weights is None, 'scale and bias are not supported without mean and var'
     y = x
   return jnp.asarray(y, dtype)
+
+
+class _BatchNorm(DnnLayer):
+  __module__ = 'brainscale'
+  num_spatial_dims: int = None
+
+  def __init__(
+      self,
+      in_size: Size,
+      feature_axis: Axes = -1,
+      track_running_stats: bool = True,
+      epsilon: float = 1e-5,
+      momentum: float = 0.99,
+      affine: bool = True,
+      bias_initializer: Union[ArrayLike, Callable] = init.Constant(0.),
+      scale_initializer: Union[ArrayLike, Callable] = init.Constant(1.),
+      axis_name: Optional[Union[str, Sequence[str]]] = None,
+      axis_index_groups: Optional[Sequence[Sequence[int]]] = None,
+      as_etrace_weight: bool = False,
+      full_etrace: bool = False,
+      mode: Optional[bc.mixin.Mode] = None,
+      name: Optional[str] = None,
+      dtype: Any = None,
+  ):
+    super().__init__(name=name, mode=mode)
+
+    if not self.mode.has(bc.mixin.Batching):
+      raise ValueError('BatchNorm layers require the Batching mode.')
+
+    # parameters
+    self.in_size = tuple(in_size)
+    self.out_size = tuple(in_size)
+    self.affine = affine
+    self.bias_initializer = bias_initializer
+    self.scale_initializer = scale_initializer
+    self.dtype = dtype or bc.environ.dftype()
+    self.track_running_stats = track_running_stats
+    self.momentum = jnp.asarray(momentum, dtype=self.dtype)
+    self.epsilon = jnp.asarray(epsilon, dtype=self.dtype)
+
+    # parameters about axis
+    feature_axis = (feature_axis,) if isinstance(feature_axis, int) else feature_axis
+    self.feature_axis = _canonicalize_axes(len(in_size), feature_axis)
+    self.axis_name = axis_name
+    self.axis_index_groups = axis_index_groups
+
+    # variables
+    feature_shape = tuple([ax if i in self.feature_axis else 1 for i, ax in enumerate(in_size)])
+    if self.track_running_stats:
+      self.running_mean = bc.LongTermState(jnp.zeros(feature_shape, dtype=self.dtype))
+      self.running_var = bc.LongTermState(jnp.ones(feature_shape, dtype=self.dtype))
+    else:
+      self.running_mean = None
+      self.running_var = None
+
+    # parameters
+    if self.affine:
+      assert track_running_stats, "Affine parameters are not needed when track_running_stats is False."
+      bias = init.parameter(self.bias_initializer, feature_shape)
+      scale = init.parameter(self.scale_initializer, feature_shape)
+      weight = dict(bias=bias, scale=scale)
+      if as_etrace_weight:
+        self.weight = ETraceParamOp(weight, op=self._operation, full_grad=full_etrace)
+      else:
+        self.weight = NormalParamOp(weight, op=self._operation)
+    else:
+      self.weight = None
+
+  def _operation(self, x, param):
+    if 'scale' in param:
+      x = x * param['scale']
+    if 'bias' in param:
+      x = x + param['bias']
+    return x
+
+  def _check_input_dim(self, x):
+    if isinstance(self.num_spatial_dims, int):
+      if x.ndim == self.num_spatial_dims + 2:
+        x_shape = x.shape[1:]
+      elif x.ndim == self.num_spatial_dims + 1:
+        x_shape = x.shape
+      else:
+        raise ValueError(f"expected {self.num_spatial_dims + 2}D (with batch) or "
+                         f"{self.num_spatial_dims + 1}D (without batch) input (got {x.ndim}D input, {x.shape})")
+      if self.in_size != x_shape:
+        raise ValueError(f"The expected input shape is {self.in_size}, while we got {x_shape}.")
+
+  def update(self, x):
+    self._check_input_dim(x)
+    fit_phase = bc.share.get('fit', desc='Whether this is a fitting process. Bool.')
+
+    # reduce the feature axis
+    if self.mode.has(bc.mixin.Batching):
+      reduction_axes = tuple(i for i in range(x.ndim) if (i - 1) not in self.feature_axis)
+    else:
+      reduction_axes = tuple(i for i in range(x.ndim) if i not in self.feature_axis)
+
+    # compute the running mean and variance
+    if self.track_running_stats:
+      if fit_phase:
+        mean, var = _compute_stats(
+          x,
+          reduction_axes,
+          dtype=self.dtype,
+          axis_name=self.axis_name,
+          axis_index_groups=self.axis_index_groups,
+        )
+        self.running_mean.value = self.momentum * self.running_mean.value + (1 - self.momentum) * mean
+        self.running_var.value = self.momentum * self.running_var.value + (1 - self.momentum) * var
+      else:
+        mean = self.running_mean.value
+        var = self.running_var.value
+    else:
+      mean, var = None, None
+
+    # normalize
+    return _normalize(x, mean, var, self.weight, reduction_axes, self.dtype, self.epsilon)
+
+
+class BatchNorm1d(_BatchNorm):
+  r"""1-D batch normalization [1]_.
+
+  The data should be of `(b, l, c)`, where `b` is the batch dimension,
+  `l` is the layer dimension, and `c` is the channel dimension.
+
+  %s
+  """
+  __module__ = 'brainscale'
+  num_spatial_dims: int = 1
+
+
+class BatchNorm2d(_BatchNorm):
+  r"""2-D batch normalization [1]_.
+
+  The data should be of `(b, h, w, c)`, where `b` is the batch dimension,
+  `h` is the height dimension, `w` is the width dimension, and `c` is the
+  channel dimension.
+
+  %s
+  """
+  __module__ = 'brainscale'
+  num_spatial_dims: int = 2
+
+
+class BatchNorm3d(_BatchNorm):
+  r"""3-D batch normalization [1]_.
+
+  The data should be of `(b, h, w, d, c)`, where `b` is the batch dimension,
+  `h` is the height dimension, `w` is the width dimension, `d` is the depth
+  dimension, and `c` is the channel dimension.
+
+  %s
+  """
+  __module__ = 'brainscale'
+  num_spatial_dims: int = 3
 
 
 _bn_doc = r'''
@@ -223,237 +382,6 @@ _bn_doc = r'''
 
 '''
 
-
-def _bn_op(x, param):
-  if 'scale' in param:
-    x = x * param['scale']
-  if 'bias' in param:
-    x = x + param['bias']
-  return x
-
-
-class _BatchNorm(DnnLayer):
-  r"""Batch Normalization layer [1]_.
-
-  %s
-  """
-  __module__ = 'brainscale'
-
-  def __init__(
-      self,
-      in_size: Size,
-      feature_axis: Axes = -1,
-      track_running_stats: bool = True,
-      epsilon: float = 1e-5,
-      momentum: float = 0.99,
-      affine: bool = True,
-      bias_initializer: Union[ArrayLike, Callable] = init.Constant(0.),
-      scale_initializer: Union[ArrayLike, Callable] = init.Constant(1.),
-      axis_name: Optional[Union[str, Sequence[str]]] = None,
-      axis_index_groups: Optional[Sequence[Sequence[int]]] = None,
-      as_etrace_weight: bool = False,
-      mode: Optional[bc.mixin.Mode] = None,
-      name: Optional[str] = None,
-      dtype: Any = None,
-  ):
-    super().__init__(name=name, mode=mode)
-
-    # parameters
-    self.in_size = tuple(in_size)
-    self.out_size = tuple(in_size)
-    self.affine = affine
-    self.bias_initializer = bias_initializer
-    self.scale_initializer = scale_initializer
-    self.dtype = dtype or bc.environ.dftype()
-    self.track_running_stats = track_running_stats
-    self.momentum = jnp.asarray(momentum, dtype=self.dtype)
-    self.epsilon = jnp.asarray(epsilon, dtype=self.dtype)
-
-    # parameters about axis
-    feature_axis = (feature_axis,) if isinstance(feature_axis, int) else feature_axis
-    self.feature_axis = _canonicalize_axes(len(in_size), feature_axis)
-    self.axis_name = axis_name
-    self.axis_index_groups = axis_index_groups
-
-    # variables
-    feature_shape = tuple([ax if i in self.feature_axis else 1 for i, ax in enumerate(in_size)])
-    if self.track_running_stats:
-      self.running_mean = bc.LongTermState(jnp.zeros(feature_shape, dtype=self.dtype))
-      self.running_var = bc.LongTermState(jnp.ones(feature_shape, dtype=self.dtype))
-    else:
-      self.running_mean = None
-      self.running_var = None
-
-    # parameters
-    if self.affine:
-      assert track_running_stats, "Affine parameters are not needed when track_running_stats is False."
-      bias = init.parameter(self.bias_initializer, feature_shape)
-      scale = init.parameter(self.scale_initializer, feature_shape)
-      weight = dict(bias=bias, scale=scale)
-      if as_etrace_weight:
-        self.weight = ETraceParamOp(weight, _bn_op)
-      else:
-        self.weight = NormalParamOp(weight, _bn_op)
-    else:
-      self.weight = None
-
-  def update(self, x):
-    fit_phase = bc.share.get('fit', desc='Whether this is a fitting process. Bool.')
-
-    # reduce the feature axis
-    if self.mode.has(bc.mixin.Batching):
-      reduction_axes = tuple(i for i in range(x.ndim) if (i - 1) not in self.feature_axis)
-    else:
-      reduction_axes = tuple(i for i in range(x.ndim) if i not in self.feature_axis)
-
-    # compute the running mean and variance
-    if self.track_running_stats:
-      if fit_phase:
-        mean, var = _compute_stats(
-          x,
-          reduction_axes,
-          dtype=self.dtype,
-          axis_name=self.axis_name,
-          axis_index_groups=self.axis_index_groups,
-        )
-        self.running_mean.value = self.momentum * self.running_mean.value + (1 - self.momentum) * mean
-        self.running_var.value = self.momentum * self.running_var.value + (1 - self.momentum) * var
-      else:
-        mean = self.running_mean.value
-        var = self.running_var.value
-    else:
-      mean, var = None, None
-
-    # normalize
-    return _normalize(x, mean, var, self.weight, reduction_axes, self.dtype, self.epsilon)
-
-
-class BatchNorm1d(_BatchNorm):
-  r"""1-D batch normalization [1]_.
-
-  The data should be of `(b, l, c)`, where `b` is the batch dimension,
-  `l` is the layer dimension, and `c` is the channel dimension.
-
-  %s
-  """
-  __module__ = 'brainscale'
-
-  def __init__(
-      self,
-      in_size: Size,
-      feature_axis: Axes = -1,
-      track_running_stats: bool = True,
-      epsilon: float = 1e-5,
-      momentum: float = 0.99,
-      affine: bool = True,
-      bias_initializer: Union[ArrayLike, Callable] = init.Constant(0.),
-      scale_initializer: Union[ArrayLike, Callable] = init.Constant(1.),
-      axis_name: Optional[Union[str, Sequence[str]]] = None,
-      axis_index_groups: Optional[Sequence[Sequence[int]]] = None,
-      as_etrace_weight: bool = False,
-      mode: Optional[bc.mixin.Mode] = None,
-      name: Optional[str] = None,
-  ):
-    super().__init__(in_size=in_size,
-                     feature_axis=feature_axis,
-                     track_running_stats=track_running_stats,
-                     epsilon=epsilon,
-                     momentum=momentum,
-                     affine=affine,
-                     bias_initializer=bias_initializer,
-                     scale_initializer=scale_initializer,
-                     axis_name=axis_name,
-                     axis_index_groups=axis_index_groups,
-                     as_etrace_weight=as_etrace_weight,
-                     mode=mode,
-                     name=name)
-
-
-class BatchNorm2d(_BatchNorm):
-  r"""2-D batch normalization [1]_.
-
-  The data should be of `(b, h, w, c)`, where `b` is the batch dimension,
-  `h` is the height dimension, `w` is the width dimension, and `c` is the
-  channel dimension.
-
-  %s
-  """
-  __module__ = 'brainscale'
-
-  def __init__(
-      self,
-      in_size: Size,
-      feature_axis: Axes = -1,
-      track_running_stats: bool = True,
-      epsilon: float = 1e-5,
-      momentum: float = 0.99,
-      affine: bool = True,
-      bias_initializer: Union[ArrayLike, Callable] = init.Constant(0.),
-      scale_initializer: Union[ArrayLike, Callable] = init.Constant(1.),
-      axis_name: Optional[Union[str, Sequence[str]]] = None,
-      axis_index_groups: Optional[Sequence[Sequence[int]]] = None,
-      as_etrace_weight: bool = False,
-      mode: Optional[bc.mixin.Mode] = None,
-      name: Optional[str] = None,
-  ):
-    super().__init__(in_size=in_size,
-                     feature_axis=feature_axis,
-                     track_running_stats=track_running_stats,
-                     epsilon=epsilon,
-                     momentum=momentum,
-                     affine=affine,
-                     bias_initializer=bias_initializer,
-                     scale_initializer=scale_initializer,
-                     axis_name=axis_name,
-                     axis_index_groups=axis_index_groups,
-                     as_etrace_weight=as_etrace_weight,
-                     mode=mode,
-                     name=name)
-
-
-class BatchNorm3d(_BatchNorm):
-  r"""3-D batch normalization [1]_.
-
-  The data should be of `(b, h, w, d, c)`, where `b` is the batch dimension,
-  `h` is the height dimension, `w` is the width dimension, `d` is the depth
-  dimension, and `c` is the channel dimension.
-
-  %s
-  """
-  __module__ = 'brainscale'
-
-  def __init__(
-      self,
-      in_size: Size,
-      feature_axis: Axes = -1,
-      track_running_stats: bool = True,
-      epsilon: float = 1e-5,
-      momentum: float = 0.99,
-      affine: bool = True,
-      bias_initializer: Union[ArrayLike, Callable] = init.Constant(0.),
-      scale_initializer: Union[ArrayLike, Callable] = init.Constant(1.),
-      axis_name: Optional[Union[str, Sequence[str]]] = None,
-      axis_index_groups: Optional[Sequence[Sequence[int]]] = None,
-      as_etrace_weight: bool = False,
-      mode: Optional[bc.mixin.Mode] = None,
-      name: Optional[str] = None,
-  ):
-    super().__init__(in_size=in_size,
-                     feature_axis=feature_axis,
-                     track_running_stats=track_running_stats,
-                     epsilon=epsilon,
-                     momentum=momentum,
-                     affine=affine,
-                     bias_initializer=bias_initializer,
-                     scale_initializer=scale_initializer,
-                     axis_name=axis_name,
-                     axis_index_groups=axis_index_groups,
-                     as_etrace_weight=as_etrace_weight,
-                     mode=mode,
-                     name=name)
-
-
-_BatchNorm.__doc__ = _BatchNorm.__doc__ % _bn_doc
 BatchNorm1d.__doc__ = BatchNorm1d.__doc__ % _bn_doc
 BatchNorm2d.__doc__ = BatchNorm2d.__doc__ % _bn_doc
 BatchNorm3d.__doc__ = BatchNorm3d.__doc__ % _bn_doc

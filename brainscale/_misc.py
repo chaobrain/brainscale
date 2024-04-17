@@ -15,34 +15,39 @@
 
 
 from __future__ import annotations
-import braincore as bc
+
 from typing import Sequence
+
+import braincore as bc
 
 git_issue_addr = 'https://github.com/brainpy/brainscale/issues'
 
 
 def state_traceback(states: Sequence[bc.State]):
-    """
-    Traceback the states of the brain model.
+  """
+  Traceback the states of the brain model.
 
-    Parameters
-    ----------
-    states : Sequence[bc.State]
-        The states of the brain model.
+  Parameters
+  ----------
+  states : Sequence[bc.State]
+    The states of the brain model.
 
-    Returns
-    -------
-    str
-        The traceback information of the states.
-    """
-    state_info = []
-    for i, state in enumerate(states):
-        state_info.append(f'State {i}: {state}\n'
-                          f'defined at \n'
-                          f'{state.source_info.traceback}\n')
-    return '\n'.join(state_info)
-
-
+  Returns
+  -------
+  str
+    The traceback information of the states.
+  """
+  state_info = []
+  for i, state in enumerate(states):
+    state_info.append(f'State {i}: {state}\n'
+                      f'defined at \n'
+                      f'{state.source_info.traceback}\n')
+  return '\n'.join(state_info)
 
 
+def set_module_as(module: str = 'brainscale'):
+  def wrapper(fun: callable):
+    fun.__module__ = module
+    return fun
 
+  return wrapper

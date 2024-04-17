@@ -14,6 +14,7 @@
 # ==============================================================================
 
 from __future__ import annotations
+
 import numbers
 import unittest
 from typing import Callable
@@ -189,7 +190,7 @@ class TestCompiler(unittest.TestCase):
     bc.init_states(model, 16)
 
     # algorithms
-    algorithm = nn.ExpSmDiagOnAlgorithm(model, decay=0.99)
+    algorithm = nn.DiagExpSmOnAlgorithm(model, decay=0.99)
     algorithm.compile_graph(inp_spk)
     out = algorithm(inp_spk)
 

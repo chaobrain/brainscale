@@ -15,10 +15,11 @@
 
 # -*- coding: utf-8 -*-
 
-
 from __future__ import annotations
+
 import contextlib
 import functools
+from enum import Enum
 from typing import Callable, Sequence, Tuple, List, Optional
 
 import braincore as bc
@@ -107,6 +108,11 @@ class ETraceOp(object):
     return y
 
 
+class ETraceGrad(Enum):
+  full = 'full'
+  approx = 'approx'
+
+
 class ETraceParamOp(ETraceParam):
   """
   The Eligibility Trace Weight and its Associated Operator.
@@ -118,8 +124,12 @@ class ETraceParamOp(ETraceParam):
   __module__ = 'brainscale'
   op: ETraceOp  # operator
 
-  def __init__(self, weight: PyTree, op: Callable):
+  def __init__(self, weight: PyTree, op: Callable, full_grad: Optional[bool] = None):
+    # weight value
     super().__init__(weight)
+
+    # gradient
+    self.gradient = ETraceGrad.full if full_grad else ETraceGrad.approx
 
     # operation
     if isinstance(op, ETraceOp):
@@ -133,7 +143,11 @@ class ETraceParamOp(ETraceParam):
 
 class NormalParamOp(bc.ParamState):
   """
-  The Parameter State with an Associated Operator.
+  The Normal Parameter State with an Associated Operator.
+
+  This class behaves the same as :py:class:`ETraceParamOp`, but will not build the
+  eligibility trace graph when using online learning. Therefore, in a sequence
+  learning task, the weight can only be trained with the spatial gradients.
 
   Args:
     value: The value of the parameter.
@@ -239,4 +253,3 @@ def split_states_v2(
       else:
         other_states.append(st)
   return etrace_param_states, hidden_states, param_states, other_states
-
