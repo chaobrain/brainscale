@@ -24,6 +24,7 @@ from __future__ import annotations
 from functools import partial
 from typing import Dict, Tuple, Any, Callable, List
 
+import numpy as np
 import braincore as bc
 import jax.core
 import jax.numpy as jnp
@@ -90,30 +91,6 @@ def low_pass_filter(old, new, alpha):
   :return: the filtered value
   """
   return alpha * old + new
-
-
-def tree_expon_smooth(olds, news, decay):
-  """
-  Exponential smoothing for the tree structure.
-
-  :param olds: the old values
-  :param news: the new values
-  :param decay: the decay factor
-  :return: the smoothed values
-  """
-  return jax.tree.map(partial(expon_smooth, decay=decay), olds, news)
-
-
-def tree_low_pass_filter(olds, news, alpha):
-  """
-  Low-pass filter for the tree structure.
-
-  :param olds: the old values
-  :param news: the new values
-  :param alpha: the filter factor
-  :return: the filtered values
-  """
-  return jax.tree.map(partial(low_pass_filter, alpha=alpha), olds, news)
 
 
 def update_dict(the_dict: Dict, key: Any, value: PyTree):
@@ -545,19 +522,22 @@ class DiagExpSmOnAlgorithm(_DiagETraceAlgorithmForVJP):
   etrace_xs: Dict[WeightXVar, bc.State]  # the spatial gradients of the weights
   etrace_dfs: Dict[Tuple[WeightYVar, HiddenVar], bc.State]  # the spatial gradients of the hidden states
 
-  decay: float  # the decay factor
-  num_rank: int  # the number of approximation rank
+  tau_pre: float  # the time constant of the input
+  tau_post: float  # the time constant of the post diagonal Jacobian
 
   def __init__(self,
                model_or_graph: Callable | ETraceGraph,
-               decay: float = None,
-               num_rank: int = None,
+               tau_pre: float,
+               tau_post: float,
                name: str | None = None,
                mode: bc.mixin.Mode | None = None):
     super().__init__(model_or_graph, name=name, mode=mode)
 
     # the learning parameters
-    self.decay, self.num_rank = _format_decay_and_rank(decay, num_rank)
+    self.tau_pre = tau_pre
+    self.tau_post = tau_post
+    self.decay_pre = np.exp(-bc.environ.get_dt() / tau_pre)
+    self.decay_post = np.exp(-bc.environ.get_dt() / tau_post)
 
   def init_etrace_state(self, *args, **kwargs):
     # The states of weight spatial gradients:
@@ -608,7 +588,7 @@ class DiagExpSmOnAlgorithm(_DiagETraceAlgorithmForVJP):
 
     # update the weight x
     for x in hist_xs.keys():
-      new_etrace_xs[x] = low_pass_filter(hist_xs[x], xs[x], self.decay)
+      new_etrace_xs[x] = low_pass_filter(hist_xs[x], xs[x], self.decay_pre)
 
     # update the weight df * diagonal
     for dfkey in hist_dfs.keys():
@@ -617,7 +597,7 @@ class DiagExpSmOnAlgorithm(_DiagETraceAlgorithmForVJP):
 
     # update the weight df
     for dfkey in hist_dfs.keys():
-      new_etrace_dfs[dfkey] = expon_smooth(new_etrace_dfs[dfkey], dfs[dfkey], self.decay)
+      new_etrace_dfs[dfkey] = expon_smooth(new_etrace_dfs[dfkey], dfs[dfkey], self.decay_post)
     return new_etrace_xs, new_etrace_dfs
 
   def _solve_weight_gradients(
@@ -772,19 +752,22 @@ class DiagHybridAlgorithm(_DiagETraceAlgorithmForVJP):
   etrace_dfs: Dict[Tuple[WeightYVar, HiddenVar], bc.State]  # the spatial gradients of the hidden states
   etrace_bwg: Dict[Tuple[WeightID, WeightXVar, HiddenVar], bc.State]  # batch of weight gradients
 
-  decay: float  # the decay factor
-  num_rank: int  # the number of approximation rank
+  tau_pre: float  # the time constant of the input
+  tau_post: float  # the time constant of the post diagonal Jacobian
 
   def __init__(self,
                model_or_graph: Callable | ETraceGraph,
-               decay: float = None,
-               num_rank: int = None,
+               tau_pre: float,
+               tau_post: float,
                name: str | None = None,
                mode: bc.mixin.Mode | None = None):
     super().__init__(model_or_graph, name=name, mode=mode)
 
     # the learning parameters
-    self.decay, self.num_rank = _format_decay_and_rank(decay, num_rank)
+    self.tau_pre = tau_pre
+    self.tau_post = tau_post
+    self.decay_pre = np.exp(-bc.environ.get_dt() / tau_pre)
+    self.decay_post = np.exp(-bc.environ.get_dt() / tau_post)
 
   def init_etrace_state(self, *args, **kwargs):
     # The states of weight spatial gradients:
@@ -868,14 +851,14 @@ class DiagHybridAlgorithm(_DiagETraceAlgorithmForVJP):
 
     # update the weight x
     for x in hist_xs.keys():
-      new_etrace_xs[x] = low_pass_filter(hist_xs[x], cur_etrace_xs[x], self.decay)
+      new_etrace_xs[x] = low_pass_filter(hist_xs[x], cur_etrace_xs[x], self.decay_pre)
     # update the weight df * diagonal
     for dfkey in hist_dfs.keys():
       df_var, hidden_var = dfkey
       new_etrace_dfs[dfkey] = hist_dfs[dfkey] * temporal_jacobian[hidden_var]
     # update the weight df
     for dfkey in hist_dfs.keys():
-      new_etrace_dfs[dfkey] = expon_smooth(new_etrace_dfs[dfkey], cur_etrace_ys[dfkey], self.decay)
+      new_etrace_dfs[dfkey] = expon_smooth(new_etrace_dfs[dfkey], cur_etrace_ys[dfkey], self.decay_post)
     return new_etrace_xs, new_etrace_dfs, new_etrace_bwg
 
   def _solve_weight_gradients(self,
