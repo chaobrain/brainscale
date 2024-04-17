@@ -26,7 +26,7 @@ __all__ = [
   'Inputs', 'Outputs',
   'HiddenVals', 'StateVals', 'WeightVals', 'ETraceVals', 'HiddenVar',
   'dG_Inputs', 'dG_Weight', 'dG_Hidden', 'dG_State',
-  'ArrayLike', 'DType', 'DTypeLike',
+  'ArrayLike', 'DType', 'DTypeLike', 'WeightXVar', 'WeightYVar',
   'WeightXs', 'WeightDfs', 'TempData', 'Current', 'Conductance', 'Spike',
 ]
 

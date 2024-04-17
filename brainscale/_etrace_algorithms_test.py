@@ -65,14 +65,14 @@ class TestDiagOn2(unittest.TestCase):
   def test_if_delta_etrace_update_On2(self):
     for mode in [
       bc.mixin.Batching(),
+      bc.mixin.Training(),
       bc.mixin.JointMode(bc.mixin.Batching(), bc.mixin.Training()),
     ]:
       bc.environ.set(mode=mode)
 
-      with self.assertRaises(NotSupportedError):
-        n_in, n_rec = 4, 10
-        snn = IF_Delta_Dense_Layer(n_in, n_rec)
-        snn = bc.init_states(snn)
-        algorithm = nn.DiagOn2Algorithm(snn)
+      n_in, n_rec = 4, 10
+      snn = IF_Delta_Dense_Layer(n_in, n_rec)
+      snn = bc.init_states(snn)
+      algorithm = nn.DiagOn2Algorithm(snn)
 
 

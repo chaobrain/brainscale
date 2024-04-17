@@ -1087,7 +1087,7 @@ class ETraceGraph:
 
   def _compute_hid2weight_jacobian(
       self, intermediate_values: dict
-  ) -> Tuple[Dict[WeightXVar, jax.Array], Dict[WeightYVar, jax.Array]]:
+  ) -> Tuple[Dict[WeightXVar, jax.Array], Dict[Tuple[WeightYVar, HiddenVar], jax.Array]]:
     """
     Computing the weight x and df values for the spatial gradients.
 
@@ -1122,6 +1122,7 @@ class ETraceGraph:
       # # ---- Method 2: using ``jax.vjp`` ---- #
       # However, for general cases, we choose to use ``jax.vjp`` to compute the gradients.
       #
+      # # ---- Method 3: using ``jax.jvp`` ---- #
       assert len(invars) == 1
       _, f_vjp = jax.vjp(lambda x: jax.core.eval_jaxpr(relation.jaxpr_y2hid, consts, x), invars[0])
       df = f_vjp(outvar_grads)[0]

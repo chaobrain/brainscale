@@ -15,12 +15,12 @@
 
 # -*- coding: utf-8 -*-
 
-
 from __future__ import annotations
+
 import contextlib
 import functools
-from typing import Callable, Sequence, Tuple, List, Optional
 from enum import Enum
+from typing import Callable, Sequence, Tuple, List, Optional
 
 import braincore as bc
 import jax.lax
@@ -110,7 +110,7 @@ class ETraceOp(object):
 
 class ETraceGrad(Enum):
   full = 'full'
-  approx = 'approx'
+  default = 'none'
 
   @classmethod
   def get(cls, type_: str | Enum):
@@ -140,12 +140,12 @@ class ETraceParamOp(ETraceParam):
   __module__ = 'brainscale'
   op: ETraceOp  # operator
 
-  def __init__(self, weight: PyTree, op: Callable, gradient: str = 'approx'):
+  def __init__(self, weight: PyTree, op: Callable, gradient: Optional[str] = None):
     # weight value
     super().__init__(weight)
 
     # gradient
-    self.gradient = ETraceGrad.get(gradient)
+    self.gradient = ETraceGrad.get(gradient or 'default')
 
     # operation
     if isinstance(op, ETraceOp):
@@ -269,4 +269,3 @@ def split_states_v2(
       else:
         other_states.append(st)
   return etrace_param_states, hidden_states, param_states, other_states
-
