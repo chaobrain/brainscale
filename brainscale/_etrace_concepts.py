@@ -110,7 +110,7 @@ class ETraceOp(object):
 
 class ETraceGrad(Enum):
   full = 'full'
-  default = 'none'
+  approx = 'approx'
 
   @classmethod
   def get(cls, type_: str | Enum):
@@ -140,12 +140,12 @@ class ETraceParamOp(ETraceParam):
   __module__ = 'brainscale'
   op: ETraceOp  # operator
 
-  def __init__(self, weight: PyTree, op: Callable, gradient: Optional[str] = None):
+  def __init__(self, weight: PyTree, op: Callable, full_grad: Optional[bool] = None):
     # weight value
     super().__init__(weight)
 
     # gradient
-    self.gradient = ETraceGrad.get(gradient or 'default')
+    self.gradient = ETraceGrad.full if full_grad else ETraceGrad.approx
 
     # operation
     if isinstance(op, ETraceOp):

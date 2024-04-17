@@ -94,6 +94,7 @@ class Linear(DnnLayer):
       b_init: Optional[Union[Callable, ArrayLike]] = init.ZeroInit(),
       w_mask: Optional[Union[ArrayLike, Callable]] = None,
       as_etrace_weight: bool = True,
+      full_etrace: bool = False,
       name: Optional[str] = None,
       mode: Optional[bc.mixin.Mixin] = None,
   ):
@@ -111,7 +112,7 @@ class Linear(DnnLayer):
     if b_init is not None:
       params['bias'] = init.parameter(b_init, self.out_size, allow_none=False)
     if as_etrace_weight:
-      self.weight_op = ETraceParamOp(params, self._operation)
+      self.weight_op = ETraceParamOp(params, self._operation, full_grad=full_etrace)
     else:
       self.weight_op = NormalParamOp(params, self._operation)
 
@@ -141,6 +142,7 @@ class SignedWLinear(DnnLayer):
       w_init: Union[Callable, ArrayLike] = init.KaimingNormal(),
       w_sign: Union[Callable, ArrayLike] = None,
       as_etrace_weight: bool = True,
+      full_etrace: bool = False,
       name: str = None,
       mode: bc.mixin.Mode = None
   ):
@@ -156,7 +158,7 @@ class SignedWLinear(DnnLayer):
     # weights
     weight = init.parameter(w_init, self.in_size + self.out_size, allow_none=False)
     if as_etrace_weight:
-      self.weight_op = ETraceParamOp(weight, self._operation)
+      self.weight_op = ETraceParamOp(weight, self._operation, full_grad=full_etrace)
     else:
       self.weight_op = NormalParamOp(weight, self._operation)
 
@@ -210,6 +212,7 @@ class ScaledWSLinear(DnnLayer):
       b_init: Callable = init.ZeroInit(),
       w_mask: Optional[Union[ArrayLike, Callable]] = None,
       as_etrace_weight: bool = True,
+      full_etrace: bool = False,
       ws_gain: bool = True,
       eps: float = 1e-4,
       name: str = None,
@@ -238,7 +241,7 @@ class ScaledWSLinear(DnnLayer):
 
     # weight operation
     if as_etrace_weight:
-      self.weight_op = ETraceParamOp(params, self._operation)
+      self.weight_op = ETraceParamOp(params, self._operation, full_grad=full_etrace)
     else:
       self.weight_op = NormalParamOp(params, self._operation)
 
@@ -416,6 +419,7 @@ class _Conv(_BaseConv):
       b_initializer: Optional[Union[Callable, ArrayLike]] = None,
       w_mask: Optional[Union[ArrayLike, Callable]] = None,
       as_etrace_weight: bool = True,
+      full_etrace: bool = False,
       mode: bc.mixin.Mixin = None,
       name: str = None,
   ):
@@ -444,7 +448,7 @@ class _Conv(_BaseConv):
 
     # The weight operation
     if as_etrace_weight:
-      self.weight_op = ETraceParamOp(params, op=self._conv_op)
+      self.weight_op = ETraceParamOp(params, op=self._conv_op, full_grad=full_etrace)
     else:
       self.weight_op = NormalParamOp(params, op=self._conv_op)
 
@@ -698,6 +702,7 @@ class _ScaledWSConv(_BaseConv):
       b_initializer: Optional[Union[Callable, ArrayLike]] = None,
       w_mask: Optional[Union[ArrayLike, Callable]] = None,
       as_etrace_weight: bool = True,
+      full_etrace: bool = False,
       mode: bc.mixin.Mixin = None,
       name: str = None,
   ):
@@ -735,7 +740,7 @@ class _ScaledWSConv(_BaseConv):
 
     # The weight operation
     if as_etrace_weight:
-      self.weight_op = ETraceParamOp(params, op=self._conv_op)
+      self.weight_op = ETraceParamOp(params, op=self._conv_op, full_grad=full_etrace)
     else:
       self.weight_op = NormalParamOp(params, op=self._conv_op)
 
