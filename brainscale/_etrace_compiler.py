@@ -22,7 +22,7 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import Callable, NamedTuple, List, Dict, Sequence, Tuple, Set, Any
+from typing import Callable, NamedTuple, List, Dict, Sequence, Tuple, Set
 
 import braincore as bc
 import jax.core
@@ -384,7 +384,6 @@ def _fun_to_weight(jaxpr_x2hid, weight_val, hidden_i, hidden_grad, consts, x):
   )
   d_weights = f_vjp(hidden_grad)[0]
   return d_weights
-
 
 
 class JaxprEvaluationForETraceRelation:
@@ -1105,7 +1104,7 @@ class ETraceGraph:
     for relation in self.weight_hidden_relations:
       consts = [intermediate_values[var] for var in relation.jaxpr_y2hid.constvars]
       invars = [intermediate_values[var] for var in relation.jaxpr_y2hid.invars]  # weight y
-      outvar_grads = [jnp.ones(v.aval.shape, v.aval.dtype) for v in relation.jaxpr_y2hid.outvars]  # hidden states
+      assert len(invars) == 1
 
       # [ KEY ]
       #
@@ -1123,12 +1122,13 @@ class ETraceGraph:
       # However, for general cases, we choose to use ``jax.vjp`` to compute the gradients.
       #
       # # ---- Method 3: using ``jax.jvp`` ---- #
-      assert len(invars) == 1
-      _, f_vjp = jax.vjp(lambda x: jax.core.eval_jaxpr(relation.jaxpr_y2hid, consts, x), invars[0])
-      df = f_vjp(outvar_grads)[0]
+      primals, tangents = jax.jvp(lambda x: jax.core.eval_jaxpr(relation.jaxpr_y2hid, consts, x),
+                                  invars,
+                                  [jnp.ones(invars[0].shape, invars[0].dtype)])
 
       # get the df we want
-      dfs[relation.y] = df
+      for i, hidden_var in enumerate(relation.jaxpr_y2hid.outvars):  # hidden states
+        dfs[(relation.y, hidden_var)] = tangents[i]
 
     # all x and df values
     return xs, dfs
@@ -1196,4 +1196,3 @@ def build_etrace_graph(model, *args, **kwargs) -> ETraceGraph:
   etrace_graph = ETraceGraph(model)
   etrace_graph.compile_graph(*args, **kwargs)
   return etrace_graph
-

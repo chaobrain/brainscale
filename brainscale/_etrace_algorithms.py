@@ -38,7 +38,6 @@ from .typing import (PyTree, Outputs, WeightID, HiddenVar, WeightXVar, WeightYVa
                      HiddenVals, StateVals, ETraceVals,
                      dG_Inputs, dG_Weight, dG_Hidden, dG_State)
 
-
 __all__ = [
   'ETraceAlgorithm',
   'DiagExpSmOnAlgorithm',
@@ -571,8 +570,8 @@ class DiagExpSmOnAlgorithm(_DiagETraceAlgorithmForVJP):
     for relation in self.graph.weight_hidden_relations:
       if relation.x not in self.etrace_xs:
         self.etrace_xs[relation.x] = bc.State(jnp.zeros(relation.x.aval.shape, relation.x.aval.dtype))
-      for statevar in relation.hidden_vars:
-        key = (relation.y, statevar)
+      for hidden_var in relation.hidden_vars:
+        key = (relation.y, hidden_var)
         if key in self.etrace_dfs:
           raise ValueError(f'The relation {key} has been added. ')
         self.etrace_dfs[key] = bc.State(jnp.zeros(relation.y.aval.shape, relation.y.aval.dtype))
@@ -595,7 +594,7 @@ class DiagExpSmOnAlgorithm(_DiagETraceAlgorithmForVJP):
       self,
       temporal_jacobian: Dict[jax.core.Var, jax.Array],
       hist_etrace_vals: PyTree,
-      hid2weight_jac: Tuple[Dict[WeightXVar, jax.Array], Dict[WeightYVar, jax.Array]],
+      hid2weight_jac: Tuple[Dict[WeightXVar, jax.Array], Dict[Tuple[WeightYVar, HiddenVar], jax.Array]],
       weight_id_to_its_val: Dict[WeightID, PyTree]
   ) -> ETraceVals:
 
@@ -615,13 +614,12 @@ class DiagExpSmOnAlgorithm(_DiagETraceAlgorithmForVJP):
 
     # update the weight df * diagonal
     for dfkey in hist_dfs.keys():
-      df_var, state_var = dfkey
-      new_etrace_dfs[dfkey] = hist_dfs[dfkey] * temporal_jacobian[state_var]
+      df_var, hidden_var = dfkey
+      new_etrace_dfs[dfkey] = hist_dfs[dfkey] * temporal_jacobian[hidden_var]
 
     # update the weight df
     for dfkey in hist_dfs.keys():
-      df_var, state_var = dfkey
-      new_etrace_dfs[dfkey] = expon_smooth(new_etrace_dfs[dfkey], dfs[df_var], self.decay)
+      new_etrace_dfs[dfkey] = expon_smooth(new_etrace_dfs[dfkey], dfs[dfkey], self.decay)
     return new_etrace_xs, new_etrace_dfs
 
   def _solve_weight_gradients(
@@ -671,8 +669,8 @@ class DiagOn2Algorithm(_DiagETraceAlgorithmForVJP):
     for relation in self.graph.weight_hidden_relations:
       # TODO: assume the batch size is the first dimension
       batch_size = relation.x.aval.shape[0] if self.mode.has(bc.mixin.Batching) else None
-      for state_var in relation.hidden_vars:
-        key = (id(relation.weight), relation.x, state_var)
+      for hidden_var in relation.hidden_vars:
+        key = (id(relation.weight), relation.x, hidden_var)
         if key in self.etrace_bwg:
           raise ValueError(f'The relation {key} has been added. ')
         self.etrace_bwg[key] = bc.State(jax.tree.map(partial(batched_zeros_like, batch_size),
@@ -689,7 +687,7 @@ class DiagOn2Algorithm(_DiagETraceAlgorithmForVJP):
       self,
       temporal_jacobian: Dict[HiddenVar, jax.Array],
       hist_etrace_vals: Dict[Tuple[WeightID, WeightXVar, HiddenVar], PyTree],
-      hid2weight_jac: Tuple[Dict[WeightXVar, jax.Array], Dict[WeightYVar, jax.Array]],
+      hid2weight_jac: Tuple[Dict[WeightXVar, jax.Array], Dict[Tuple[WeightYVar, HiddenVar], jax.Array]],
       weight_id_to_its_val: Dict[WeightID, PyTree]
   ) -> Dict[Tuple[WeightID, WeightXVar, HiddenVar], PyTree]:
     # "hist_etrace_vals" has the following structure:
@@ -704,11 +702,12 @@ class DiagOn2Algorithm(_DiagETraceAlgorithmForVJP):
       weight_vals = weight_id_to_its_val[weight_id]
       for i, hid_var in enumerate(relation.hidden_vars):
         key = (weight_id, relation.x, hid_var)
+        y_key = (relation.y, hid_var)
         dg_hidden = relation.hidden2df[i](temporal_jacobian[hid_var])
         dg_weight = dy_to_weight(self.mode, relation, weight_vals, dg_hidden)
         current_etrace = dx_dy_to_weight(self.mode, relation, weight_vals,
                                          cur_etrace_xs[relation.x],
-                                         cur_etrace_ys[relation.y])
+                                         cur_etrace_ys[y_key])
         new_etrace_bwg[key] = jax.tree.map(lambda old, jac, new: old * jac + new,
                                            hist_etrace_vals[key],
                                            dg_weight,
@@ -788,8 +787,8 @@ class DiagHybridAlgorithm(_DiagETraceAlgorithmForVJP):
       if isinstance(relation.weight, ETraceParamOp) and relation.weight.gradient == ETraceGrad.full:
         # TODO: assume the batch size is the first dimension
         batch_size = relation.x.aval.shape[0] if self.mode.has(bc.mixin.Batching) else None
-        for state_var in relation.hidden_vars:
-          key = (id(relation.weight), relation.x, state_var)
+        for hidden_var in relation.hidden_vars:
+          key = (id(relation.weight), relation.x, hidden_var)
           if key in self.etrace_bwg:
             raise ValueError(f'The relation {key} has been added. ')
           self.etrace_bwg[key] = bc.State(jax.tree.map(partial(batched_zeros_like, batch_size),
@@ -797,8 +796,8 @@ class DiagHybridAlgorithm(_DiagETraceAlgorithmForVJP):
       else:
         if relation.x not in self.etrace_xs:
           self.etrace_xs[relation.x] = bc.State(jnp.zeros(relation.x.aval.shape, relation.x.aval.dtype))
-        for statevar in relation.hidden_vars:
-          key = (relation.y, statevar)
+        for hidden_var in relation.hidden_vars:
+          key = (relation.y, hidden_var)
           if key in self.etrace_dfs:
             raise ValueError(f'The relation {key} has been added. ')
           self.etrace_dfs[key] = bc.State(jnp.zeros(relation.y.aval.shape, relation.y.aval.dtype))
@@ -826,7 +825,7 @@ class DiagHybridAlgorithm(_DiagETraceAlgorithmForVJP):
       self,
       temporal_jacobian: Dict[HiddenVar, jax.Array],
       hist_etrace_vals: Tuple[Dict, Dict, Dict],
-      hid2weight_jac: Tuple[Dict[WeightXVar, jax.Array], Dict[WeightYVar, jax.Array]],
+      hid2weight_jac: Tuple[Dict[WeightXVar, jax.Array], Dict[Tuple[WeightYVar, HiddenVar], jax.Array]],
       weight_id_to_its_val: Dict[WeightID, PyTree]
   ) -> Tuple[Dict, Dict, Dict]:
     # the history etrace values
@@ -845,11 +844,12 @@ class DiagHybridAlgorithm(_DiagETraceAlgorithmForVJP):
         weight_vals = weight_id_to_its_val[weight_id]
         for i, hid_var in enumerate(relation.hidden_vars):
           key = (weight_id, relation.x, hid_var)
+          y_key = (relation.y, hid_var)
           dg_hidden = relation.hidden2df[i](temporal_jacobian[hid_var])
           dg_weight = dy_to_weight(self.mode, relation, weight_vals, dg_hidden)
           current_etrace = dx_dy_to_weight(self.mode, relation, weight_vals,
                                            cur_etrace_xs[relation.x],
-                                           cur_etrace_ys[relation.y])
+                                           cur_etrace_ys[y_key])
           new_etrace_bwg[key] = jax.tree.map(lambda old, jac, new: old * jac + new,
                                              hist_wgrads[key],
                                              dg_weight,
@@ -863,14 +863,13 @@ class DiagHybridAlgorithm(_DiagETraceAlgorithmForVJP):
 
     # update the weight df * diagonal
     for dfkey in hist_dfs.keys():
-      df_var, state_var = dfkey
-      new_etrace_dfs[dfkey] = hist_dfs[dfkey] * temporal_jacobian[state_var]
+      df_var, hidden_var = dfkey
+      new_etrace_dfs[dfkey] = hist_dfs[dfkey] * temporal_jacobian[hidden_var]
 
     # update the weight df
     for dfkey in hist_dfs.keys():
-      df_var, state_var = dfkey
       new_etrace_dfs[dfkey] = expon_smooth(new_etrace_dfs[dfkey],
-                                           cur_etrace_ys[df_var],
+                                           cur_etrace_ys[dfkey],
                                            self.decay)
     return new_etrace_xs, new_etrace_dfs, new_etrace_bwg
 
