@@ -293,7 +293,7 @@ class ETraceAlgorithm(bc.Module):
 
   def init_etrace_state(self, *args, **kwargs) -> None:
     """
-    Initialize the states of the etrace algorithm.
+    Initialize the eligibility trace states of the etrace algorithm.
 
     This method is needed after compiling the etrace graph. See `.compile_graph()` for the details.
     """
@@ -664,7 +664,7 @@ class DiagOn2Algorithm(_DiagETraceAlgorithmForVJP):
   etrace_bwg: Dict[Tuple[WeightID, WeightXVar, HiddenVar], bc.State]  # batch of weight gradients
 
   def init_etrace_state(self, *args, **kwargs):
-    # The states of batched weight gradients:
+    # The states of batched weight gradients
     self.etrace_bwg = bc.visible_state_dict()
     for relation in self.graph.weight_hidden_relations:
       # TODO: assume the batch size is the first dimension
@@ -690,9 +690,21 @@ class DiagOn2Algorithm(_DiagETraceAlgorithmForVJP):
       hid2weight_jac: Tuple[Dict[WeightXVar, jax.Array], Dict[Tuple[WeightYVar, HiddenVar], jax.Array]],
       weight_id_to_its_val: Dict[WeightID, PyTree]
   ) -> Dict[Tuple[WeightID, WeightXVar, HiddenVar], PyTree]:
-    # "hist_etrace_vals" has the following structure:
-    #   - key: the weight id, the weight-x jax var and the hidden state var
-    #   - value: the batched weight gradients
+    # 1. "hist_etrace_vals" has the following structure:
+    #    - key: the weight id, the weight-x jax var, the hidden state var
+    #    - value: the batched weight gradients
+    #
+    # 2. "hid2weight_jac" has the following structure:
+    #    - a dict of weight x gradients
+    #       * key: the weight x jax var
+    #       * value: the weight x gradients
+    #    - a dict of weight y gradients
+    #       * key: the tuple of the weight y jax var and the hidden state jax var
+    #       * value: the weight y gradients
+    #
+    # 3. "temporal_jacobian" has the following structure:
+    #    - key: the hidden state jax var
+    #    - value: the hidden state jacobian gradients
 
     cur_etrace_xs, cur_etrace_ys = hid2weight_jac
 
@@ -701,17 +713,17 @@ class DiagOn2Algorithm(_DiagETraceAlgorithmForVJP):
       weight_id = id(relation.weight)
       weight_vals = weight_id_to_its_val[weight_id]
       for i, hid_var in enumerate(relation.hidden_vars):
-        key = (weight_id, relation.x, hid_var)
+        w_key = (weight_id, relation.x, hid_var)
         y_key = (relation.y, hid_var)
         dg_hidden = relation.hidden2df[i](temporal_jacobian[hid_var])
         dg_weight = dy_to_weight(self.mode, relation, weight_vals, dg_hidden)
         current_etrace = dx_dy_to_weight(self.mode, relation, weight_vals,
                                          cur_etrace_xs[relation.x],
                                          cur_etrace_ys[y_key])
-        new_etrace_bwg[key] = jax.tree.map(lambda old, jac, new: old * jac + new,
-                                           hist_etrace_vals[key],
-                                           dg_weight,
-                                           current_etrace)
+        new_etrace_bwg[w_key] = jax.tree.map(lambda old, jac, new: old * jac + new,
+                                             hist_etrace_vals[w_key],
+                                             dg_weight,
+                                             current_etrace)
     return new_etrace_bwg
 
   def _solve_weight_gradients(self,
@@ -739,9 +751,9 @@ class DiagOn2Algorithm(_DiagETraceAlgorithmForVJP):
         dg_weight = jax.tree.map(lambda x, y: x * y, etrace_data[key], hid2w)
         update_dict(temp_data, weight_id, dg_weight)
     if self.mode.has(bc.mixin.Batching):
-      # average the batched weight gradients
+      # sum up the batched weight gradients
       for key, val in temp_data.items():
-        temp_data[key] = jax.tree_map(lambda x: jnp.mean(x, axis=0), val)
+        temp_data[key] = jax.tree_map(lambda x: jnp.sum(x, axis=0), val)
 
     # update the weight gradients
     dG_weights = {id(st): None for st in self.weight_states}
@@ -803,21 +815,17 @@ class DiagHybridAlgorithm(_DiagETraceAlgorithmForVJP):
           self.etrace_dfs[key] = bc.State(jnp.zeros(relation.y.aval.shape, relation.y.aval.dtype))
 
   def _get_etrace_data(self) -> Tuple[Dict, Dict, Dict]:
-    etrace_xs, etrace_dfs, etrace_wgrads = dict(), dict(), dict()
-    for x, val in self.etrace_xs.items():
-      etrace_xs[x] = val.value
-    for dfkey, val in self.etrace_dfs.items():
-      etrace_dfs[dfkey] = val.value
-    for x, val in self.etrace_bwg.items():
-      etrace_wgrads[x] = val.value
+    etrace_xs = {x: val.value for x, val in self.etrace_xs.items()}
+    etrace_dfs = {x: val.value for x, val in self.etrace_dfs.items()}
+    etrace_wgrads = {x: val.value for x, val in self.etrace_bwg.items()}
     return etrace_xs, etrace_dfs, etrace_wgrads
 
   def _assign_etrace_data(self, etrace_vals: Tuple[Dict, Dict, Dict]) -> None:
     etrace_xs, etrace_dfs, etrace_wgrads = etrace_vals
     for x, val in etrace_xs.items():
       self.etrace_xs[x].value = val
-    for dfkey, val in etrace_dfs.items():
-      self.etrace_dfs[dfkey].value = val
+    for x, val in etrace_dfs.items():
+      self.etrace_dfs[x].value = val
     for x, val in etrace_wgrads.items():
       self.etrace_bwg[x].value = val
 
