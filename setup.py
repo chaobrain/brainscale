@@ -54,7 +54,7 @@ setup(
   author_email='chao.brain@qq.com',
   packages=packages,
   python_requires='>=3.9',
-  install_requires=['braincore', 'braintools'],
+  install_requires=['braincore', 'braintools', 'brainpy'],
   url='https://github.com/brainpy/brainscale',
   project_urls={
     "Bug Tracker": "https://github.com/brainpy/brainscale/issues",
