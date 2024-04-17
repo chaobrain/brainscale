@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-__version__ = "0.0.0.1"
+__version__ = "0.0.1"
 
 from brainscale._base import *
 from brainscale._base import __all__ as base_all
