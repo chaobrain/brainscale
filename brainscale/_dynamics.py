@@ -24,9 +24,11 @@ import brainpy as bp
 import braintools as bts
 import jax
 import jax.numpy as jnp
+from braintools import init
 
 from ._base import ExplicitInOutSize
-from ._etrace_concepts import ETraceVar, ETraceParamOp
+from ._connections import Linear
+from ._etrace_concepts import ETraceVar, ETraceParamOp, NormalParamOp
 from .typing import DTypeLike, ArrayLike, Current, Spike, Size
 
 __all__ = [
@@ -37,7 +39,7 @@ __all__ = [
   'Synapse', 'Expon', 'STP', 'STD',
 
   # RNN models
-  'ValinaRNNCell', 'GRUCell', 'LSTMCell',
+  'ValinaRNNCell', 'GRUCell', 'LSTMCell', 'URLSTMCell',
 ]
 
 
@@ -99,8 +101,8 @@ class IF(Neuron):
                      spk_fun=spk_fun, spk_dtype=spk_dtype, spk_reset=spk_reset)
 
     # parameters
-    self.tau = bts.init.parameter(tau, self.varshape)
-    self.V_th = bts.init.parameter(V_th, self.varshape)
+    self.tau = init.parameter(tau, self.varshape)
+    self.V_th = init.parameter(V_th, self.varshape)
 
     # integral
     self.integral = bp.odeint(self.dv, method='exp_euler')
@@ -110,7 +112,7 @@ class IF(Neuron):
     return (-v + x) / self.tau
 
   def init_state(self, batch_size: int = None, **kwargs):
-    self.V = ETraceVar(bts.init.parameter(jnp.zeros, self.varshape, batch_size))
+    self.V = ETraceVar(init.parameter(jnp.zeros, self.varshape, batch_size))
 
   @property
   def spike(self):
@@ -154,10 +156,10 @@ class LIF(Neuron):
                      spk_dtype=spk_dtype, spk_reset=spk_reset)
 
     # parameters
-    self.tau = bts.init.parameter(tau, self.varshape)
-    self.V_th = bts.init.parameter(V_th, self.varshape)
-    self.V_rest = bts.init.parameter(V_rest, self.varshape)
-    self.V_reset = bts.init.parameter(V_reset, self.varshape)
+    self.tau = init.parameter(tau, self.varshape)
+    self.V_th = init.parameter(V_th, self.varshape)
+    self.V_rest = init.parameter(V_rest, self.varshape)
+    self.V_reset = init.parameter(V_reset, self.varshape)
 
     # integral
     self.integral = bp.odeint(self.dv, method='exp_euler')
@@ -167,7 +169,7 @@ class LIF(Neuron):
     return (-v + self.V_rest + x) / self.tau
 
   def init_state(self, batch_size: int = None, **kwargs):
-    self.V = ETraceVar(bts.init.parameter(bts.init.Constant(self.V_reset), self.varshape, batch_size))
+    self.V = ETraceVar(init.parameter(init.Constant(self.V_reset), self.varshape, batch_size))
 
   @property
   def spike(self):
@@ -210,10 +212,10 @@ class ALIF(Neuron):
                      spk_dtype=spk_dtype, spk_reset=spk_reset)
 
     # parameters
-    self.tau = bts.init.parameter(tau, self.varshape)
-    self.tau_a = bts.init.parameter(tau_a, self.varshape)
-    self.V_th = bts.init.parameter(V_th, self.varshape)
-    self.beta = bts.init.parameter(beta, self.varshape)
+    self.tau = init.parameter(tau, self.varshape)
+    self.tau_a = init.parameter(tau_a, self.varshape)
+    self.V_th = init.parameter(V_th, self.varshape)
+    self.beta = init.parameter(beta, self.varshape)
 
     # integral
     self.integral_v = bp.odeint(self.dv, method='exp_euler')
@@ -227,8 +229,8 @@ class ALIF(Neuron):
     return -a / self.tau_a
 
   def init_state(self, batch_size: int = None, **kwargs):
-    self.V = ETraceVar(bts.init.parameter(bts.init.Constant(0.), self.varshape, batch_size))
-    self.a = ETraceVar(bts.init.parameter(bts.init.Constant(0.), self.varshape, batch_size))
+    self.V = ETraceVar(init.parameter(init.Constant(0.), self.varshape, batch_size))
+    self.a = ETraceVar(init.parameter(init.Constant(0.), self.varshape, batch_size))
 
   @property
   def spike(self):
@@ -284,7 +286,7 @@ class Expon(Synapse):
                      keep_size=keep_size)
 
     # parameters
-    self.tau = bts.init.parameter(tau, self.varshape)
+    self.tau = init.parameter(tau, self.varshape)
 
     # function
     self.integral = bp.odeint(self.derivative, method=method)
@@ -293,7 +295,7 @@ class Expon(Synapse):
     return -g / self.tau
 
   def init_state(self, batch_size: int = None, **kwargs):
-    self.g = ETraceVar(bts.init.parameter(bts.init.Constant(0.), self.varshape, batch_size))
+    self.g = ETraceVar(init.parameter(init.Constant(0.), self.varshape, batch_size))
 
   def update(self, x: Spike = None):
     self.g.value = self.integral(self.g.value, bc.share.get('t'), bc.environ.get('dt'))
@@ -338,16 +340,16 @@ class STP(Synapse):
                      keep_size=keep_size)
 
     # parameters
-    self.tau_f = bts.init.parameter(tau_f, self.varshape)
-    self.tau_d = bts.init.parameter(tau_d, self.varshape)
-    self.U = bts.init.parameter(U, self.varshape)
+    self.tau_f = init.parameter(tau_f, self.varshape)
+    self.tau_d = init.parameter(tau_d, self.varshape)
+    self.U = init.parameter(U, self.varshape)
 
     # integral function
     self.integral = bp.odeint(self.derivative, method=self.method)
 
   def init_state(self, batch_size: int = None, **kwargs):
-    self.x = ETraceVar(bts.init.parameter(bts.init.Constant(1.), self.varshape, batch_size))
-    self.u = ETraceVar(bts.init.parameter(bts.init.Constant(self.U), self.varshape, batch_size))
+    self.x = ETraceVar(init.parameter(init.Constant(1.), self.varshape, batch_size))
+    self.u = ETraceVar(init.parameter(init.Constant(self.U), self.varshape, batch_size))
 
   @property
   def derivative(self):
@@ -405,14 +407,14 @@ class STD(Synapse):
                      keep_size=keep_size)
 
     # parameters
-    self.tau = bts.init.parameter(tau, self.varshape)
-    self.U = bts.init.parameter(U, self.varshape)
+    self.tau = init.parameter(tau, self.varshape)
+    self.U = init.parameter(U, self.varshape)
 
     # integral function
     self.integral = bp.odeint(lambda x, t: (1 - x) / self.tau, method=method)
 
   def init_state(self, batch_size: int = None, **kwargs):
-    self.x = ETraceVar(bts.init.parameter(bts.init.Constant(1.), self.varshape, batch_size))
+    self.x = ETraceVar(init.parameter(init.Constant(1.), self.varshape, batch_size))
 
   def update(self, pre_spike: Spike):
     t = bc.share.get('t')
@@ -437,13 +439,11 @@ class ValinaRNNCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
   Args:
     num_in: int. The number of input units.
     num_out: int. The number of hidden units.
-    state_initializer: callable, Initializer, bm.ndarray, jax.numpy.ndarray. The state initializer.
-    Wi_initializer: callable, Initializer, bm.ndarray, jax.numpy.ndarray. The input weight initializer.
-    Wh_initializer: callable, Initializer, bm.ndarray, jax.numpy.ndarray. The hidden weight initializer.
-    b_initializer: optional, callable, Initializer, bm.ndarray, jax.numpy.ndarray. The bias weight initializer.
+    state_initializer: callable, ArrayLike. The state initializer.
+    W_initializer: callable, ArrayLike. The input weight initializer.
+    b_initializer: optional, callable, ArrayLike. The bias weight initializer.
     activation: str, callable. The activation function. It can be a string or a callable function.
     mode: optional, bc.mixin.Mode. The mode of the module.
-    train_state: bool. Whether to train the state.
     name: optional, str. The name of the module.
   """
   __module__ = 'brainscale'
@@ -452,13 +452,11 @@ class ValinaRNNCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
       self,
       num_in: int,
       num_out: int,
-      state_initializer: Union[ArrayLike, Callable] = bts.init.ZeroInit(),
-      Wi_initializer: Union[ArrayLike, Callable] = bts.init.XavierNormal(),
-      Wh_initializer: Union[ArrayLike, Callable] = bts.init.XavierNormal(),
-      b_initializer: Union[ArrayLike, Callable] = bts.init.ZeroInit(),
-      activation: str = 'relu',
+      state_initializer: Union[ArrayLike, Callable] = init.ZeroInit(),
+      W_initializer: Union[ArrayLike, Callable] = init.XavierNormal(),
+      b_initializer: Union[ArrayLike, Callable] = init.ZeroInit(),
+      activation: str | Callable = 'relu',
       mode: bc.mixin.Mode = None,
-      train_state: bool = False,
       name: str = None,
   ):
     super().__init__(mode=mode, name=name)
@@ -466,7 +464,6 @@ class ValinaRNNCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
     # parameters
     self._state_initializer = state_initializer
     self.num_out = num_out
-    self.train_state = train_state
 
     # parameters
     self.num_in = num_in
@@ -474,26 +471,27 @@ class ValinaRNNCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
     self.out_size = (num_out,)
 
     # initializers
-    self._Wi_initializer = Wi_initializer
-    self._Wh_initializer = Wh_initializer
+    self._W_initializer = W_initializer
     self._b_initializer = b_initializer
 
     # activation function
-    self.activation = getattr(bts.functional, activation)
+    if isinstance(activation, str):
+      self.activation = getattr(bts.functional, activation)
+    else:
+      assert callable(activation), "The activation function should be a string or a callable function. "
+      self.activation = activation
 
     # weights
-    Wi = bts.init.parameter(self._Wi_initializer, (num_in, self.num_out))
-    Wh = bts.init.parameter(self._Wh_initializer, (self.num_out, self.num_out))
-    self.Wi = ETraceParamOp(Wi, op=jnp.matmul)
-    self.Wh = ETraceParamOp(Wh, op=jnp.matmul)
+    self.W = Linear(num_in + num_out, num_out, w_init=W_initializer, b_init=b_initializer, name=self.name + '_W')
 
   def init_state(self, batch_size: int = None, **kwargs):
-    self.state = ETraceVar(bts.init.parameter(self._state_initializer, self.num_out, batch_size))
+    self.h = ETraceVar(init.parameter(self._state_initializer, self.num_out, batch_size))
 
   def update(self, x):
-    h = self.Wi.execute(x) + self.Wh.execute(self.state.value)
-    self.state.value = self.activation(h)
-    return self.state.value
+    xh = jnp.concatenate([x, self.h.value], axis=-1)
+    h = self.W(xh)
+    self.h.value = self.activation(h)
+    return self.h.value
 
 
 class GRUCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
@@ -503,13 +501,11 @@ class GRUCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
   Args:
     num_in: int. The number of input units.
     num_out: int. The number of hidden units.
-    state_initializer: callable, Initializer, bm.ndarray, jax.numpy.ndarray. The state initializer.
-    Wi_initializer: callable, Initializer, bm.ndarray, jax.numpy.ndarray. The input weight initializer.
-    Wh_initializer: callable, Initializer, bm.ndarray, jax.numpy.ndarray. The hidden weight initializer.
-    b_initializer: optional, callable, Initializer, bm.ndarray, jax.numpy.ndarray. The bias weight initializer.
+    state_initializer: callable, ArrayLike. The state initializer.
+    W_initializer: callable, ArrayLike. The input weight initializer.
+    b_initializer: optional, callable, ArrayLike. The bias weight initializer.
     activation: str, callable. The activation function. It can be a string or a callable function.
     mode: optional, bc.mixin.Mode. The mode of the module.
-    train_state: bool. Whether to train the state.
     name: optional, str. The name of the module.
   """
   __module__ = 'brainscale'
@@ -518,13 +514,11 @@ class GRUCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
       self,
       num_in: int,
       num_out: int,
-      Wi_initializer: Union[ArrayLike, Callable] = bts.init.Orthogonal(),
-      Wh_initializer: Union[ArrayLike, Callable] = bts.init.Orthogonal(),
-      b_initializer: Union[ArrayLike, Callable] = bts.init.ZeroInit(),
-      state_initializer: Union[ArrayLike, Callable] = bts.init.ZeroInit(),
-      activation: str = 'tanh',
+      W_initializer: Union[ArrayLike, Callable] = init.Orthogonal(),
+      b_initializer: Union[ArrayLike, Callable] = init.ZeroInit(),
+      state_initializer: Union[ArrayLike, Callable] = init.ZeroInit(),
+      activation: str | Callable = 'tanh',
       mode: bc.mixin.Mode = None,
-      train_state: bool = False,
       name: str = None,
   ):
     super().__init__(mode=mode, name=name)
@@ -532,48 +526,37 @@ class GRUCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
     # parameters
     self._state_initializer = state_initializer
     self.num_out = num_out
-    self.train_state = train_state
     self.num_in = num_in
     self.in_size = (num_in,)
     self.out_size = (num_out,)
 
     # initializers
-    self._Wi_initializer = Wi_initializer
-    self._Wh_initializer = Wh_initializer
+    self._W_initializer = W_initializer
     self._b_initializer = b_initializer
 
     # activation function
-    self.activation = getattr(bts.functional, activation)
+    if isinstance(activation, str):
+      self.activation = getattr(bts.functional, activation)
+    else:
+      assert callable(activation), "The activation function should be a string or a callable function. "
+      self.activation = activation
 
     # weights
-    Wi = bts.init.parameter(self._Wi_initializer, (num_in, self.num_out * 3), allow_none=False)
-    self.Wi = ETraceParamOp(Wi, op=jnp.matmul)
-    self.Whz = ETraceParamOp(bts.init.parameter(self._Wh_initializer, (self.num_out, self.num_out * 2)), op=jnp.matmul)
-    self.Wha = ETraceParamOp(bts.init.parameter(self._Wh_initializer, (self.num_out, self.num_out)), op=jnp.matmul)
-    if b_initializer is not None:
-      self.bz = ETraceParamOp(bts.init.parameter(b_initializer, (self.num_out * 2,)), op=jnp.add)
-      self.ba = ETraceParamOp(bts.init.parameter(b_initializer, (self.num_out,)), op=jnp.add)
+    self.Wz = Linear(num_in + num_out, num_out, w_init=W_initializer, b_init=b_initializer, name=self.name + '_Wz')
+    self.Wr = Linear(num_in + num_out, num_out, w_init=W_initializer, b_init=b_initializer, name=self.name + '_Wr')
+    self.Wh = Linear(num_in + num_out, num_out, w_init=W_initializer, b_init=b_initializer, name=self.name + '_Wh')
 
   def init_state(self, batch_size: int = None, **kwargs):
-    self.state = ETraceVar(self._state_initializer(batch_size, self.num_out))
+    self.h = ETraceVar(self._state_initializer(batch_size, self.num_out))
 
   def update(self, x):
-    gates_x = self.Wi.execute(x)
-    zr_x, a_x = jnp.split(gates_x, indices_or_sections=[2 * self.num_out], axis=-1)
-    zr_h = self.Whz.execute(self.state.value)
-    zr = zr_x + zr_h
-    has_bias = False
-    if has_bias:
-      zr = self.bz.execute(zr)
-    z, r = jnp.split(bts.functional.sigmoid(zr), indices_or_sections=2, axis=-1)
-    a_h = self.Wha.execute(r * self.state.value)
-    if has_bias:
-      a = self.activation(a_x + self.ba.execute(a_h))
-    else:
-      a = self.activation(a_x + a_h)
-    next_state = (1 - z) * self.state.value + z * a
-    self.state.value = next_state
-    return next_state
+    xh = jnp.concatenate([x, self.h.value], axis=-1)
+    z = bts.functional.sigmoid(self.Wz(xh))
+    r = bts.functional.sigmoid(self.Wr(xh))
+    h = self.activation(self.Wh(jnp.concatenate([x, r * self.h.value], axis=-1)))
+    h = (1 - z) * self.h.value + z * h
+    self.h.value = h
+    return h
 
 
 class LSTMCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
@@ -613,13 +596,11 @@ class LSTMCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
     The dimension of the input vector
   num_out: int
     The number of hidden unit in the node.
-  state_initializer: callable, Initializer, bm.ndarray, jax.numpy.ndarray
+  state_initializer: callable, ArrayLike
     The state initializer.
-  Wi_initializer: callable, Initializer, bm.ndarray, jax.numpy.ndarray
+  W_initializer: callable, ArrayLike
     The input weight initializer.
-  Wh_initializer: callable, Initializer, bm.ndarray, jax.numpy.ndarray
-    The hidden weight initializer.
-  b_initializer: optional, callable, Initializer, bm.ndarray, jax.numpy.ndarray
+  b_initializer: optional, callable, ArrayLike
     The bias weight initializer.
   activation: str, callable
     The activation function. It can be a string or a callable function.
@@ -639,65 +620,117 @@ class LSTMCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
       self,
       num_in: int,
       num_out: int,
-      Wi_initializer: Union[ArrayLike, Callable] = bts.init.XavierNormal(),
-      Wh_initializer: Union[ArrayLike, Callable] = bts.init.XavierNormal(),
-      b_initializer: Union[ArrayLike, Callable] = bts.init.ZeroInit(),
-      state_initializer: Union[ArrayLike, Callable] = bts.init.ZeroInit(),
-      activation: str = 'tanh',
+      W_initializer: Union[ArrayLike, Callable] = init.XavierNormal(),
+      b_initializer: Union[ArrayLike, Callable] = init.ZeroInit(),
+      state_initializer: Union[ArrayLike, Callable] = init.ZeroInit(),
+      activation: str | Callable = 'tanh',
       mode: bc.mixin.Mode = None,
-      train_state: bool = False,
       name: str = None,
   ):
     super().__init__(mode=mode, name=name)
 
     # parameters
-    self._state_initializer = state_initializer
     self.num_out = num_out
-    self.train_state = train_state
     self.num_in = num_in
     self.in_size = (num_in,)
     self.out_size = (num_out,)
 
     # initializers
     self._state_initializer = state_initializer
-    self._Wi_initializer = Wi_initializer
-    self._Wh_initializer = Wh_initializer
+    self._W_initializer = W_initializer
     self._b_initializer = b_initializer
 
     # activation function
-    self.activation = getattr(bts.functional, activation)
+    if isinstance(activation, str):
+      self.activation = getattr(bts.functional, activation)
+    else:
+      assert callable(activation), "The activation function should be a string or a callable function. "
+      self.activation = activation
 
     # weights
-    self.Wii = ETraceParamOp(bts.init.parameter(self._Wi_initializer, (num_in, self.num_out)),
-                             op=jnp.matmul)
-    self.Wig = ETraceParamOp(bts.init.parameter(self._Wi_initializer, (num_in, self.num_out)),
-                             op=jnp.matmul)
-    self.Wif = ETraceParamOp(bts.init.parameter(self._Wi_initializer, (num_in, self.num_out)),
-                             op=jnp.matmul)
-    self.Wio = ETraceParamOp(bts.init.parameter(self._Wi_initializer, (num_in, self.num_out)),
-                             op=jnp.matmul)
-
-    self.Whi = ETraceParamOp(bts.init.parameter(self._Wh_initializer, (self.num_out, self.num_out)),
-                             op=jnp.matmul)
-    self.Whg = ETraceParamOp(bts.init.parameter(self._Wh_initializer, (self.num_out, self.num_out)),
-                             op=jnp.matmul)
-    self.Whf = ETraceParamOp(bts.init.parameter(self._Wh_initializer, (self.num_out, self.num_out)),
-                             op=jnp.matmul)
-    self.Who = ETraceParamOp(bts.init.parameter(self._Wh_initializer, (self.num_out, self.num_out)),
-                             op=jnp.matmul)
+    self.Wi = Linear(num_in + num_out, num_out, w_init=W_initializer, b_init=b_initializer, name=self.name + '_Wi')
+    self.Wg = Linear(num_in + num_out, num_out, w_init=W_initializer, b_init=b_initializer, name=self.name + '_Wg')
+    self.Wf = Linear(num_in + num_out, num_out, w_init=W_initializer, b_init=b_initializer, name=self.name + '_Wf')
+    self.Wo = Linear(num_in + num_out, num_out, w_init=W_initializer, b_init=b_initializer, name=self.name + '_Wo')
 
   def init_state(self, batch_size: int = None, **kwargs):
-    self.c = ETraceVar(bts.init.parameter(self._state_initializer, [self.num_out], batch_size))
-    self.state = ETraceVar(bts.init.parameter(self._state_initializer, [self.num_out], batch_size))
+    self.c = ETraceVar(init.parameter(self._state_initializer, [self.num_out], batch_size))
+    self.h = ETraceVar(init.parameter(self._state_initializer, [self.num_out], batch_size))
 
   def update(self, x):
-    h, c = self.state.value, self.c.value
-    i = self.Wii.execute(x) + self.Whi.execute(h)
-    g = self.Wig.execute(x) + self.Whg.execute(h)
-    f = self.Wif.execute(x) + self.Whf.execute(h)
-    o = self.Wio.execute(x) + self.Who.execute(h)
+    h, c = self.h.value, self.c.value
+    xh = jnp.concat([x, h], axis=-1)
+    i = self.Wi(xh)
+    g = self.Wg(xh)
+    f = self.Wf(xh)
+    o = self.Wo(xh)
     c = bts.functional.sigmoid(f + 1.) * c + bts.functional.sigmoid(i) * self.activation(g)
     h = bts.functional.sigmoid(o) * self.activation(c)
-    self.state.value = h
+    self.h.value = h
     self.c.value = c
     return h
+
+
+class URLSTMCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
+  def __init__(
+      self,
+      num_in: int,
+      num_out: int,
+      W_initializer: Union[ArrayLike, Callable] = init.XavierNormal(),
+      b_initializer: Union[ArrayLike, Callable] = init.ZeroInit(),
+      state_initializer: Union[ArrayLike, Callable] = init.ZeroInit(),
+      activation: str | Callable = 'tanh',
+      mode: bc.mixin.Mode = None,
+      name: str = None,
+  ):
+    super().__init__(mode=mode, name=name)
+
+    # parameters
+    self.num_out = num_out
+    self.num_in = num_in
+    self.in_size = (num_in,)
+    self.out_size = (num_out,)
+
+    # initializers
+    self._state_initializer = state_initializer
+    self._W_initializer = W_initializer
+    self._b_initializer = b_initializer
+
+    # activation function
+    if isinstance(activation, str):
+      self.activation = getattr(bts.functional, activation)
+    else:
+      assert callable(activation), "The activation function should be a string or a callable function. "
+      self.activation = activation
+
+    # weights
+    self.Wu = Linear(num_in + num_out, num_out, w_init=W_initializer, b_init=None, name=self.name + '_Wg')
+    self.Wf = Linear(num_in + num_out, num_out, w_init=W_initializer, b_init=None, name=self.name + '_Wf')
+    self.Wr = Linear(num_in + num_out, num_out, w_init=W_initializer, b_init=None, name=self.name + '_Wi')
+    self.Wo = Linear(num_in + num_out, num_out, w_init=W_initializer, b_init=None, name=self.name + '_Wo')
+    self.bias = ETraceParamOp(self._forget_bias(), op=jnp.add, full_grad=True)
+    self.bias = NormalParamOp(self._forget_bias(), op=jnp.add)
+
+  def _forget_bias(self):
+    u = bc.random.uniform(1 / self.num_out, 1 - 1 / self.num_out, (self.num_out,))
+    return -jnp.log(1 / u - 1)
+
+  def init_state(self, batch_size: int = None, **kwargs):
+    self.c = ETraceVar(init.parameter(self._state_initializer, [self.num_out], batch_size))
+    self.h = ETraceVar(init.parameter(self._state_initializer, [self.num_out], batch_size))
+
+  def update(self, x: ArrayLike) -> ArrayLike:
+    h, c = self.h.value, self.c.value
+    xh = jnp.concat([x, h], axis=-1)
+    f = self.Wf(xh)
+    r = self.Wr(xh)
+    u = self.Wu(xh)
+    o = self.Wo(xh)
+    f_ = bts.functional.sigmoid(self.bias.execute(f))
+    r_ = bts.functional.sigmoid(-self.bias.execute(-r))
+    g = 2 * r_ * f_ + (1 - 2 * r_) * f_ ** 2
+    next_cell = g * c + (1 - g) * self.activation(u)
+    next_hidden = bts.functional.sigmoid(o) * self.activation(next_cell)
+    self.h.value = next_hidden
+    self.c.value = next_cell
+    return next_hidden

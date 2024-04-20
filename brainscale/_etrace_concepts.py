@@ -76,11 +76,15 @@ class ETraceParam(bc.ParamState):
   __module__ = 'brainscale'
 
 
-class ETraceOp(object):
+class ETraceOp(bc.Module):
   """
   The Eligibility Trace Operator.
 
   The function must have the signature: ``(x: jax.Array, weight: PyTree) -> jax.Array``.
+
+  Attributes:
+    fun: The operator function.
+    stop_behavior: The behavior when stopping the weight gradients. If None, the operator will stop the gradients.
 
   Args:
     fun: The operator function.
@@ -88,13 +92,14 @@ class ETraceOp(object):
   __module__ = 'brainscale'
 
   def __init__(self, fun: Callable):
-    self._fun = fun
+    super().__init__()
+    self.fun = fun
     self.stop_behavior: Optional[Callable] = None
 
   @functools.partial(jax.jit, static_argnums=0)
   @wrap_etrace_fun
   def _call(self, x, weight):
-    return self._fun(x, weight)
+    return self.fun(x, weight)
 
   def __call__(self, x: jax.Array, weight: PyTree) -> jax.Array:
     if _stop_param_gradient:
@@ -210,7 +215,7 @@ def split_states(states: Sequence[bc.State]) -> Tuple[List[bc.ParamState], List[
     states: The states to be split.
 
   Returns:
-    weight_states: The weight parameter states.
+    param_states: The weight parameter states.
     hidden_states: The hidden states.
     other_states: The other states.
 
