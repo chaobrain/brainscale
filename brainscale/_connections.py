@@ -29,6 +29,7 @@ from braintools import init
 
 from ._base import DnnLayer
 from ._etrace_concepts import ETraceParamOp, NormalParamOp
+from ._etrace_operators import MatMulETraceOp
 from .typing import ArrayLike
 
 T = TypeVar('T')
@@ -107,25 +108,17 @@ class Linear(DnnLayer):
     self.w_mask = init.parameter(w_mask, self.in_size + self.out_size)
 
     # weights
+    op = MatMulETraceOp(self.w_mask)
     params = dict(weight=init.parameter(w_init, self.in_size + self.out_size, allow_none=False))
     if b_init is not None:
       params['bias'] = init.parameter(b_init, self.out_size, allow_none=False)
     if as_etrace_weight:
-      self.weight_op = ETraceParamOp(params, self._operation, full_grad=full_etrace)
+      self.weight_op = ETraceParamOp(params, op, full_grad=full_etrace)
     else:
-      self.weight_op = NormalParamOp(params, self._operation)
+      self.weight_op = NormalParamOp(params, op.fun)
 
   def update(self, x):
     return self.weight_op.execute(x)
-
-  def _operation(self, x, params):
-    w = params['weight']
-    if self.w_mask is not None:
-      w = w * self.w_mask
-    y = jnp.dot(x, w)
-    if 'bias' in params:
-      y = y + params['bias']
-    return y
 
 
 class SignedWLinear(DnnLayer):

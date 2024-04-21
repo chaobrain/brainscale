@@ -189,13 +189,17 @@ class TestCompiler(unittest.TestCase):
     model = Model()
     bc.init_states(model, 16)
 
+    def run_model(i, inp):
+      bc.share.set(i=i)
+      return model(inp)
+
     # algorithms
-    algorithm = nn.DiagExpSmOnAlgorithm(model, tau_pre=100., tau_post=100.)
-    algorithm.compile_graph(inp_spk)
-    out = algorithm(inp_spk)
+    algorithm = nn.DiagExpSmOnAlgorithm(run_model, decay_or_rank=100)
+    algorithm.compile_graph(0, inp_spk)
+    out = algorithm(0, inp_spk)
 
     weights = model.states().subset(bc.ParamState)
-    grads = bc.transform.grad(lambda x: algorithm(x).sum(), grad_vars=weights)(inp_spk)
+    grads = bc.transform.grad(lambda x: algorithm(0, x).sum(), grad_vars=weights)(inp_spk)
 
     # print(out)
     print(grads)
