@@ -35,6 +35,9 @@ class StandardETraceOp(ETraceOp):
   def etrace_update(self, w, dh_to_dw, diag, ph_to_pwx, ph_to_pwy):
     raise NotImplementedError
 
+  def hidden_to_etrace(self, w, dl_to_dh, dh_to_dw):
+    raise NotImplementedError
+
 
 class MatMulETraceOp(StandardETraceOp):
   """
@@ -95,6 +98,27 @@ class MatMulETraceOp(StandardETraceOp):
       dh_to_dweight = dh_to_dweight * jnp.expand_dims(diag, axis=0) + jnp.outer(ph_to_pwx, ph_to_pwy)
       if dh_to_dbias is not None:
         dh_to_dbias = dh_to_dbias * diag + ph_to_pwy
+    return unflatten(dh_to_dweight, dh_to_dbias)
+
+  def hidden_to_etrace(self, w, dl_to_dh, dh_to_dw):
+    # 1. w: the wight value
+    # 2. dl_to_dh: the derivative of the loss with respect to the hidden
+    # 3. dh_to_dw: the derivative of the hidden with respect to the weight
+
+    (dh_to_dweight, dh_to_dbias), unflatten = self._format_weight(dh_to_dw)
+    if self.mode.has(bc.mixin.Batching):
+      # dl_to_dh: (batch_size, hidden_size,)
+      # dh_to_dw: (batch_size, input_size, hidden_size,)
+      # return: (batch_size, input_size, hidden_size,)
+      dh_to_dweight = jnp.expand_dims(dl_to_dh, axis=1) * dh_to_dweight
+      if dh_to_dbias is not None:
+        dh_to_dbias = dh_to_dbias * dl_to_dh
+    else:
+      # dl_to_dh: (hidden_size,)
+      # dh_to_dw: (input_size, hidden_size,)
+      dh_to_dweight = dh_to_dweight * jnp.expand_dims(dl_to_dh, axis=0)
+      if dh_to_dbias is not None:
+        dh_to_dbias = dh_to_dbias * dl_to_dh
     return unflatten(dh_to_dweight, dh_to_dbias)
 
 
