@@ -696,8 +696,8 @@ class DiagExpSmOnAlgorithm(_DiagETraceAlgorithmForVJP):
 
     # the learning parameters
     self.decay, num_rank = _format_decay_and_rank(decay_or_rank)
-    assert isinstance(num_snap, int) and num_snap > 0, (f'The number of snap shoot should be '
-                                                        f'greater than 0. While we got {num_snap}. ')
+    assert isinstance(num_snap, int) and num_snap >= 0, (f'The number of snap shoot should be '
+                                                         f'greater than 0. While we got {num_snap}. ')
     self.num_snap = num_snap
     self.snap_freq = snap_freq or num_rank
 
@@ -1041,8 +1041,8 @@ class DiagHybridAlgorithm(_DiagETraceAlgorithmForVJP):
 
     # the learning parameters
     self.decay, num_rank = _format_decay_and_rank(decay_or_rank)
-    assert isinstance(num_snap, int) and num_snap > 0, (f'The number of snap shoot should be '
-                                                        f'greater than 0. While we got {num_snap}. ')
+    assert isinstance(num_snap, int) and num_snap >= 0, (f'The number of snap shoot should be '
+                                                         f'greater than 0. While we got {num_snap}. ')
     self.num_snap = num_snap
     self.snap_freq = snap_freq or num_rank
 
