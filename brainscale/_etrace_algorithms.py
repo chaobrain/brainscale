@@ -621,7 +621,7 @@ def _solve_on_weight_gradients(hist_etrace_data,
                                decay: float,
                                num_snap: int):
   i = bc.share.get('i', desc='The current running index. Should be an integer. ')
-  correction_factor = (1 - np.power(1 - decay, i + 1))  # avoid the exponential smoothing bias at the beginning
+  correction_factor = (1 - jnp.power(1 - decay, i + 1))  # avoid the exponential smoothing bias at the beginning
 
   xs, dfs, chunk_xs, chunk_dfs = hist_etrace_data
 
