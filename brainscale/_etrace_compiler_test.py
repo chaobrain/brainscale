@@ -190,7 +190,7 @@ class TestCompiler(unittest.TestCase):
     bc.init_states(model, 16)
 
     # algorithms
-    algorithm = nn.DiagExpSmOnAlgorithm(model, num_rank=100)
+    algorithm = nn.DiagExpSmOnAlgorithm(model, decay_or_rank=100)
     algorithm.compile_graph(inp_spk)
     out = algorithm(inp_spk)
 
