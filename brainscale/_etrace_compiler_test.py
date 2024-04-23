@@ -53,7 +53,7 @@ class IF_Delta_Dense_Layer(bc.Module):
 
 
 class TestCompiler(unittest.TestCase):
-  def test_no_weight(self):
+  def test_no_weight_in_etrace_op(self):
     class Linear(bc.Module):
       def __init__(self, in_size: bc.typing.Size, out_size: bc.typing.Size,
                    w_init: Callable = bts.init.KaimingNormal()):
@@ -80,7 +80,7 @@ class TestCompiler(unittest.TestCase):
 
     bc.util.clear_buffer_memory()
 
-  def test_multi_weight(self):
+  def test_multi_weights_in_etrace_op(self):
     class Linear(bc.Module):
       def __init__(self, in_size: bc.typing.Size, out_size: bc.typing.Size, w_init=bts.init.KaimingNormal()):
         super().__init__()
@@ -108,7 +108,7 @@ class TestCompiler(unittest.TestCase):
 
     bc.util.clear_buffer_memory()
 
-  def test_op_multi_return(self):
+  def test_multi_returns_in_etrace_op(self):
     class Linear(bc.Module):
       def __init__(self, in_size: bc.typing.Size, out_size: bc.typing.Size,
                    w_init: Callable = bts.init.KaimingNormal()):
@@ -166,7 +166,7 @@ class TestCompiler(unittest.TestCase):
 
     bc.util.clear_buffer_memory()
 
-  def test_etrace_and_non_etrace_weight(self):
+  def test_train_both_etrace_weight_and_non_etrace_weight(self):
     bc.environ.set(mode=bc.mixin.JointMode(bc.mixin.Batching(), bc.mixin.Training()))
 
     class Model(bc.Module):
@@ -203,6 +203,3 @@ class TestCompiler(unittest.TestCase):
 
     # print(out)
     print(grads)
-
-  def test_weight_weight_hidden_structure(self):
-    pass

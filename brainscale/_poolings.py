@@ -22,7 +22,6 @@ from typing import Sequence, Optional
 from typing import Union, Tuple, Callable, List
 
 import braincore as bc
-import brainpy as bp
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -99,7 +98,7 @@ class Flatten(DnnLayer, ExplicitInOutSize):
 
 class Unflatten(DnnLayer, ExplicitInOutSize):
   r"""
-  Unflattens a tensor dim expanding it to a desired shape. For use with :class:`~nn.Sequential`.
+  Unflatten a tensor dim expanding it to a desired shape. For use with :class:`~nn.Sequential`.
 
   * :attr:`dim` specifies the dimension of the input tensor to be unflattened, and it can
     be either `int` or `str` when `Tensor` or `NamedTensor` is used, respectively.
@@ -118,27 +117,6 @@ class Unflatten(DnnLayer, ExplicitInOutSize):
       dim: int, Dimension to be unflattened.
       sizes: Sequence of int. New shape of the unflattened dimension.
       in_size: Sequence of int. The shape of the input tensor.
-
-  Examples:
-      >>> import brainscale as nn
-      >>> import braincore as bc
-      >>> input = bc.random.randn(2, 50)
-      >>> # With tuple of ints
-      >>> m = bp.Sequential(
-      >>>     bp.dnn.Linear(50, 50),
-      >>>     Unflatten(1, (2, 5, 5))
-      >>> )
-      >>> output = m(input)
-      >>> output.shape
-      (2, 2, 5, 5)
-      >>> # With torch.Size
-      >>> m = bp.Sequential(
-      >>>     bp.dnn.Linear(50, 50),
-      >>>     Unflatten(1, [2, 5, 5])
-      >>> )
-      >>> output = m(input)
-      >>> output.shape
-      (2, 2, 5, 5)
   """
   __module__ = 'brainscale'
 
@@ -198,7 +176,8 @@ class _MaxPool(DnnLayer, ExplicitInOutSize):
     if isinstance(kernel_size, int):
       kernel_size = (kernel_size,) * pool_dim
     elif isinstance(kernel_size, Sequence):
-      bp.check.is_sequence(kernel_size, elem_type=int)
+      assert isinstance(kernel_size, (tuple, list)), f'kernel_size should be a tuple, but got {type(kernel_size)}'
+      assert all([isinstance(x, int) for x in kernel_size]), f'kernel_size should be a tuple of ints. {kernel_size}'
       if len(kernel_size) != pool_dim:
         raise ValueError(f'kernel_size should a tuple with {pool_dim} ints, but got {len(kernel_size)}')
     else:
@@ -211,7 +190,8 @@ class _MaxPool(DnnLayer, ExplicitInOutSize):
     if isinstance(stride, int):
       stride = (stride,) * pool_dim
     elif isinstance(stride, Sequence):
-      bp.check.is_sequence(stride, elem_type=int)
+      assert isinstance(stride, (tuple, list)), f'stride should be a tuple, but got {type(stride)}'
+      assert all([isinstance(x, int) for x in stride]), f'stride should be a tuple of ints. {stride}'
       if len(stride) != pool_dim:
         raise ValueError(f'stride should a tuple with {pool_dim} ints, but got {len(kernel_size)}')
     else:
@@ -244,7 +224,9 @@ class _MaxPool(DnnLayer, ExplicitInOutSize):
     self.padding = padding
 
     # channel_axis
-    self.channel_axis = bp.check.is_integer(channel_axis, allow_none=True)
+    assert channel_axis is None or isinstance(channel_axis, int), \
+      f'channel_axis should be an int, but got {channel_axis}'
+    self.channel_axis = channel_axis
 
     # in & out shapes
     if in_size is not None:
