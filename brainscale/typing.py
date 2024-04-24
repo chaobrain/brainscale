@@ -17,7 +17,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Sequence, Union
+from typing import Any, Dict, Sequence, Union, FrozenSet, List
 
 import braincore as bc
 import jax
@@ -25,10 +25,12 @@ import jax
 __all__ = [
   'PyTree', 'StateID', 'WeightID', 'Size', 'Axis', 'Axes',
   'Inputs', 'Outputs',
-  'HiddenVals', 'StateVals', 'WeightVals', 'ETraceVals', 'HiddenVar',
+  'HiddenVals', 'StateVals', 'WeightVals', 'ETraceVals',
+  'HiddenInVar', 'HiddenOutVar',
   'dG_Inputs', 'dG_Weight', 'dG_Hidden', 'dG_State',
   'ArrayLike', 'DType', 'DTypeLike', 'WeightXVar', 'WeightYVar',
   'WeightXs', 'WeightDfs', 'TempData', 'Current', 'Conductance', 'Spike',
+  'Hid2WeightJacobian', 'Hid2HidJacobian', 'Hid2HidDiagJacobian',
 ]
 
 ArrayLike = bc.typing.ArrayLike
@@ -52,7 +54,8 @@ HiddenVals = Sequence[PyTree]
 StateVals = Sequence[PyTree]
 WeightVals = Sequence[PyTree]
 ETraceVals = PyTree
-HiddenVar = jax.core.Var
+HiddenOutVar = jax.core.Var
+HiddenInVar = jax.core.Var
 
 # --- gradients --- #
 dG_Inputs = PyTree  # gradients of inputs
@@ -69,3 +72,8 @@ TempData = Dict[jax.core.Var, jax.Array]
 Current = ArrayLike  # the synaptic current
 Conductance = ArrayLike  # the synaptic conductance
 Spike = ArrayLike  # the spike signal
+# the diagonal Jacobian of the hidden-to-hidden function
+Hid2HidDiagJacobian = Dict[FrozenSet[HiddenOutVar], Dict[HiddenOutVar, List[jax.Array]]]
+Hid2WeightJacobian = Any
+Hid2HidJacobian = Any
+

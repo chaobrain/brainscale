@@ -18,7 +18,6 @@
 from __future__ import annotations
 
 import contextlib
-import functools
 from enum import Enum
 from typing import Callable, Sequence, Tuple, List, Optional
 
@@ -29,21 +28,30 @@ from .typing import PyTree
 
 __all__ = [
   # eligibility trace related concepts
-  'ETraceVar',  # the hidden state for RTRL
-  'ETraceParam',  # the parameter for RTRL
-  'ETraceOp',  # the operator for ETrace
-  'ETraceParamOp',  # the parameter with an associated operator for ETrace, combining ETraceParam and ETraceOp
+  'ETraceVar',  # the hidden state for the etrace-based learning
+  'ETraceParam',  # the parameter/weight for the etrace-based learning
+  'ETraceOp',  # the operator for the etrace-based learning
+  'ETraceParamOp',  # the parameter and operator for the etrace-based learning, combining ETraceParam and ETraceOp
   'NormalParamOp',  # the parameter state with an associated operator
   'stop_param_gradients',
 ]
 
 _stop_param_gradient = False
 _etrace_op_name = '_etrace_weight_operator_call_'
+_etrace_op_name_enable_grad = '_etrace_weight_operator_call_enable_grad_'
 
 
-def wrap_etrace_fun(fun):
-  fun.__name__ = _etrace_op_name
+def wrap_etrace_fun(fun, name: str = _etrace_op_name):
+  fun.__name__ = name
   return fun
+
+
+def is_etrace_op(jit_param_name: str):
+  return jit_param_name.startswith(_etrace_op_name)
+
+
+def is_etrace_op_enable_gradient(jit_param_name: str):
+  return jit_param_name.startswith(_etrace_op_name_enable_grad)
 
 
 # -------------------------------------------------------------------------------------- #
@@ -76,7 +84,7 @@ class ETraceParam(bc.ParamState):
   __module__ = 'brainscale'
 
 
-class ETraceOp(bc.Module):
+class ETraceOp:
   """
   The Eligibility Trace Operator.
 
@@ -84,38 +92,51 @@ class ETraceOp(bc.Module):
 
   Attributes:
     fun: The operator function.
-    stop_behavior: The behavior when stopping the weight gradients. If None, the operator will stop the gradients.
 
   Args:
     fun: The operator function.
   """
   __module__ = 'brainscale'
 
-  def __init__(self, fun: Callable):
+  def __init__(self,
+               fun: Callable,
+               is_diagonal: bool = False):
     super().__init__()
     self.fun = fun
-    self.stop_behavior: Optional[Callable] = None
+    self.is_diagonal = is_diagonal
+    name = _etrace_op_name_enable_grad if is_diagonal else _etrace_op_name
 
-  @functools.partial(jax.jit, static_argnums=0)
-  @wrap_etrace_fun
-  def _call(self, x, weight):
-    return self.fun(x, weight)
+    def _call(x, weight):
+      return self.fun(x, weight)
+    self._jitted_call = jax.jit(wrap_etrace_fun(_call, name))
 
   def __call__(self, x: jax.Array, weight: PyTree) -> jax.Array:
-    if _stop_param_gradient:
-      if self.stop_behavior is None:
-        y = self._call(x, weight)
-        y = jax.lax.stop_gradient(y)
-      else:
-        y = self.stop_behavior(x, weight)
-    else:
-      y = self._call(x, weight)
+    y = self._jitted_call(x, weight)
+    if _stop_param_gradient and not self.is_diagonal:
+      y = jax.lax.stop_gradient(self._jitted_call(x, weight))
     return y
 
 
 class ETraceGrad(Enum):
   full = 'full'
   approx = 'approx'
+  adaptive = 'adaptive'
+
+  @classmethod
+  def get_by_name(cls, name: str):
+    for item in cls:
+      if item.name == name:
+        return item
+    raise ValueError(f'Cannot find the {cls.__name__} type {name}.')
+
+  @classmethod
+  def get(cls, type_: str | Enum):
+    if isinstance(type_, cls):
+      return type_
+    elif isinstance(type_, str):
+      return cls.get_by_name(type_)
+    else:
+      raise ValueError(f'Cannot find the {cls.__name__} type {type_}.')
 
 
 class ETraceParamOp(ETraceParam):
@@ -129,12 +150,12 @@ class ETraceParamOp(ETraceParam):
   __module__ = 'brainscale'
   op: ETraceOp  # operator
 
-  def __init__(self, weight: PyTree, op: Callable, full_grad: Optional[bool] = None):
+  def __init__(self, weight: PyTree, op: Callable, grad: str = ETraceGrad.adaptive):
     # weight value
     super().__init__(weight)
 
     # gradient
-    self.gradient = ETraceGrad.full if full_grad else ETraceGrad.approx
+    self.gradient = ETraceGrad.get(grad)
 
     # operation
     if isinstance(op, ETraceOp):

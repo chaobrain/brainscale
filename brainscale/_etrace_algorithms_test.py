@@ -73,8 +73,8 @@ class TestDiagOn2(unittest.TestCase):
     algorithm.compile_graph(jax.ShapeDtypeStruct((n_in,), bc.environ.dftype()))
 
     def run_snn(i, inp_spk):
-      bc.share.set(i=i, t=i * bc.environ.get_dt())
-      out = algorithm.update_model_and_etrace(inp_spk)
+      with bc.share.context(i=i, t=i * bc.environ.get_dt()):
+        out = algorithm.update_model_and_etrace(inp_spk)
       return out
 
     nt = 100
@@ -96,8 +96,8 @@ class TestDiagOn2(unittest.TestCase):
     algorithm.compile_graph(jax.ShapeDtypeStruct((n_batch, n_in), bc.environ.dftype()))
 
     def run_snn(i, inp_spk):
-      bc.share.set(i=i, t=i * bc.environ.get_dt())
-      out = algorithm.update_model_and_etrace(inp_spk)
+      with bc.share.context(i=i, t=i * bc.environ.get_dt()):
+        out = algorithm.update_model_and_etrace(inp_spk)
       return out
 
     nt = 100

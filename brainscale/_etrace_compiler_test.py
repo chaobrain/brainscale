@@ -196,10 +196,10 @@ class TestCompiler(unittest.TestCase):
     # algorithms
     algorithm = nn.DiagExpSmOnAlgorithm(run_model, decay_or_rank=100)
     algorithm.compile_graph(0, inp_spk)
-    out = algorithm(0, inp_spk)
+    out = algorithm(0, inp_spk, running_index=0)
 
     weights = model.states().subset(bc.ParamState)
-    grads = bc.transform.grad(lambda x: algorithm(0, x).sum(), grad_vars=weights)(inp_spk)
+    grads = bc.transform.grad(lambda x: algorithm(0, x, running_index=0).sum(), grad_vars=weights)(inp_spk)
 
     # print(out)
     print(grads)
