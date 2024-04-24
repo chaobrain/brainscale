@@ -40,7 +40,7 @@ from ._etrace_concepts import (assign_state_values,
                                ETraceParamOp,
                                ETraceGrad)
 from ._etrace_operators import (StandardETraceOp,
-                                GeneralETraceUpdate)
+                                GeneralETraceOp)
 from .typing import (PyTree,
                      Outputs,
                      WeightID,
@@ -933,8 +933,8 @@ def _update_on2_etrace(hist_etrace_vals: Dict,
     if isinstance(relation.weight.op, StandardETraceOp):
       etrace_op = relation.weight.op
     else:
-      etrace_op = GeneralETraceUpdate(relation.weight.op,
-                                      xinfo=jax.ShapeDtypeStruct(relation.x.aval.shape, relation.x.aval.dtype), )
+      etrace_op = GeneralETraceOp(relation.weight.op,
+                                  xinfo=jax.ShapeDtypeStruct(relation.x.aval.shape, relation.x.aval.dtype), )
 
     # update the etrace weight gradients
     for i, hid_var in enumerate(relation.hidden_vars):
@@ -971,8 +971,8 @@ def _solve_on2_weight_gradients(hist_etrace_data: Dict,
     if isinstance(relation.weight.op, StandardETraceOp):
       etrace_op = relation.weight.op
     else:
-      etrace_op = GeneralETraceUpdate(relation.weight.op,
-                                      xinfo=jax.ShapeDtypeStruct(relation.x.aval.shape, relation.x.aval.dtype), )
+      etrace_op = GeneralETraceOp(relation.weight.op,
+                                  xinfo=jax.ShapeDtypeStruct(relation.x.aval.shape, relation.x.aval.dtype), )
 
     for i, hid_var in enumerate(relation.hidden_vars):
       key = (weight_id, relation.x, hid_var)

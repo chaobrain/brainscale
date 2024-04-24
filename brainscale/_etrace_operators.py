@@ -28,13 +28,13 @@ from .typing import PyTree
 
 __all__ = [
   'StandardETraceOp',
-  'GeneralETraceUpdate',
+  'GeneralETraceOp',
   'MatMulETraceOp',
   'AbsMatMulETraceOp',
 ]
 
 
-class StandardETraceOp:
+class StandardETraceOp(ETraceOp):
   """
   The standard operator for the eligibility trace.
   """
@@ -56,7 +56,7 @@ class StandardETraceOp:
     raise NotImplementedError
 
 
-class GeneralETraceUpdate(StandardETraceOp):
+class GeneralETraceOp(StandardETraceOp):
   """
   The general operator for computing the eligibility trace updates.
 
@@ -65,6 +65,7 @@ class GeneralETraceUpdate(StandardETraceOp):
   """
 
   def __init__(self, op: Callable, xinfo: jax.ShapeDtypeStruct):
+    super().__init__(op)
     #
     # calling the operator through:
     #       y = op(x, w)
@@ -169,7 +170,7 @@ class GeneralETraceUpdate(StandardETraceOp):
     return dG_weight
 
 
-class MatMulETraceOp(StandardETraceOp, ETraceOp):
+class MatMulETraceOp(StandardETraceOp):
   """
   The standard matrix multiplication operator for the eligibility trace.
 
@@ -283,7 +284,7 @@ class AbsMatMulETraceOp(MatMulETraceOp):
       return jnp.matmul(x, weight) + bias
 
 
-class Conv2dETraceOp(StandardETraceOp, ETraceOp):
+class Conv2dETraceOp(StandardETraceOp):
   """
   The etrace operator for the 2D convolution.
 
