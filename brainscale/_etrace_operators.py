@@ -64,8 +64,8 @@ class GeneralETraceOp(StandardETraceOp):
   computational efficiency.
   """
 
-  def __init__(self, op: Callable, xinfo: jax.ShapeDtypeStruct):
-    super().__init__(op)
+  def __init__(self, op: Callable, xinfo: jax.ShapeDtypeStruct, is_diagonal=False):
+    super().__init__(op, is_diagonal=is_diagonal)
     #
     # calling the operator through:
     #       y = op(x, w)
@@ -92,11 +92,11 @@ class GeneralETraceOp(StandardETraceOp):
                                      self.op,
                                      self.xinfo,
                                      diag)
-      diag_mul_dw = jax.tree_map(jnp.multiply, dg_weight, dw)
+      diag_mul_dw = jax.tree.map(jnp.multiply, dg_weight, dw)
       if final_dw is None:
         final_dw = diag_mul_dw
       else:
-        final_dw = jax.tree_map(jnp.add, final_dw, diag_mul_dw)
+        final_dw = jax.tree.map(jnp.add, final_dw, diag_mul_dw)
 
     # compute: current_etrace
     current_etrace = self._dx_dy_to_weight(mode,
@@ -120,7 +120,7 @@ class GeneralETraceOp(StandardETraceOp):
                                    self.op,
                                    self.xinfo,
                                    dl_to_dh)
-    return jax.tree_map(jnp.multiply, dg_weight, dh_to_dw)
+    return jax.tree.map(jnp.multiply, dg_weight, dh_to_dw)
 
   @staticmethod
   def _dy_to_weight(mode: bc.mixin.Mode,
@@ -176,8 +176,8 @@ class MatMulETraceOp(StandardETraceOp):
 
   """
 
-  def __init__(self, weight_mask: Optional[jax.Array] = None):
-    super().__init__(self._operation)
+  def __init__(self, weight_mask: Optional[jax.Array] = None, is_diagonal: bool = False):
+    super().__init__(self._operation, is_diagonal=is_diagonal)
     self.weight_mask = weight_mask
 
   def _format_weight(self, weight) -> Tuple[Tuple[jax.Array, Optional[jax.Array]], Callable]:
@@ -217,7 +217,8 @@ class MatMulETraceOp(StandardETraceOp):
     # 4. ph_to_pwx: the partial derivative of the hidden with respect to the weight input
     # 5. ph_to_pwy: the partial derivative of the hidden with respect to the weight output
 
-    diag_mul_dhdw = [self.hidden_to_etrace(w, dh, dw) for dh, dw in zip(diag_jac, dh_to_dw)]
+    diag_mul_dhdw = [self.hidden_to_etrace(mode, w, dh, dw)
+                     for dh, dw in zip(diag_jac, dh_to_dw)]
     diag_mul_dhdw = jax.tree.map(lambda *xs: reduce(jnp.add, xs), *diag_mul_dhdw)
 
     (dh_to_dweight, dh_to_dbias), unflatten = self._format_weight(diag_mul_dhdw)
@@ -270,8 +271,8 @@ class AbsMatMulETraceOp(MatMulETraceOp):
 
   """
 
-  def __init__(self, weight_mask: Optional[jax.Array] = None):
-    super().__init__(weight_mask)
+  def __init__(self, weight_mask: Optional[jax.Array] = None, is_diagonal: bool = False):
+    super().__init__(weight_mask, is_diagonal=is_diagonal)
 
   def _operation(self, x, w):
     (weight, bias), _ = self._format_weight(w)
@@ -290,8 +291,8 @@ class Conv2dETraceOp(StandardETraceOp):
 
   """
 
-  def __init__(self, weight_mask: Optional[jax.Array] = None):
-    super().__init__(fun=self._operation)
+  def __init__(self, weight_mask: Optional[jax.Array] = None, is_diagonal: bool = False):
+    super().__init__(fun=self._operation, is_diagonal=is_diagonal)
     self.weight_mask = weight_mask
 
   def _operation(self, x, w):

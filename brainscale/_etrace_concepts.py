@@ -83,6 +83,13 @@ class ETraceParam(bc.ParamState):
   """
   __module__ = 'brainscale'
 
+  is_not_etrace: bool
+
+  def __init__(self, value: PyTree):
+    super().__init__(value)
+
+    self.is_not_etrace = False
+
 
 class ETraceOp:
   """
@@ -98,9 +105,7 @@ class ETraceOp:
   """
   __module__ = 'brainscale'
 
-  def __init__(self,
-               fun: Callable,
-               is_diagonal: bool = False):
+  def __init__(self, fun: Callable, is_diagonal: bool = False):
     super().__init__()
     self.fun = fun
     self.is_diagonal = is_diagonal
@@ -150,18 +155,27 @@ class ETraceParamOp(ETraceParam):
   __module__ = 'brainscale'
   op: ETraceOp  # operator
 
-  def __init__(self, weight: PyTree, op: Callable, grad: str = ETraceGrad.adaptive):
+  def __init__(self,
+               weight: PyTree,
+               op: Callable,
+               grad: Optional[str] = None,
+               is_diagonal: bool = None):
     # weight value
     super().__init__(weight)
 
     # gradient
+    if grad is None:
+      grad = 'adaptive'
+    assert isinstance(grad, str), f'Currently, {ETraceParamOp.__name__} only supports str.'
     self.gradient = ETraceGrad.get(grad)
 
     # operation
     if isinstance(op, ETraceOp):
       self.op = op
+      if is_diagonal is not None:
+        self.op.is_diagonal = is_diagonal
     else:
-      self.op = ETraceOp(op)
+      self.op = ETraceOp(op, is_diagonal=is_diagonal if is_diagonal is not None else False)
 
   def execute(self, x: jax.Array) -> jax.Array:
     return self.op(x, self.value)
@@ -258,6 +272,11 @@ def split_states_v2(
   """
   Split the states into weight states, hidden states, and other states.
 
+  .. note::
+
+      This function is important since it determines what ParamState should be
+      trained with the eligibility trace and what should not.
+
   Args:
     states: The states to be split.
 
@@ -272,9 +291,19 @@ def split_states_v2(
     if isinstance(st, ETraceVar):
       hidden_states.append(st)
     elif isinstance(st, ETraceParam):
-      etrace_param_states.append(st)
+      if st.is_not_etrace:
+        # The ETraceParam is set to "is_not_etrace" since
+        # no hidden state is associated with it,
+        # so it should be treated as a normal parameter state
+        # and be trained with spatial gradients only
+        param_states.append(st)
+      else:
+        etrace_param_states.append(st)
     else:
       if isinstance(st, bc.ParamState):
+        # The ParamState which is not an ETraceParam,
+        # should be treated as a normal parameter state
+        # and be trained with spatial gradients only
         param_states.append(st)
       else:
         other_states.append(st)
