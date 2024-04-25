@@ -439,9 +439,9 @@ class ValinaRNNCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
   Args:
     num_in: int. The number of input units.
     num_out: int. The number of hidden units.
-    state_initializer: callable, ArrayLike. The state initializer.
-    W_initializer: callable, ArrayLike. The input weight initializer.
-    b_initializer: optional, callable, ArrayLike. The bias weight initializer.
+    state_init: callable, ArrayLike. The state initializer.
+    w_init: callable, ArrayLike. The input weight initializer.
+    b_init: optional, callable, ArrayLike. The bias weight initializer.
     activation: str, callable. The activation function. It can be a string or a callable function.
     mode: optional, bc.mixin.Mode. The mode of the module.
     name: optional, str. The name of the module.
@@ -452,9 +452,9 @@ class ValinaRNNCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
       self,
       num_in: int,
       num_out: int,
-      state_initializer: Union[ArrayLike, Callable] = init.ZeroInit(),
-      W_initializer: Union[ArrayLike, Callable] = init.XavierNormal(),
-      b_initializer: Union[ArrayLike, Callable] = init.ZeroInit(),
+      state_init: Union[ArrayLike, Callable] = init.ZeroInit(),
+      w_init: Union[ArrayLike, Callable] = init.XavierNormal(),
+      b_init: Union[ArrayLike, Callable] = init.ZeroInit(),
       activation: str | Callable = 'relu',
       mode: bc.mixin.Mode = None,
       name: str = None,
@@ -462,7 +462,7 @@ class ValinaRNNCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
     super().__init__(mode=mode, name=name)
 
     # parameters
-    self._state_initializer = state_initializer
+    self._state_initializer = state_init
     self.num_out = num_out
 
     # parameters
@@ -471,8 +471,8 @@ class ValinaRNNCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
     self.out_size = (num_out,)
 
     # initializers
-    self._W_initializer = W_initializer
-    self._b_initializer = b_initializer
+    self._W_initializer = w_init
+    self._b_initializer = b_init
 
     # activation function
     if isinstance(activation, str):
@@ -482,7 +482,7 @@ class ValinaRNNCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
       self.activation = activation
 
     # weights
-    self.W = Linear(num_in + num_out, num_out, w_init=W_initializer, b_init=b_initializer, name=self.name + '_W')
+    self.W = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_W')
 
   def init_state(self, batch_size: int = None, **kwargs):
     self.h = ETraceVar(init.parameter(self._state_initializer, self.num_out, batch_size))
@@ -501,9 +501,9 @@ class GRUCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
   Args:
     num_in: int. The number of input units.
     num_out: int. The number of hidden units.
-    state_initializer: callable, ArrayLike. The state initializer.
-    W_initializer: callable, ArrayLike. The input weight initializer.
-    b_initializer: optional, callable, ArrayLike. The bias weight initializer.
+    state_init: callable, ArrayLike. The state initializer.
+    w_init: callable, ArrayLike. The input weight initializer.
+    b_init: optional, callable, ArrayLike. The bias weight initializer.
     activation: str, callable. The activation function. It can be a string or a callable function.
     mode: optional, bc.mixin.Mode. The mode of the module.
     name: optional, str. The name of the module.
@@ -514,9 +514,9 @@ class GRUCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
       self,
       num_in: int,
       num_out: int,
-      W_initializer: Union[ArrayLike, Callable] = init.Orthogonal(),
-      b_initializer: Union[ArrayLike, Callable] = init.ZeroInit(),
-      state_initializer: Union[ArrayLike, Callable] = init.ZeroInit(),
+      w_init: Union[ArrayLike, Callable] = init.Orthogonal(),
+      b_init: Union[ArrayLike, Callable] = init.ZeroInit(),
+      state_init: Union[ArrayLike, Callable] = init.ZeroInit(),
       activation: str | Callable = 'tanh',
       mode: bc.mixin.Mode = None,
       name: str = None,
@@ -524,15 +524,15 @@ class GRUCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
     super().__init__(mode=mode, name=name)
 
     # parameters
-    self._state_initializer = state_initializer
+    self._state_initializer = state_init
     self.num_out = num_out
     self.num_in = num_in
     self.in_size = (num_in,)
     self.out_size = (num_out,)
 
     # initializers
-    self._W_initializer = W_initializer
-    self._b_initializer = b_initializer
+    self._W_initializer = w_init
+    self._b_initializer = b_init
 
     # activation function
     if isinstance(activation, str):
@@ -542,18 +542,20 @@ class GRUCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
       self.activation = activation
 
     # weights
-    self.Wz = Linear(num_in + num_out, num_out, w_init=W_initializer, b_init=b_initializer, name=self.name + '_Wz')
-    self.Wr = Linear(num_in + num_out, num_out, w_init=W_initializer, b_init=b_initializer, name=self.name + '_Wr')
-    self.Wh = Linear(num_in + num_out, num_out, w_init=W_initializer, b_init=b_initializer, name=self.name + '_Wh')
+    self.Wz = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_Wz')
+    self.Wr = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_Wr')
+    self.Wh = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_Wh')
 
   def init_state(self, batch_size: int = None, **kwargs):
-    self.h = ETraceVar(self._state_initializer(batch_size, self.num_out))
+    self.h = ETraceVar(init.parameter(self._state_initializer, [self.num_out], batch_size))
 
   def update(self, x):
-    xh = jnp.concatenate([x, self.h.value], axis=-1)
+    old_h = self.h.value
+    xh = jnp.concatenate([x, old_h], axis=-1)
     z = bts.functional.sigmoid(self.Wz(xh))
     r = bts.functional.sigmoid(self.Wr(xh))
-    h = self.activation(self.Wh(jnp.concatenate([x, r * self.h.value], axis=-1)))
+    rh = r * old_h
+    h = self.activation(self.Wh(jnp.concatenate([x, rh], axis=-1)))
     h = (1 - z) * self.h.value + z * h
     self.h.value = h
     return h
@@ -596,11 +598,11 @@ class LSTMCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
     The dimension of the input vector
   num_out: int
     The number of hidden unit in the node.
-  state_initializer: callable, ArrayLike
+  state_init: callable, ArrayLike
     The state initializer.
-  W_initializer: callable, ArrayLike
+  w_init: callable, ArrayLike
     The input weight initializer.
-  b_initializer: optional, callable, ArrayLike
+  b_init: optional, callable, ArrayLike
     The bias weight initializer.
   activation: str, callable
     The activation function. It can be a string or a callable function.
@@ -620,9 +622,9 @@ class LSTMCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
       self,
       num_in: int,
       num_out: int,
-      W_initializer: Union[ArrayLike, Callable] = init.XavierNormal(),
-      b_initializer: Union[ArrayLike, Callable] = init.ZeroInit(),
-      state_initializer: Union[ArrayLike, Callable] = init.ZeroInit(),
+      w_init: Union[ArrayLike, Callable] = init.XavierNormal(),
+      b_init: Union[ArrayLike, Callable] = init.ZeroInit(),
+      state_init: Union[ArrayLike, Callable] = init.ZeroInit(),
       activation: str | Callable = 'tanh',
       mode: bc.mixin.Mode = None,
       name: str = None,
@@ -636,9 +638,9 @@ class LSTMCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
     self.out_size = (num_out,)
 
     # initializers
-    self._state_initializer = state_initializer
-    self._W_initializer = W_initializer
-    self._b_initializer = b_initializer
+    self._state_initializer = state_init
+    self._W_initializer = w_init
+    self._b_initializer = b_init
 
     # activation function
     if isinstance(activation, str):
@@ -648,10 +650,10 @@ class LSTMCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
       self.activation = activation
 
     # weights
-    self.Wi = Linear(num_in + num_out, num_out, w_init=W_initializer, b_init=b_initializer, name=self.name + '_Wi')
-    self.Wg = Linear(num_in + num_out, num_out, w_init=W_initializer, b_init=b_initializer, name=self.name + '_Wg')
-    self.Wf = Linear(num_in + num_out, num_out, w_init=W_initializer, b_init=b_initializer, name=self.name + '_Wf')
-    self.Wo = Linear(num_in + num_out, num_out, w_init=W_initializer, b_init=b_initializer, name=self.name + '_Wo')
+    self.Wi = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_Wi')
+    self.Wg = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_Wg')
+    self.Wf = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_Wf')
+    self.Wo = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_Wo')
 
   def init_state(self, batch_size: int = None, **kwargs):
     self.c = ETraceVar(init.parameter(self._state_initializer, [self.num_out], batch_size))
@@ -676,9 +678,9 @@ class URLSTMCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
       self,
       num_in: int,
       num_out: int,
-      W_initializer: Union[ArrayLike, Callable] = init.XavierNormal(),
-      b_initializer: Union[ArrayLike, Callable] = init.ZeroInit(),
-      state_initializer: Union[ArrayLike, Callable] = init.ZeroInit(),
+      w_init: Union[ArrayLike, Callable] = init.XavierNormal(),
+      b_init: Union[ArrayLike, Callable] = init.ZeroInit(),
+      state_init: Union[ArrayLike, Callable] = init.ZeroInit(),
       activation: str | Callable = 'tanh',
       mode: bc.mixin.Mode = None,
       name: str = None,
@@ -692,9 +694,9 @@ class URLSTMCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
     self.out_size = (num_out,)
 
     # initializers
-    self._state_initializer = state_initializer
-    self._W_initializer = W_initializer
-    self._b_initializer = b_initializer
+    self._state_initializer = state_init
+    self._W_initializer = w_init
+    self._b_initializer = b_init
 
     # activation function
     if isinstance(activation, str):
@@ -704,10 +706,10 @@ class URLSTMCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
       self.activation = activation
 
     # weights
-    self.Wu = Linear(num_in + num_out, num_out, w_init=W_initializer, b_init=None, name=self.name + '_Wg')
-    self.Wf = Linear(num_in + num_out, num_out, w_init=W_initializer, b_init=None, name=self.name + '_Wf')
-    self.Wr = Linear(num_in + num_out, num_out, w_init=W_initializer, b_init=None, name=self.name + '_Wi')
-    self.Wo = Linear(num_in + num_out, num_out, w_init=W_initializer, b_init=None, name=self.name + '_Wo')
+    self.Wu = Linear(num_in + num_out, num_out, w_init=w_init, b_init=None, name=self.name + '_Wg')
+    self.Wf = Linear(num_in + num_out, num_out, w_init=w_init, b_init=None, name=self.name + '_Wf')
+    self.Wr = Linear(num_in + num_out, num_out, w_init=w_init, b_init=None, name=self.name + '_Wi')
+    self.Wo = Linear(num_in + num_out, num_out, w_init=w_init, b_init=None, name=self.name + '_Wo')
     self.bias = ETraceParamOp(self._forget_bias(), op=jnp.add, full_grad=True)
     self.bias = NormalParamOp(self._forget_bias(), op=jnp.add)
 

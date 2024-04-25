@@ -113,7 +113,7 @@ class Linear(DnnLayer):
     if b_init is not None:
       params['bias'] = init.parameter(b_init, self.out_size, allow_none=False)
     if as_etrace_weight:
-      self.weight_op = ETraceParamOp(params, op, full_grad=full_etrace)
+      self.weight_op = ETraceParamOp(params, op, grad='full' if full_etrace else None)
     else:
       self.weight_op = NormalParamOp(params, op.fun)
 
@@ -150,7 +150,7 @@ class SignedWLinear(DnnLayer):
     # weights
     weight = init.parameter(w_init, self.in_size + self.out_size, allow_none=False)
     if as_etrace_weight:
-      self.weight_op = ETraceParamOp(weight, self._operation, full_grad=full_etrace)
+      self.weight_op = ETraceParamOp(weight, self._operation, grad='full' if full_etrace else None)
     else:
       self.weight_op = NormalParamOp(weight, self._operation)
 
@@ -233,7 +233,7 @@ class ScaledWSLinear(DnnLayer):
 
     # weight operation
     if as_etrace_weight:
-      self.weight_op = ETraceParamOp(params, self._operation, full_grad=full_etrace)
+      self.weight_op = ETraceParamOp(params, self._operation, grad='full' if full_etrace else None)
     else:
       self.weight_op = NormalParamOp(params, self._operation)
 
@@ -365,8 +365,8 @@ class _Conv(_BaseConv):
       lhs_dilation: Union[int, Tuple[int, ...]] = 1,
       rhs_dilation: Union[int, Tuple[int, ...]] = 1,
       groups: int = 1,
-      w_initializer: Union[Callable, ArrayLike] = init.XavierNormal(),
-      b_initializer: Optional[Union[Callable, ArrayLike]] = None,
+      w_init: Union[Callable, ArrayLike] = init.XavierNormal(),
+      b_init: Optional[Union[Callable, ArrayLike]] = None,
       w_mask: Optional[Union[ArrayLike, Callable]] = None,
       as_etrace_weight: bool = True,
       full_etrace: bool = False,
@@ -385,8 +385,8 @@ class _Conv(_BaseConv):
                      name=name,
                      mode=mode)
 
-    self.w_initializer = w_initializer
-    self.b_initializer = b_initializer
+    self.w_initializer = w_init
+    self.b_initializer = b_init
 
     # --- weights --- #
     weight = init.parameter(self.w_initializer, self.kernel_shape, allow_none=False)
@@ -398,7 +398,7 @@ class _Conv(_BaseConv):
 
     # The weight operation
     if as_etrace_weight:
-      self.weight_op = ETraceParamOp(params, op=self._conv_op, full_grad=full_etrace)
+      self.weight_op = ETraceParamOp(params, op=self._conv_op, grad='full' if full_etrace else None)
     else:
       self.weight_op = NormalParamOp(params, op=self._conv_op)
 
@@ -504,9 +504,9 @@ _conv_doc = '''
     is also known as 'atrous convolution'.
   groups: int
     If specified, divides the input features into groups. default 1.
-  w_initializer: Callable, ArrayLike, Initializer
+  w_init: Callable, ArrayLike, Initializer
     The initializer for the convolutional kernel.
-  b_initializer: Optional, Callable, ArrayLike, Initializer
+  b_init: Optional, Callable, ArrayLike, Initializer
     The initializer for the bias.
   w_mask: ArrayLike, Callable, Optional
     The optional mask of the weights.
@@ -534,8 +534,8 @@ class _ScaledWSConv(_BaseConv):
       groups: int = 1,
       ws_gain: bool = True,
       eps: float = 1e-4,
-      w_initializer: Union[Callable, ArrayLike] = init.XavierNormal(),
-      b_initializer: Optional[Union[Callable, ArrayLike]] = None,
+      w_init: Union[Callable, ArrayLike] = init.XavierNormal(),
+      b_init: Optional[Union[Callable, ArrayLike]] = None,
       w_mask: Optional[Union[ArrayLike, Callable]] = None,
       as_etrace_weight: bool = True,
       full_etrace: bool = False,
@@ -554,8 +554,8 @@ class _ScaledWSConv(_BaseConv):
                      name=name,
                      mode=mode)
 
-    self.w_initializer = w_initializer
-    self.b_initializer = b_initializer
+    self.w_initializer = w_init
+    self.b_initializer = b_init
 
     # --- weights --- #
     weight = init.parameter(self.w_initializer, self.kernel_shape, allow_none=False)
@@ -576,7 +576,7 @@ class _ScaledWSConv(_BaseConv):
 
     # The weight operation
     if as_etrace_weight:
-      self.weight_op = ETraceParamOp(params, op=self._conv_op, full_grad=full_etrace)
+      self.weight_op = ETraceParamOp(params, op=self._conv_op, grad='full' if full_etrace else None)
     else:
       self.weight_op = NormalParamOp(params, op=self._conv_op)
 
@@ -674,9 +674,9 @@ _ws_conv_doc = '''
     is also known as 'atrous convolution'.
   groups: int
     If specified, divides the input features into groups. default 1.
-  w_initializer: Callable, ArrayLike, Initializer
+  w_init: Callable, ArrayLike, Initializer
     The initializer for the convolutional kernel.
-  b_initializer: Optional, Callable, ArrayLike, Initializer
+  b_init: Optional, Callable, ArrayLike, Initializer
     The initializer for the bias.
   ws_gain: bool
     Whether to add a gain term for the weight standarization. The default is `True`.
