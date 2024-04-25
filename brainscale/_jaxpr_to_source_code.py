@@ -13,6 +13,7 @@
 # limitations under the License.
 # ==============================================================================
 
+from contextlib import contextmanager
 import ast
 import enum
 import warnings
@@ -147,6 +148,18 @@ class SourcerorState:
     return f"{prefix}_{self._skolem_count}"
 
 
+prefix_imports = set()
+
+
+@contextmanager
+def catch_imports():
+  try:
+    prefix_imports.clear()
+    yield
+  finally:
+    prefix_imports.clear()
+
+
 def fn_to_python_code(fn, *args, **kwargs):
   """
   Given a function which is defined by jax primitives and the function arguments,
@@ -164,10 +177,13 @@ def fn_to_python_code(fn, *args, **kwargs):
     name = fn.__name__
   except AttributeError:
     name = "unknown"
-  node = jaxpr_to_py_ast(state, jaxpr, fn_name=name)
-  node = _maybe_wrap_fn_for_leaves(node, fn, len(args) + len(kwargs))
-  ast.fix_missing_locations(node)
-  source = ast.unparse(node)
+  with catch_imports():
+    node = jaxpr_to_py_ast(state, jaxpr, fn_name=name)
+    node = _maybe_wrap_fn_for_leaves(node, fn, len(args) + len(kwargs))
+    ast.fix_missing_locations(node)
+    source = ast.unparse(node)
+    if len(prefix_imports):
+      source = "\n".join(prefix_imports) + "\n\n" + source
   return source
 
 
@@ -182,9 +198,12 @@ def jaxpr_to_python_code(jaxpr: jax.core.Jaxpr,
   """
   jaxpr = constant_fold_jaxpr(jaxpr)
   state = SourcerorState()
-  node = jaxpr_to_py_ast(state, jaxpr, fn_name=fn_name)
-  ast.fix_missing_locations(node)
-  source = ast.unparse(node)
+  with catch_imports():
+    node = jaxpr_to_py_ast(state, jaxpr, fn_name=fn_name)
+    ast.fix_missing_locations(node)
+    source = ast.unparse(node)
+    if len(prefix_imports):
+      source = "\n".join(prefix_imports) + "\n\n" + source
   return source
 
 
@@ -658,17 +677,24 @@ def _astify_value(value):
     # return ast.Call(func=ast.Attribute(value=ast.Name(id='jax.numpy', ctx=ast.Load()), attr='dtype', ctx=ast.Load()), args=[ast.Constant(value=str(value))], keywords=[])
     if value.name in ('float32', 'float64', 'int32', 'int64', 'bfloat16', 'float16'):
       # return ast.Constant(value=getattr(jnp, value.name))
-      return ast.Attribute(value=ast.Name(id='jax.numpy', ctx=ast.Load()), attr=value.name, ctx=ast.Load())
+      return ast.Attribute(value=ast.Name(id='jax.numpy', ctx=ast.Load()),
+                           attr=value.name,
+                           ctx=ast.Load())
     elif value.name == 'bool':
-      return ast.Attribute(value=ast.Name(id='jax.numpy', ctx=ast.Load()), attr='bool_', ctx=ast.Load())
+      return ast.Attribute(value=ast.Name(id='jax.numpy', ctx=ast.Load()),
+                           attr='bool_',
+                           ctx=ast.Load())
     else:
-      return ast.Call(func=ast.Attribute(value=ast.Name(id='jax.numpy', ctx=ast.Load()), attr='dtype', ctx=ast.Load()),
+      return ast.Call(func=ast.Attribute(value=ast.Name(id='jax.numpy', ctx=ast.Load()),
+                                         attr='dtype',
+                                         ctx=ast.Load()),
                       args=[ast.Constant(value=str(value))], keywords=[])
   elif value is UNSPECIFIED:
-    return ast.Attribute(value=ast.Name(id='jax._src.sharding_impls', ctx=ast.Load()), attr='UNSPECIFIED',
-                         ctx=ast.Load())
+    prefix_imports.add('from jax._src.sharding_impls import UNSPECIFIED')
+    return ast.Name(id='UNSPECIFIED', ctx=ast.Load())
   elif isinstance(value, enum.Enum):
-    return ast.Attribute(value=ast.Name(id=value.__class__.__qualname__, ctx=ast.Load()), attr=value.name,
+    return ast.Attribute(value=ast.Name(id=value.__class__.__qualname__, ctx=ast.Load()),
+                         attr=value.name,
                          ctx=ast.Load())
 
   else:
