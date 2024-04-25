@@ -240,6 +240,12 @@ class ETraceAlgorithm(bc.Module):
       # mark the graph is compiled
       self.is_compiled = True
 
+  def show_graph(self, *args, **kwargs) -> None:
+    """
+    Show the etrace graph.
+    """
+    return self.graph.show_graph(*args, **kwargs)
+
   def call(self, *args, running_index: int = None) -> Any:
     """
     Update the model and the eligibility trace states.
@@ -520,8 +526,10 @@ class _OnAlgorithm(Protocol):
   etrace_chunked_dfs: Dict[Tuple[WeightYVar, HiddenOutVar], bc.State]
 
 
-def _init_on_state(self: _OnAlgorithm,
-                   relation: HiddenWeightOpRelation):
+def _init_on_state(
+    self: _OnAlgorithm,
+    relation: HiddenWeightOpRelation
+):
   if relation.x not in self.etrace_xs:
     shape = relation.x.aval.shape
     dtype = relation.x.aval.dtype
@@ -539,15 +547,17 @@ def _init_on_state(self: _OnAlgorithm,
       self.etrace_chunked_dfs[key] = bc.State(jnp.zeros((self.num_snap + 1,) + shape, dtype))
 
 
-def _update_on_etrace(hist_etrace_vals: Tuple,
-                      hid2weight_jac: Tuple[Dict, Dict],
-                      data_for_hid2hid_jac: Dict,
-                      hid_weight_op_relations: List,
-                      hid_group_relations: Dict,
-                      hidden_outvar_to_invar: Dict,
-                      decay: float,
-                      num_snap: int,
-                      snap_freq: int):
+def _update_on_etrace(
+    hist_etrace_vals: Tuple,
+    hid2weight_jac: Tuple[Dict, Dict],
+    data_for_hid2hid_jac: Dict,
+    hid_weight_op_relations: List,
+    hid_group_relations: Dict,
+    hidden_outvar_to_invar: Dict,
+    decay: float,
+    num_snap: int,
+    snap_freq: int
+):
   # --- the data --- #
 
   #
@@ -656,14 +666,16 @@ def _update_on_etrace(hist_etrace_vals: Tuple,
   return new_etrace_xs, new_etrace_dfs, new_etrace_chunk_xs, new_etrace_chunk_dfs
 
 
-def _solve_on_weight_gradients(hist_etrace_data,
-                               dG_weights: Dict[WeightID, dG_Weight],
-                               dG_hiddens: Dict[HiddenOutVar, jax.Array],
-                               weight_hidden_relations,
-                               weight_id_to_its_val,
-                               running_index: int,
-                               decay: float,
-                               num_snap: int):
+def _solve_on_weight_gradients(
+    hist_etrace_data,
+    dG_weights: Dict[WeightID, dG_Weight],
+    dG_hiddens: Dict[HiddenOutVar, jax.Array],
+    weight_hidden_relations,
+    weight_id_to_its_val,
+    running_index: int,
+    decay: float,
+    num_snap: int
+):
   # avoid the exponential smoothing bias at the beginning
   correction_factor = 1 - jnp.power(1 - decay, running_index + 1)
 
@@ -866,15 +878,17 @@ def _init_on2_state(self: _On2Algorithm, relation: HiddenWeightOpRelation):
                                                  relation.weight.value))
 
 
-def _update_on2_etrace(hist_etrace_vals: Dict,
-                       hid2weight_jac: Tuple,
-                       data_for_hid2hid_jac: Dict,
-                       weight_id_to_its_val: Dict,
-                       hidden_param_op_relations,
-                       hid_group_relations,
-                       hidden_outvar_to_invar: Dict,
-                       diag_normalize: bool,
-                       mode: bc.mixin.Mode):
+def _update_on2_etrace(
+    hist_etrace_vals: Dict,
+    hid2weight_jac: Tuple,
+    data_for_hid2hid_jac: Dict,
+    weight_id_to_its_val: Dict,
+    hidden_param_op_relations,
+    hid_group_relations,
+    hidden_outvar_to_invar: Dict,
+    diag_normalize: bool,
+    mode: bc.mixin.Mode
+):
   #
   # + "hist_etrace_vals" has the following structure:
   #    - key: the weight id, the weight-x jax var, the hidden state var
@@ -927,7 +941,8 @@ def _update_on2_etrace(hist_etrace_vals: Dict,
     weight_vals = weight_id_to_its_val[weight_id]
 
     # previous gradients
-    old_grads = [hist_etrace_vals[(relation.y, hid_var)] for hid_var in relation.hidden_vars]
+    old_grads = [hist_etrace_vals[(weight_id, relation.x, hid_var)]
+                 for hid_var in relation.hidden_vars]
 
     # the etrace operation for computing etrace updates
     if isinstance(relation.weight.op, StandardETraceOp):
@@ -950,12 +965,14 @@ def _update_on2_etrace(hist_etrace_vals: Dict,
   return new_etrace_bwg
 
 
-def _solve_on2_weight_gradients(hist_etrace_data: Dict,
-                                dG_weights: Dict[WeightID, dG_Weight],
-                                dG_hiddens: Dict[HiddenOutVar, jax.Array],
-                                weight_hidden_relations,
-                                weight_id_to_its_val,
-                                mode: bc.mixin.Mode):
+def _solve_on2_weight_gradients(
+    hist_etrace_data: Dict,
+    dG_weights: Dict[WeightID, dG_Weight],
+    dG_hiddens: Dict[HiddenOutVar, jax.Array],
+    weight_hidden_relations,
+    weight_id_to_its_val,
+    mode: bc.mixin.Mode
+):
   # update the etrace weight gradients
   temp_data = dict()
   for relation in weight_hidden_relations:
@@ -1099,8 +1116,10 @@ def _numel(pytree: PyTree):
   return sum(jnp.size(x) for x in jax.tree_leaves(pytree))
 
 
-def _is_weight_need_full_grad(relation: HiddenWeightOpRelation,
-                              mode: bc.mixin.Mode):
+def _is_weight_need_full_grad(
+    relation: HiddenWeightOpRelation,
+    mode: bc.mixin.Mode
+):
   if isinstance(relation.weight, ETraceParamOp):
     if relation.weight.gradient == ETraceGrad.full:
       return True
@@ -1147,7 +1166,8 @@ class DiagHybridAlgorithm(DiagETraceAlgorithmForVJP):
   etrace_chunked_xs: Dict[WeightXVar, bc.State]  # the chunked spatial gradients of the weights
   # the chunked spatial gradients of the hidden states
   etrace_chunked_dfs: Dict[Tuple[WeightYVar, HiddenOutVar], bc.State]
-  etrace_bwg: Dict[Tuple[WeightID, WeightXVar, HiddenOutVar], bc.State]  # batch of weight gradients
+  # batch of weight gradients
+  etrace_bwg: Dict[Tuple[WeightID, WeightXVar, HiddenOutVar], bc.State]
   decay: float  # the exponential smoothing decay factor
 
   def __init__(self,
@@ -1168,10 +1188,12 @@ class DiagHybridAlgorithm(DiagETraceAlgorithmForVJP):
     self.snap_freq = snap_freq or num_rank
 
   def init_etrace_state(self, *args, **kwargs):
+    #
     # The states of weight spatial gradients:
     #   1. x
     #   2. df
     #   3. batched weight gradients
+    #
     self.etrace_xs = bc.visible_state_dict()
     self.etrace_dfs = bc.visible_state_dict()
     self.etrace_bwg = bc.visible_state_dict()
