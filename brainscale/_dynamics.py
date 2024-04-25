@@ -28,7 +28,7 @@ from braintools import init
 
 from ._base import ExplicitInOutSize
 from ._connections import Linear
-from ._etrace_concepts import ETraceVar, ETraceParamOp, NormalParamOp
+from ._etrace_concepts import ETraceVar, ETraceParamOp
 from .typing import DTypeLike, ArrayLike, Current, Spike, Size
 
 __all__ = [
@@ -710,8 +710,7 @@ class URLSTMCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
     self.Wf = Linear(num_in + num_out, num_out, w_init=w_init, b_init=None, name=self.name + '_Wf')
     self.Wr = Linear(num_in + num_out, num_out, w_init=w_init, b_init=None, name=self.name + '_Wi')
     self.Wo = Linear(num_in + num_out, num_out, w_init=w_init, b_init=None, name=self.name + '_Wo')
-    self.bias = ETraceParamOp(self._forget_bias(), op=jnp.add, full_grad=True)
-    self.bias = NormalParamOp(self._forget_bias(), op=jnp.add)
+    self.bias = ETraceParamOp(self._forget_bias(), op=jnp.add, grad='full')
 
   def _forget_bias(self):
     u = bc.random.uniform(1 / self.num_out, 1 - 1 / self.num_out, (self.num_out,))

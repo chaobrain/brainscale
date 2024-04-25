@@ -203,3 +203,60 @@ class TestCompiler(unittest.TestCase):
 
     # print(out)
     print(grads)
+
+
+class TestShowGraph(unittest.TestCase):
+  def test_show_graph(self):
+    class Linear1(bc.Module):
+      def __init__(self, in_size: int, out_size: int, w_init: Callable = bts.init.KaimingNormal()):
+        super().__init__()
+        self.in_size = (in_size,)
+        self.out_size = (out_size,)
+        params = dict(weight=bts.init.parameter(w_init, self.in_size + self.out_size, allow_none=False))
+        self.weight = nn.ETraceParam(params)
+        self.mask = bc.random.random(self.in_size + self.out_size) < 0.5
+        self.op = nn.ETraceOp(self._operation)
+
+      def update(self, x):
+        res = self.op(x, self.weight.value)
+        return res
+
+      def _operation(self, x, params):
+        return x @ (params['weight'] * self.mask)
+
+    model = IF_Delta_Dense_Layer(Linear1, 10, 20)
+    bc.init_states(model, 16)
+
+    inp_spk = jnp.asarray(bc.random.rand(16, 10) < 0.3, dtype=bc.environ.dftype())
+    graph = nn.ETraceGraph(model)
+    graph.compile_graph(inp_spk)
+    graph.show_graph()
+
+    bc.util.clear_buffer_memory()
+
+  def test_show_lstm_graph(self):
+    bc.environ.set(mode=bc.mixin.JointMode(bc.mixin.Batching(), bc.mixin.Training()))
+    cell = nn.LSTMCell(10, 20)
+    bc.init_states(cell, 16)
+
+    graph = nn.ETraceGraph(cell)
+    graph.compile_graph(jnp.zeros((16, 10)))
+    graph.show_graph()
+
+    self.assertTrue(len(graph.hidden_param_op_relations) == 3)
+
+    bc.util.clear_buffer_memory()
+
+  def test_show_gru_graph(self):
+    bc.environ.set(mode=bc.mixin.JointMode(bc.mixin.Batching(), bc.mixin.Training()))
+    cell = nn.GRUCell(10, 20)
+    bc.init_states(cell, 16)
+
+    graph = nn.ETraceGraph(cell)
+    graph.compile_graph(jnp.zeros((16, 10)))
+    graph.show_graph()
+
+    self.assertTrue(len(graph.hidden_param_op_relations) == 3)
+
+    bc.util.clear_buffer_memory()
+

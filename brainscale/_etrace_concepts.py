@@ -24,6 +24,7 @@ from typing import Callable, Sequence, Tuple, List, Optional
 import braincore as bc
 import jax.lax
 
+from ._misc import BaseEnum
 from .typing import PyTree
 
 __all__ = [
@@ -99,6 +100,7 @@ class ETraceOp:
 
   Attributes:
     fun: The operator function.
+    is_diagonal: bool. Whether the operator is in the hidden diagonal or not.
 
   Args:
     fun: The operator function.
@@ -113,6 +115,7 @@ class ETraceOp:
 
     def _call(x, weight):
       return self.fun(x, weight)
+
     self._jitted_call = jax.jit(wrap_etrace_fun(_call, name))
 
   def __call__(self, x: jax.Array, weight: PyTree) -> jax.Array:
@@ -122,11 +125,7 @@ class ETraceOp:
     return y
 
 
-class ETraceGrad(Enum):
-  full = 'full'
-  approx = 'approx'
-  adaptive = 'adaptive'
-
+class ETraceGrad(BaseEnum):
   @classmethod
   def get_by_name(cls, name: str):
     for item in cls:

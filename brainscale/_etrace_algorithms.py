@@ -31,7 +31,8 @@ from braincore.transform._autograd import functional_vector_grad as vgrad
 
 from ._etrace_compiler import (ETraceGraph,
                                HiddenWeightOpRelation,
-                               HiddenGroupRelation)
+                               HiddenGroupRelation,
+                               DiagJacobian)
 from ._etrace_concepts import (assign_state_values,
                                split_states,
                                split_states_v2,
@@ -166,12 +167,19 @@ class ETraceAlgorithm(bc.Module):
 
   Parameters:
   -----------
-  model_or_graph: Union[Callable, ETraceGraph]
-      The model or the etrace graph. The model is the function that we want to
-      compute the recurrent states in one time step. The etrace graph is the
-      graph that we want to compute the eligibility trace.
+  model: Callable
+      The model to create the etrace graph. The model is the function that we want to
+      compute the recurrent states in one time step.
+  diag_jacobian: str
+      The method to compute the hidden Jacobian diagonal matrix. It should be one of
+      the following values:
+
+      - 'exact': the exact Jacobian diagonal matrix
+      - 'vjp': the vector-Jacobian product computed Jacobian diagonal matrix
+      - 'jvp': the Jacobian-vector product computed Jacobian diagonal matrix
   diag_normalize: bool
       Whether to normalize the hidden Jacobian diagonal matrix to the range of ``[-1, 1]``.
+      Supported only when the ``diag_jacobian`` is ``'vjp'`` or ``'jvp'``. Default is ``None``.
   name: str, optional
       The name of the etrace algorithm.
   mode: bc.mixin.Mode, optional
@@ -188,25 +196,25 @@ class ETraceAlgorithm(bc.Module):
   diag_normalize: bool  # whether to normalize the hidden Jacobian diagonal matrix
 
   def __init__(self,
-               model_or_graph: Callable | ETraceGraph,
-               diag_normalize: bool = False,
+               model: Callable,
+               diag_normalize: bool = None,
+               diag_jacobian: str = 'exact',
                name: str | None = None,
                mode: bc.mixin.Mode | None = None):
-    super().__init__(name=name,
-                     mode=mode)
+    super().__init__(name=name, mode=mode)
 
-    # the model and the graph
-    if isinstance(model_or_graph, ETraceGraph):
-      self.graph = model_or_graph
-      self.is_compiled = model_or_graph.revised_jaxpr is not None
-    else:
-      if not callable(model_or_graph):
-        raise ValueError('The model should be a callable function. ')
-      self.graph = ETraceGraph(model_or_graph)
-      self.is_compiled = False
+    # The method to compute the hidden Jacobian diagonal matrix,
+    # and whether to normalize the hidden Jacobian diagonal matrix
+    self.diag_jacobian = DiagJacobian.get(diag_jacobian)
+    if self.diag_jacobian == DiagJacobian.exact:
+      assert diag_normalize is None, 'The normalization is not supported for the exact Jacobian diagonal matrix. '
+    self.diag_normalize = False if diag_normalize is None else diag_normalize
 
-    # the normalization of the hidden Jacobian diagonal matrix
-    self.diag_normalize = diag_normalize
+    # The model and the graph
+    if not callable(model):
+      raise ValueError('The model should be a callable function. ')
+    self.graph = ETraceGraph(model, self.diag_jacobian)
+    self.is_compiled = False
 
   def compile_graph(self, *args, **kwargs) -> None:
     """
@@ -240,11 +248,11 @@ class ETraceAlgorithm(bc.Module):
       # mark the graph is compiled
       self.is_compiled = True
 
-  def show_graph(self, *args, **kwargs) -> None:
+  def show_graph(self) -> None:
     """
     Show the etrace graph.
     """
-    return self.graph.show_graph(*args, **kwargs)
+    return self.graph.show_graph()
 
   def call(self, *args, running_index: int = None) -> Any:
     """
@@ -299,6 +307,45 @@ class FakedETraceAlgorithm(ETraceAlgorithm):
     return self.graph.model(*args)
 
 
+def _solve_diagonal_jacobian_by_vjp_or_jvp(self: ETraceAlgorithm, *args) -> Dict[HiddenOutVar, jax.Array]:
+  """
+  The common method to solve the temporal Jacobian gradients of the hidden states.
+
+  Note here the temporal gradients are the gradients of the hidden states with respect to the hidden states,
+  and only consider the diagonal structure of such hidden Jacobian matrix.
+  """
+  # [compute D^t]
+  # approximate the hidden to hidden Jacobian diagonal using the VJP
+  hidden_values = [st.value for st in self.hidden_states]
+  other_values = [st.value for st in self.other_states]
+  hidden_values = jax.lax.stop_gradient(hidden_values)
+  other_values = jax.lax.stop_gradient(other_values)
+  args = jax.lax.stop_gradient(args)
+
+  # compute the diagonal Jacobian matrix through VJP
+  if self.diag_jacobian == DiagJacobian.vjp:
+    diagonal = vgrad(partial(_diag_hidden_update, self), argnums=0)(hidden_values, other_values, *args)
+    diagonal = {self.graph.hidden_id_to_outvar[id(st)]: val
+                for st, val in zip(self.hidden_states, diagonal)}
+
+  # compute the diagonal Jacobian matrix through JVP
+  elif self.diag_jacobian == DiagJacobian.jvp:
+    hidden_ones = jax.tree.map(jnp.zeros_like, hidden_values)
+    fun = lambda hiddens: _diag_hidden_update(self, hiddens, other_values, *args)
+    _, diagonal = jax.jvp(fun, (hidden_values,), (hidden_ones,))
+    diagonal = {self.graph.hidden_id_to_outvar[id(st)]: val
+                for st, val in zip(self.hidden_states, diagonal)}
+
+  else:
+    raise ValueError(f'The diagonal Jacobian method {self.diag_jacobian} is not supported. ')
+
+  # recovery the state values
+  assign_state_values(self.hidden_states, hidden_values)
+  assign_state_values(self.other_states, other_values)
+
+  return diagonal
+
+
 class DiagETraceAlgorithmForVJP(FakedETraceAlgorithm):
   """
   The base class for the eligibility trace algorithm which supporting the VJP gradient
@@ -332,11 +379,11 @@ class DiagETraceAlgorithmForVJP(FakedETraceAlgorithm):
   __module__ = 'brainscale'
 
   def __init__(self,
-               model_or_graph: Callable | ETraceGraph,
+               model: Callable,
                diag_normalize: bool = False,
                name: str | None = None,
                mode: bc.mixin.Mode | None = None):
-    super().__init__(model_or_graph=model_or_graph,
+    super().__init__(model=model,
                      diag_normalize=diag_normalize,
                      name=name,
                      mode=mode)
@@ -384,17 +431,22 @@ class DiagETraceAlgorithmForVJP(FakedETraceAlgorithm):
 
     weight_id_to_its_val = {id(st): val for st, val in zip(self.param_states, weight_vals)}
 
-    # spatial gradients of the weights
-    out, hidden_vals, oth_state_vals, hid2weight_jac, hid2hid_jac = (
+    # necessary gradients of the weights
+    out, hidden_vals, oth_state_vals, hid2weight_jac, data_for_hid2hid_jac = (
       self.graph.solve_h2w_jacobian(*inputs)
     )
     hid2weight_jac = jax.lax.stop_gradient(hid2weight_jac)
 
+    # gradients for the diagonal hidden Jacobian matrix
+    if self.diag_jacobian != DiagJacobian.exact:
+      data_for_hid2hid_jac = _solve_diagonal_jacobian_by_vjp_or_jvp(self, *inputs)
+
     # eligibility trace update
     etrace_vals = self._update_etrace_data(etrace_vals,
                                            hid2weight_jac,
-                                           hid2hid_jac,
-                                           weight_id_to_its_val)
+                                           data_for_hid2hid_jac,
+                                           weight_id_to_its_val,
+                                           running_index)
 
     # returns
     return out, hidden_vals, oth_state_vals, etrace_vals
@@ -408,17 +460,22 @@ class DiagETraceAlgorithmForVJP(FakedETraceAlgorithm):
 
     weight_id_to_its_val = {id(st): val for st, val in zip(self.param_states, weight_vals)}
 
-    # spatial gradients of the weights
-    out, hiddens, oth_states, hid2weight_jac, hid2hid_jac, residuals = (
+    # necessary gradients of the weights
+    out, hiddens, oth_states, hid2weight_jac, data_for_hid2hid_jac, residuals = (
       self.graph.solve_h2w_jacobian_and_l2h_vjp(*args)
     )
     hid2weight_jac = jax.lax.stop_gradient(hid2weight_jac)
 
+    # gradients for the diagonal hidden Jacobian matrix
+    if self.diag_jacobian != DiagJacobian.exact:
+      data_for_hid2hid_jac = _solve_diagonal_jacobian_by_vjp_or_jvp(self, *args)
+
     # eligibility trace update
     etrace_vals = self._update_etrace_data(etrace_vals,
                                            hid2weight_jac,
-                                           hid2hid_jac,
-                                           weight_id_to_its_val)
+                                           data_for_hid2hid_jac,
+                                           weight_id_to_its_val,
+                                           running_index)
 
     # returns
     fwd_out = (out, hiddens, oth_states, etrace_vals)
@@ -450,14 +507,14 @@ class DiagETraceAlgorithmForVJP(FakedETraceAlgorithm):
 
     # The gradients of inputs, hidden states, and other states are computed through the
     # normal back-propagation algorithm.
-    dg_args, dg_hiddens, dG_non_etrace_params, dg_oth_states, dg_perturbs = jax.tree.unflatten(in_tree, cts_out)
+    dg_args, dg_hiddens, dg_non_etrace_params, dg_oth_states, dg_perturbs = jax.tree.unflatten(in_tree, cts_out)
 
     # However, the gradients of the weights are computed through the RTRL algorithm.
     dg_perturbs = {hid_var: dg for hid_var, dg in zip(self.graph.out_hidden_jaxvars, dg_perturbs)}
     dg_weights = self._solve_weight_gradients(etrace_vals,
                                               dg_perturbs,
                                               id2weight_val,
-                                              dG_non_etrace_params,
+                                              dg_non_etrace_params,
                                               running_index)
 
     # Note that there are no gradients flowing through the etrace data.
@@ -485,7 +542,8 @@ class DiagETraceAlgorithmForVJP(FakedETraceAlgorithm):
                           etrace_vals: ETraceVals,
                           hid2weight_jac: ETraceVals,
                           data_for_hid2hid_jac,
-                          weight_id_to_its_val: Dict[WeightID, PyTree]) -> ETraceVals:
+                          weight_id_to_its_val: Dict[WeightID, PyTree],
+                          running_index: Optional[int]) -> ETraceVals:
     """
     The method to update the eligibility trace data.
 
@@ -547,13 +605,14 @@ def _init_on_state(
       self.etrace_chunked_dfs[key] = bc.State(jnp.zeros((self.num_snap + 1,) + shape, dtype))
 
 
-def _update_on_etrace(
+def _update_on_etrace_with_exact_jac(
     hist_etrace_vals: Tuple,
     hid2weight_jac: Tuple[Dict, Dict],
     data_for_hid2hid_jac: Dict,
     hid_weight_op_relations: List,
     hid_group_relations: Dict,
     hidden_outvar_to_invar: Dict,
+    running_index: int,
     decay: float,
     num_snap: int,
     snap_freq: int
@@ -619,7 +678,6 @@ def _update_on_etrace(
   # -- the chunked etrace values -- #
 
   if num_snap > 0:
-    i = bc.share.get('i', desc='The current running index. Should be an integer. ')
 
     for hwo_relation in hid_weight_op_relations:
       hh_relation: HiddenGroupRelation = hid_group_relations[frozenset(hwo_relation.hidden_vars)]
@@ -657,7 +715,77 @@ def _update_on_etrace(
       return old_chunk_xs, old_chunk_dfs
 
     new_etrace_chunk_xs, new_etrace_chunk_dfs = jax.lax.cond(
-      i % snap_freq == 0,
+      running_index % snap_freq == 0,
+      at_chunked_index,
+      not_chunked_index,
+      hist_chunk_xs, hist_chunk_dfs, new_etrace_xs, new_etrace_dfs
+    )
+
+  return new_etrace_xs, new_etrace_dfs, new_etrace_chunk_xs, new_etrace_chunk_dfs
+
+
+def _update_on_etrace_with_jvp_or_vjp_jac(hist_etrace_vals: Tuple,
+                                          hid2weight_jac: Tuple[Dict, Dict],
+                                          temporal_jacobian,
+                                          diag_normalize: bool,
+                                          running_index: int,
+                                          decay: float,
+                                          num_snap: int,
+                                          snap_freq: int):
+  # Normalize the temporal Jacobian so that the temporal gradients are
+  # within [-1., 1.], preventing the gradient vanishing and exploding.
+  if diag_normalize:
+    temporal_jacobian = jax.tree.map(_normalize, temporal_jacobian)
+
+  # --- the data --- #
+
+  # the etrace data at the current time step (t) of the O(n) algorithm
+  # is a tuple, including the weight x and df values.
+  xs, dfs = hid2weight_jac
+
+  # the history etrace values
+  hist_xs, hist_dfs, hist_chunk_xs, hist_chunk_dfs = hist_etrace_vals
+
+  # the new etrace values
+  new_etrace_xs, new_etrace_dfs, new_etrace_chunk_xs, new_etrace_chunk_dfs = dict(), dict(), dict(), dict()
+
+  # --- the update --- #
+
+  # update the weight x
+  for xkey in hist_xs.keys():
+    new_etrace_xs[xkey] = low_pass_filter(hist_xs[xkey], xs[xkey], decay)
+  # update the weight df * diagonal
+  for dfkey in hist_dfs.keys():
+    df_var, hidden_var = dfkey
+    new_etrace_dfs[dfkey] = hist_dfs[dfkey] * temporal_jacobian[hidden_var]
+  # update the weight df
+  for dfkey in hist_dfs.keys():
+    new_etrace_dfs[dfkey] = expon_smooth(new_etrace_dfs[dfkey], dfs[dfkey], decay)
+
+  # -- the chunked etrace values -- #
+
+  if num_snap > 0:
+
+    for dfkey in hist_chunk_dfs.keys():
+      df_var, hidden_var = dfkey
+      hist_chunk_dfs[dfkey] = hist_chunk_dfs[dfkey] * jnp.expand_dims(temporal_jacobian[hidden_var], axis=0)
+
+    def at_chunked_index(old_chunk_xs, old_chunk_dfs, new_xs, new_dfs):
+      new_chunk_xs = dict()
+      for x in new_xs:
+        new_chunk_xs[x] = jnp.concatenate([old_chunk_xs[x][1:], jnp.expand_dims(new_xs[x], axis=0)],
+                                          axis=0)
+      new_chunk_dfs = dict()
+      for dfkey in new_dfs:
+        new_chunk_dfs[dfkey] = jnp.concatenate([old_chunk_dfs[dfkey][1:], jnp.expand_dims(new_dfs[dfkey], axis=0)],
+                                               axis=0)
+      return new_chunk_xs, new_chunk_dfs
+
+    def not_chunked_index(old_chunk_xs, old_chunk_dfs, new_xs, new_dfs):
+      return old_chunk_xs, old_chunk_dfs
+
+    new_etrace_chunk_xs, new_etrace_chunk_dfs = jax.lax.cond(
+      running_index % snap_freq == 0,
       at_chunked_index,
       not_chunked_index,
       hist_chunk_xs, hist_chunk_dfs, new_etrace_xs, new_etrace_dfs
@@ -722,10 +850,9 @@ class DiagExpSmOnAlgorithm(DiagETraceAlgorithmForVJP):
 
   Parameters:
   -----------
-  model_or_graph: Callable, ETraceGraph
-      The model or the etrace graph. The model is the function that we want to
-      compute the recurrent states in one time step. The etrace graph is the
-      graph that we want to compute the eligibility trace.
+  model: Callable
+      The model to create the etrace graph. The model is the function that we want to
+      compute the recurrent states in one time step.
   decay_or_rank: float, int
       The exponential smoothing factor for the eligibility trace. If it is a float,
       it is the decay factor, should be in the range of (0, 1). If it is an integer,
@@ -736,8 +863,16 @@ class DiagExpSmOnAlgorithm(DiagETraceAlgorithmForVJP):
   snap_freq: int
       The frequency of the chunked eligibility trace. If it is None, it will use the
       number of approximation rank.
+  diag_jacobian: str
+      The method to compute the hidden Jacobian diagonal matrix. It should be one of
+      the following values:
+
+      - 'exact': the exact Jacobian diagonal matrix
+      - 'vjp': the vector-Jacobian product computed Jacobian diagonal matrix
+      - 'jvp': the Jacobian-vector product computed Jacobian diagonal matrix
   diag_normalize: bool
       Whether to normalize the hidden Jacobian diagonal matrix to the range of ``[-1, 1]``.
+      Supported only when the ``diag_jacobian`` is ``'vjp'`` or ``'jvp'``. Default is ``None``.
   name: str, optional
       The name of the etrace algorithm.
   mode: bc.mixin.Mode, optional
@@ -755,14 +890,14 @@ class DiagExpSmOnAlgorithm(DiagETraceAlgorithmForVJP):
   snap_freq: int  # the frequency of the snap shoot
 
   def __init__(self,
-               model_or_graph: Callable | ETraceGraph,
+               model: Callable,
                decay_or_rank: float | int,
                num_snap: int = 0,
                snap_freq: int | None = None,
                diag_normalize: bool = False,
                name: str | None = None,
                mode: bc.mixin.Mode | None = None):
-    super().__init__(model_or_graph,
+    super().__init__(model,
                      diag_normalize=diag_normalize,
                      name=name,
                      mode=mode)
@@ -811,24 +946,31 @@ class DiagExpSmOnAlgorithm(DiagETraceAlgorithmForVJP):
       self,
       hist_etrace_vals: PyTree,
       hid2weight_jac: Tuple[Dict[WeightXVar, jax.Array], Dict[Tuple[WeightYVar, HiddenOutVar], jax.Array]],
-      data_for_hid2hid_jac,
-      weight_id_to_its_val: Dict[WeightID, PyTree]
+      data_for_hid2hid_jac: Dict,
+      weight_id_to_its_val: Dict[WeightID, PyTree],
+      running_index: Optional[int]
   ) -> ETraceVals:
-    # # Normalize the temporal Jacobian so that the temporal gradients are
-    # # within [-1., 1.], preventing the gradient vanishing and exploding.
-    # if self.diag_normalize:
-    #   temporal_jacobian = jax.tree.map(_normalize, temporal_jacobian)
+    if self.diag_jacobian == DiagJacobian.exact:
+      return _update_on_etrace_with_exact_jac(hist_etrace_vals,
+                                              hid2weight_jac,
+                                              data_for_hid2hid_jac,
+                                              self.graph.hidden_param_op_relations,
+                                              self.graph.hidden_group_relations,
+                                              self.graph.hidden_outvar_to_invar,
+                                              running_index,
+                                              decay=self.decay,
+                                              num_snap=self.num_snap,
+                                              snap_freq=self.snap_freq)
 
-    # update the eligibility trace data
-    return _update_on_etrace(hist_etrace_vals,
-                             hid2weight_jac,
-                             data_for_hid2hid_jac,
-                             self.graph.hidden_param_op_relations,
-                             self.graph.hidden_group_relations,
-                             self.graph.hidden_outvar_to_invar,
-                             decay=self.decay,
-                             num_snap=self.num_snap,
-                             snap_freq=self.snap_freq)
+    else:
+      return _update_on_etrace_with_jvp_or_vjp_jac(hist_etrace_vals,
+                                                   hid2weight_jac,
+                                                   data_for_hid2hid_jac,
+                                                   self.diag_normalize,
+                                                   running_index,
+                                                   decay=self.decay,
+                                                   num_snap=self.num_snap,
+                                                   snap_freq=self.snap_freq)
 
   def _solve_weight_gradients(
       self,
@@ -878,7 +1020,7 @@ def _init_on2_state(self: _On2Algorithm, relation: HiddenWeightOpRelation):
                                                  relation.weight.value))
 
 
-def _update_on2_etrace(
+def _update_on2_etrace_with_exact_jac(
     hist_etrace_vals: Dict,
     hid2weight_jac: Tuple,
     data_for_hid2hid_jac: Dict,
@@ -965,6 +1107,78 @@ def _update_on2_etrace(
   return new_etrace_bwg
 
 
+def _update_on2_etrace_with_jvp_or_vjp_jac(hist_etrace_vals: Dict,
+                                           hid2weight_jac: Tuple,
+                                           temporal_jacobian: Dict,
+                                           weight_id_to_its_val: Dict,
+                                           weight_hidden_relations,
+                                           diag_normalize: bool,
+                                           mode: bc.mixin.Mode):
+  #
+  # 1. "temporal_jacobian" has the following structure:
+  #    - key: the hidden state jax var
+  #    - value: the hidden state jacobian gradients
+  #
+  # 2. "hist_etrace_vals" has the following structure:
+  #    - key: the weight id, the weight-x jax var, the hidden state var
+  #    - value: the batched weight gradients
+  #
+  # 3. "hid2weight_jac" has the following structure:
+  #    - a dict of weight x gradients
+  #       * key: the weight x jax var
+  #       * value: the weight x gradients
+  #    - a dict of weight y gradients
+  #       * key: the tuple of the weight y jax var and the hidden state jax var
+  #       * value: the weight y gradients
+
+  cur_etrace_xs, cur_etrace_ys = hid2weight_jac
+
+  new_etrace_bwg = dict()
+  for relation in weight_hidden_relations:
+    if not isinstance(relation.weight, ETraceParamOp):
+      raise NotImplementedError('The weight should be an ETraceParamOp. ')
+
+    weight_id = id(relation.weight)
+    weight_vals = weight_id_to_its_val[weight_id]
+    for i, hid_var in enumerate(relation.hidden_vars):
+      w_key = (weight_id, relation.x, hid_var)
+      y_key = (relation.y, hid_var)
+      dg_hidden = relation.hidden2df[i](temporal_jacobian[hid_var])
+      if isinstance(relation.weight.op, StandardETraceOp):
+        if diag_normalize:
+          # normalize the temporal Jacobian so that the maximum value is 1.,
+          # preventing the gradient vanishing and exploding
+          dg_hidden = _normalize(dg_hidden)
+        new_bwg = relation.weight.op.etrace_update(weight_vals,
+                                                   hist_etrace_vals[w_key],
+                                                   dg_hidden,
+                                                   cur_etrace_xs[relation.x],
+                                                   cur_etrace_ys[y_key])
+
+      else:
+        x = relation.x
+        dg_weight = GeneralETraceOp._dy_to_weight(mode,
+                                                  weight_vals,
+                                                  relation.weight.op,
+                                                  jax.ShapeDtypeStruct(x.aval.shape, x.aval.dtype),
+                                                  dg_hidden)
+        if diag_normalize:
+          # normalize the temporal Jacobian so that the maximum value is 1.,
+          # preventing the gradient vanishing and exploding
+          dg_weight = _normalize(dg_weight)
+        current_etrace = GeneralETraceOp._dx_dy_to_weight(mode,
+                                                          weight_vals,
+                                                          relation.weight.op,
+                                                          cur_etrace_xs[relation.x],
+                                                          cur_etrace_ys[y_key])
+        new_bwg = jax.tree.map(lambda old, jac, new: old * jac + new,
+                               hist_etrace_vals[w_key],
+                               dg_weight,
+                               current_etrace)
+      new_etrace_bwg[w_key] = new_bwg
+  return new_etrace_bwg
+
+
 def _solve_on2_weight_gradients(
     hist_etrace_data: Dict,
     dG_weights: Dict[WeightID, dG_Weight],
@@ -1027,12 +1241,19 @@ class DiagOn2Algorithm(DiagETraceAlgorithmForVJP):
 
   Parameters:
   -----------
-  model_or_graph: Callable, ETraceGraph
-      The model or the etrace graph. The model is the function that we want to
-      compute the recurrent states in one time step. The etrace graph is the
-      graph that we want to compute the eligibility trace.
+  model: Callable
+      The model to create the etrace graph. The model is the function that we want to
+      compute the recurrent states in one time step.
+  diag_jacobian: str
+      The method to compute the hidden Jacobian diagonal matrix. It should be one of
+      the following values:
+
+      - 'exact': the exact Jacobian diagonal matrix
+      - 'vjp': the vector-Jacobian product computed Jacobian diagonal matrix
+      - 'jvp': the Jacobian-vector product computed Jacobian diagonal matrix
   diag_normalize: bool
       Whether to normalize the hidden Jacobian diagonal matrix to the range of ``[-1, 1]``.
+      Supported only when the ``diag_jacobian`` is ``'vjp'`` or ``'jvp'``. Default is ``None``.
   name: str, optional
       The name of the etrace algorithm.
   mode: bc.mixin.Mode, optional
@@ -1042,11 +1263,11 @@ class DiagOn2Algorithm(DiagETraceAlgorithmForVJP):
   etrace_bwg: Dict[Tuple[WeightID, WeightXVar, HiddenOutVar], bc.State]  # batch of weight gradients
 
   def __init__(self,
-               model_or_graph: Callable | ETraceGraph,
+               model: Callable,
                diag_normalize: bool = False,
                name: str | None = None,
                mode: bc.mixin.Mode | None = None):
-    super().__init__(model_or_graph,
+    super().__init__(model,
                      diag_normalize=diag_normalize,
                      name=name,
                      mode=mode)
@@ -1069,17 +1290,27 @@ class DiagOn2Algorithm(DiagETraceAlgorithmForVJP):
       hist_etrace_vals: Dict[Tuple[WeightID, WeightXVar, HiddenOutVar], PyTree],
       hid2weight_jac: Tuple[Dict[WeightXVar, jax.Array], Dict[Tuple[WeightYVar, HiddenOutVar], jax.Array]],
       data_for_hid2hid_jac,
-      weight_id_to_its_val: Dict[WeightID, PyTree]
+      weight_id_to_its_val: Dict[WeightID, PyTree],
+      running_index: Optional[int]
   ) -> Dict[Tuple[WeightID, WeightXVar, HiddenOutVar], PyTree]:
-    return _update_on2_etrace(hist_etrace_vals,
-                              hid2weight_jac,
-                              data_for_hid2hid_jac,
-                              weight_id_to_its_val,
-                              self.graph.hidden_param_op_relations,
-                              self.graph.hidden_group_relations,
-                              self.graph.hidden_outvar_to_invar,
-                              self.diag_normalize,
-                              self.mode)
+    if self.diag_jacobian == DiagJacobian.exact:
+      return _update_on2_etrace_with_exact_jac(hist_etrace_vals,
+                                               hid2weight_jac,
+                                               data_for_hid2hid_jac,
+                                               weight_id_to_its_val,
+                                               self.graph.hidden_param_op_relations,
+                                               self.graph.hidden_group_relations,
+                                               self.graph.hidden_outvar_to_invar,
+                                               self.diag_normalize,
+                                               self.mode)
+    else:
+      return _update_on2_etrace_with_jvp_or_vjp_jac(hist_etrace_vals,
+                                                    hid2weight_jac,
+                                                    data_for_hid2hid_jac,
+                                                    weight_id_to_its_val,
+                                                    self.graph.hidden_param_op_relations,
+                                                    self.diag_normalize,
+                                                    self.mode)
 
   def _solve_weight_gradients(
       self,
@@ -1140,10 +1371,9 @@ class DiagHybridAlgorithm(DiagETraceAlgorithmForVJP):
 
   Parameters:
   -----------
-  model_or_graph: Callable, ETraceGraph
-      The model or the etrace graph. The model is the function that we want to
-      compute the recurrent states in one time step. The etrace graph is the
-      graph that we want to compute the eligibility trace.
+  model: Callable
+      The model to create the etrace graph. The model is the function that we want to
+      compute the recurrent states in one time step.
   decay_or_rank: float, int
       The exponential smoothing factor for the eligibility trace. If it is a float,
       it is the decay factor, should be in the range of (0, 1). If it is an integer,
@@ -1154,8 +1384,16 @@ class DiagHybridAlgorithm(DiagETraceAlgorithmForVJP):
   snap_freq: int
       The frequency of the chunked eligibility trace. If it is None, it will use the
       number of approximation rank.
+  diag_jacobian: str
+      The method to compute the hidden Jacobian diagonal matrix. It should be one of
+      the following values:
+
+      - 'exact': the exact Jacobian diagonal matrix
+      - 'vjp': the vector-Jacobian product computed Jacobian diagonal matrix
+      - 'jvp': the Jacobian-vector product computed Jacobian diagonal matrix
   diag_normalize: bool
       Whether to normalize the hidden Jacobian diagonal matrix to the range of ``[-1, 1]``.
+      Supported only when the ``diag_jacobian`` is ``'vjp'`` or ``'jvp'``. Default is ``None``.
   name: str, optional
       The name of the etrace algorithm.
   mode: bc.mixin.Mode, optional
@@ -1171,14 +1409,14 @@ class DiagHybridAlgorithm(DiagETraceAlgorithmForVJP):
   decay: float  # the exponential smoothing decay factor
 
   def __init__(self,
-               model_or_graph: Callable | ETraceGraph,
+               model: Callable,
                decay_or_rank: float | int,
                num_snap: int = 0,
                snap_freq: int | None = None,
                diag_normalize: bool = False,
                name: str | None = None,
                mode: bc.mixin.Mode | None = None):
-    super().__init__(model_or_graph, diag_normalize=diag_normalize, name=name, mode=mode)
+    super().__init__(model, diag_normalize=diag_normalize, name=name, mode=mode)
 
     # the learning parameters
     self.decay, num_rank = _format_decay_and_rank(decay_or_rank)
@@ -1267,39 +1505,67 @@ class DiagHybridAlgorithm(DiagETraceAlgorithmForVJP):
       hist_etrace_vals: Tuple[Dict, ...],
       hid2weight_jac: Tuple[Dict[WeightXVar, jax.Array], Dict[Tuple[WeightYVar, HiddenOutVar], jax.Array]],
       data_for_hid2hid_jac,
-      weight_id_to_its_val: Dict[WeightID, PyTree]
+      weight_id_to_its_val: Dict[WeightID, PyTree],
+      running_index: Optional[int]
   ) -> Tuple[Dict, ...]:
 
     # the history etrace values
     hist_xs, hist_dfs, hist_chunk_xs, hist_chunk_dfs, hist_bwg = hist_etrace_vals
 
     # ---- O(n^2) etrace gradients update ---- #
-    weight_hidden_relations = [
-      relation for relation in self.graph.hidden_param_op_relations
-      if _is_weight_need_full_grad(relation, self.mode)
-    ]
-    new_bwg = _update_on2_etrace(hist_bwg,
-                                 hid2weight_jac,
-                                 data_for_hid2hid_jac,
-                                 weight_id_to_its_val,
-                                 weight_hidden_relations,
-                                 self.graph.hidden_group_relations,
-                                 self.graph.hidden_outvar_to_invar,
-                                 self.diag_normalize,
-                                 self.mode)
+    on_weight_hidden_relations = []
+    on2_weight_hidden_relations = []
+    for relation in self.graph.hidden_param_op_relations:
+      if _is_weight_need_full_grad(relation, self.mode):
+        on2_weight_hidden_relations.append(relation)
+      else:
+        on_weight_hidden_relations.append(relation)
+
+    if self.diag_jacobian == DiagJacobian.exact:
+      new_bwg = _update_on2_etrace_with_exact_jac(hist_bwg,
+                                                  hid2weight_jac,
+                                                  data_for_hid2hid_jac,
+                                                  weight_id_to_its_val,
+                                                  on2_weight_hidden_relations,
+                                                  self.graph.hidden_group_relations,
+                                                  self.graph.hidden_outvar_to_invar,
+                                                  self.diag_normalize,
+                                                  self.mode)
+    else:
+      new_bwg = _update_on2_etrace_with_jvp_or_vjp_jac(hist_bwg,
+                                                       hid2weight_jac,
+                                                       data_for_hid2hid_jac,
+                                                       weight_id_to_its_val,
+                                                       on2_weight_hidden_relations,
+                                                       self.diag_normalize,
+                                                       self.mode)
 
     # ---- O(n) etrace gradients update ---- #
-    new_xs, new_dfs, new_chunked_xs, new_chunked_dfs = (
-      _update_on_etrace((hist_xs, hist_dfs, hist_chunk_xs, hist_chunk_dfs),
-                        hid2weight_jac,
-                        data_for_hid2hid_jac,
-                        self.graph.hidden_param_op_relations,
-                        self.graph.hidden_group_relations,
-                        self.graph.hidden_outvar_to_invar,
-                        decay=self.decay,
-                        num_snap=self.num_snap,
-                        snap_freq=self.snap_freq)
-    )
+    if self.diag_jacobian == DiagJacobian.exact:
+      new_xs, new_dfs, new_chunked_xs, new_chunked_dfs = (
+        _update_on_etrace_with_exact_jac(hist_etrace_vals,
+                                         hid2weight_jac,
+                                         data_for_hid2hid_jac,
+                                         on_weight_hidden_relations,
+                                         self.graph.hidden_group_relations,
+                                         self.graph.hidden_outvar_to_invar,
+                                         running_index,
+                                         decay=self.decay,
+                                         num_snap=self.num_snap,
+                                         snap_freq=self.snap_freq)
+      )
+    else:
+      new_xs, new_dfs, new_chunked_xs, new_chunked_dfs = (
+        _update_on_etrace_with_jvp_or_vjp_jac(hist_etrace_vals,
+                                              hid2weight_jac,
+                                              data_for_hid2hid_jac,
+                                              self.diag_normalize,
+                                              running_index,
+                                              decay=self.decay,
+                                              num_snap=self.num_snap,
+                                              snap_freq=self.snap_freq)
+      )
+
     return new_xs, new_dfs, new_chunked_xs, new_chunked_dfs, new_bwg
 
   def _solve_weight_gradients(
