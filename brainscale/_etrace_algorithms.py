@@ -197,7 +197,7 @@ class ETraceAlgorithm(bc.Module):
 
   def __init__(self,
                model: Callable,
-               diag_normalize: bool = None,
+               diag_normalize: bool | None = None,
                diag_jacobian: str = 'exact',
                name: str | None = None,
                mode: bc.mixin.Mode | None = None):
@@ -378,15 +378,8 @@ class DiagETraceAlgorithmForVJP(FakedETraceAlgorithm):
 
   __module__ = 'brainscale'
 
-  def __init__(self,
-               model: Callable,
-               diag_normalize: bool = False,
-               name: str | None = None,
-               mode: bc.mixin.Mode | None = None):
-    super().__init__(model=model,
-                     diag_normalize=diag_normalize,
-                     name=name,
-                     mode=mode)
+  def __init__(self, *args, **kwargs):
+    super().__init__(*args, **kwargs)
 
     # the update rule
     self._true_update_fun = jax.custom_vjp(self._update)
@@ -894,10 +887,12 @@ class DiagExpSmOnAlgorithm(DiagETraceAlgorithmForVJP):
                decay_or_rank: float | int,
                num_snap: int = 0,
                snap_freq: int | None = None,
-               diag_normalize: bool = False,
+               diag_normalize: bool | None = None,
+               diag_jacobian: str = 'exact',
                name: str | None = None,
                mode: bc.mixin.Mode | None = None):
     super().__init__(model,
+                     diag_jacobian=diag_jacobian,
                      diag_normalize=diag_normalize,
                      name=name,
                      mode=mode)
@@ -1149,9 +1144,10 @@ def _update_on2_etrace_with_jvp_or_vjp_jac(hist_etrace_vals: Dict,
           # normalize the temporal Jacobian so that the maximum value is 1.,
           # preventing the gradient vanishing and exploding
           dg_hidden = _normalize(dg_hidden)
-        new_bwg = relation.weight.op.etrace_update(weight_vals,
-                                                   hist_etrace_vals[w_key],
-                                                   dg_hidden,
+        new_bwg = relation.weight.op.etrace_update(mode,
+                                                   weight_vals,
+                                                   [hist_etrace_vals[w_key]],
+                                                   [dg_hidden],
                                                    cur_etrace_xs[relation.x],
                                                    cur_etrace_ys[y_key])
 
@@ -1264,10 +1260,12 @@ class DiagOn2Algorithm(DiagETraceAlgorithmForVJP):
 
   def __init__(self,
                model: Callable,
-               diag_normalize: bool = False,
+               diag_jacobian: str = 'exact',
+               diag_normalize: bool | None = None,
                name: str | None = None,
                mode: bc.mixin.Mode | None = None):
     super().__init__(model,
+                     diag_jacobian=diag_jacobian,
                      diag_normalize=diag_normalize,
                      name=name,
                      mode=mode)
@@ -1413,10 +1411,15 @@ class DiagHybridAlgorithm(DiagETraceAlgorithmForVJP):
                decay_or_rank: float | int,
                num_snap: int = 0,
                snap_freq: int | None = None,
-               diag_normalize: bool = False,
+               diag_jacobian: str = 'exact',
+               diag_normalize: bool | None = None,
                name: str | None = None,
                mode: bc.mixin.Mode | None = None):
-    super().__init__(model, diag_normalize=diag_normalize, name=name, mode=mode)
+    super().__init__(model,
+                     diag_jacobian=diag_jacobian,
+                     diag_normalize=diag_normalize,
+                     name=name,
+                     mode=mode)
 
     # the learning parameters
     self.decay, num_rank = _format_decay_and_rank(decay_or_rank)

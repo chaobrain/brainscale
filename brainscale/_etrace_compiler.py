@@ -62,7 +62,13 @@ from .typing import (PyTree,
 from ._misc import BaseEnum
 
 # TODO
-# - [ ] visualization of the etrace graph
+# - [ ] The visualization of the etrace graph.
+# - [ ] Judge whether the `df` is the same for different weight y.
+#       For example,
+#
+#          h = f(x1 @ w1 + x2 @ w2)
+#
+#       The `df` for w1 and w2 are the same, although them have the different weight y.
 
 
 __all__ = [
@@ -1346,13 +1352,13 @@ class ETraceGraph:
         weight_invars=set(invar_to_weight_id.keys()),
         hidden_outvar_to_invar=self.hidden_outvar_to_invar
       )
-      hidden_group_relations, hid_param_op_tracers = evaluator.compile(hid_param_op_tracers)
-      self.hidden_param_op_relations = hid_param_op_tracers
+      hidden_group_relations, hidden_param_op_relations = evaluator.compile(hid_param_op_tracers)
       self.hidden_group_relations = hidden_group_relations
 
     else:
-      self.hidden_param_op_relations = [_trace_simplify(tracer) for tracer in hid_param_op_tracers]
+      hidden_param_op_relations = [_trace_simplify(tracer) for tracer in hid_param_op_tracers]
       self.hidden_group_relations = dict()
+    self.hidden_param_op_relations = hidden_param_op_relations
 
     # --- Collect the Var needed to compute the weight spatial gradients --- #
     # ---      Rewrite the jaxpr for computing the needed variables      --- #
@@ -1373,11 +1379,11 @@ class ETraceGraph:
     self.out_othstate_jaxvars = jax.tree.leaves(other_state_jaxvar_tree)
 
     # all weight x
-    self.out_wx_jaxvars = list(set([relation.x for relation in hid_param_op_tracers]))
+    self.out_wx_jaxvars = list(set([relation.x for relation in hidden_param_op_relations]))
 
     # all y-to-hidden vars
     out_wy2hid_jaxvars = list(
-      set([v for relation in hid_param_op_tracers
+      set([v for relation in self.hidden_param_op_relations
            for v in (relation.jaxpr_y2hid.invars + relation.jaxpr_y2hid.constvars)])
     )
 

@@ -1,4 +1,4 @@
-# Copyright: https://github.com/dlwh/jax_sourceror
+# Modified from: https://github.com/dlwh/jax_sourceror
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,11 +13,11 @@
 # limitations under the License.
 # ==============================================================================
 
-from contextlib import contextmanager
 import ast
 import enum
 import warnings
 from collections.abc import MutableMapping, MutableSet
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Callable, Union
 
@@ -677,25 +677,34 @@ def _astify_value(value):
     # return ast.Call(func=ast.Attribute(value=ast.Name(id='jax.numpy', ctx=ast.Load()), attr='dtype', ctx=ast.Load()), args=[ast.Constant(value=str(value))], keywords=[])
     if value.name in ('float32', 'float64', 'int32', 'int64', 'bfloat16', 'float16'):
       # return ast.Constant(value=getattr(jnp, value.name))
-      return ast.Attribute(value=ast.Name(id='jax.numpy', ctx=ast.Load()),
-                           attr=value.name,
-                           ctx=ast.Load())
+      return ast.Attribute(
+        value=ast.Name(id='jax.numpy', ctx=ast.Load()),
+        attr=value.name,
+        ctx=ast.Load()
+      )
     elif value.name == 'bool':
-      return ast.Attribute(value=ast.Name(id='jax.numpy', ctx=ast.Load()),
-                           attr='bool_',
-                           ctx=ast.Load())
+      return ast.Attribute(
+        value=ast.Name(id='jax.numpy', ctx=ast.Load()),
+        attr='bool_',
+        ctx=ast.Load()
+      )
     else:
-      return ast.Call(func=ast.Attribute(value=ast.Name(id='jax.numpy', ctx=ast.Load()),
-                                         attr='dtype',
-                                         ctx=ast.Load()),
-                      args=[ast.Constant(value=str(value))], keywords=[])
+      return ast.Call(
+        func=ast.Attribute(value=ast.Name(id='jax.numpy', ctx=ast.Load()),
+                           attr='dtype',
+                           ctx=ast.Load()),
+        args=[ast.Constant(value=str(value))],
+        keywords=[]
+      )
   elif value is UNSPECIFIED:
     prefix_imports.add('from jax._src.sharding_impls import UNSPECIFIED')
     return ast.Name(id='UNSPECIFIED', ctx=ast.Load())
   elif isinstance(value, enum.Enum):
-    return ast.Attribute(value=ast.Name(id=value.__class__.__qualname__, ctx=ast.Load()),
-                         attr=value.name,
-                         ctx=ast.Load())
+    return ast.Attribute(
+      value=ast.Name(id=value.__class__.__qualname__, ctx=ast.Load()),
+      attr=value.name,
+      ctx=ast.Load()
+    )
 
   else:
     warnings.warn(f"Unknown value type {type(value)}")
@@ -776,7 +785,8 @@ def _astify_scan(state, eqn):
     )
 
     initial_assign = ast.Assign(
-      targets=[ast.Tuple(elts=[ast.Name(a.arg) for a in fn_ast.args.args], ctx=ast.Store())],
+      targets=[ast.Tuple(elts=[ast.Name(a.arg) for a in fn_ast.args.args],
+                         ctx=ast.Store())],
       value=ast.Tuple(
         elts=[maybe_untuple_vars(ast.Name(id='carry', ctx=ast.Load()), num_carry != 1),
               maybe_untuple_vars(ast.Name(id='x', ctx=ast.Load()), len(xs) != 1)]
@@ -816,9 +826,13 @@ def _astify_scan(state, eqn):
 
     scan_call = ast.Assign(
       # targets=_astify_outvars(eqn.outvars),
-      targets=[ast.Tuple(elts=[ast.Name(id='final_carry', ctx=ast.Store()),
-                               ast.Name(id='ys', ctx=ast.Store())],
-                         ctx=ast.Store())],
+      targets=[
+        ast.Tuple(
+          elts=[ast.Name(id='final_carry', ctx=ast.Store()),
+                ast.Name(id='ys', ctx=ast.Store())],
+          ctx=ast.Store()
+        )
+      ],
       value=ast.Call(
         func=ast.Name(id='jax.lax.scan', ctx=ast.Load()),
         args=[ast.Name(id=fn_name, ctx=ast.Load()),
@@ -883,7 +897,9 @@ def _astify_map(state, eqn):
     targets=_astify_outvars(state, eqn.outvars),
     value=ast.Call(
       func=ast.Name(id='jax.lax.map', ctx=ast.Load()),
-      args=[lam, ast.Tuple(elts=[_astify_atom(state, v) for v in eqn.invars], ctx=ast.Load())],
+      args=[lam,
+            ast.Tuple(elts=[_astify_atom(state, v) for v in eqn.invars],
+                      ctx=ast.Load())],
       keywords=[]
     )
   )
@@ -896,13 +912,17 @@ def _astify_closed_call(state, eqn):
   # out = partial_eval_jaxpr(eqn.params['call_jaxpr'].jaxpr,
   #                          {var: val for var, val in zip(eqn.params['call_jaxpr'].jaxpr.invars, vals)})
   raw_jaxpr = eqn.params['call_jaxpr'].jaxpr
-  literal_args = {k: v.val for k, v in zip(raw_jaxpr.invars, eqn.invars) if isinstance(v, Literal)}
+  literal_args = {k: v.val
+                  for k, v in zip(raw_jaxpr.invars, eqn.invars)
+                  if isinstance(v, Literal)}
   call_japr = partial_eval_jaxpr(raw_jaxpr, literal_args)
   fn_name = state.skolem('fn')
 
   fn_ast = jaxpr_to_py_ast(state, call_japr, fn_name)
 
-  invars = [_astify_atom(state, v) for v in eqn.invars if not isinstance(v, Literal)]
+  invars = [_astify_atom(state, v)
+            for v in eqn.invars
+            if not isinstance(v, Literal)]
   outvars = _astify_outvars(state, eqn.outvars)
 
   assign = ast.Assign(
