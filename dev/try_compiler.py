@@ -230,12 +230,40 @@ def try_if_delta_etrace_grad_vs_bptt_grad():
   print(bptt_grads)
 
 
+
+
+def try_alif_compile_and_show_graph():
+  bc.environ.set(mode=bc.mixin.JointMode(bc.mixin.Batching(), bc.mixin.Training()))
+
+  n_in = 40
+  n_rec = 100
+  n_out = 10
+  n_batch = 16
+
+  inp_spk = bc.random.rand(n_batch, n_in) < 0.8
+  snn = ALIF_ExpCu_Dense_Layer(n_in, n_rec, n_out)
+  snn = bc.init_states(snn, n_batch)
+
+  def run_snn(i, inp):
+    with bc.share.context(i=i, t=i * bc.environ.get_dt()):
+      out = snn(inp)
+    return out
+
+  algorithm = nn.DiagExpSmOnAlgorithm(run_snn, decay_or_rank=0.99)
+  algorithm.compile_graph(0, inp_spk)
+  algorithm.show_graph()
+
+
 if __name__ == '__main__':
   pass
   # try1()
   # try_if_delta_etrace_update()
   # try_if_delta_etrace_update_On2()
-  try_if_delta_etrace_update_batched_On2()
+  # try_if_delta_etrace_update_batched_On2()
   # try_if_delta_etrace_update_and_grad()
   # try_if_delta_etrace_grad_vs_bptt_grad()
   # try_traceback()
+
+  try_alif_compile_and_show_graph()
+
+

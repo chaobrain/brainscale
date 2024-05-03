@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+from enum import Enum
 from typing import Sequence
 
 import braincore as bc
@@ -51,3 +52,23 @@ def set_module_as(module: str = 'brainscale'):
     return fun
 
   return wrapper
+
+
+
+class BaseEnum(Enum):
+  @classmethod
+  def get_by_name(cls, name: str):
+    for item in cls:
+      if item.name == name:
+        return item
+    raise ValueError(f'Cannot find the {cls.__name__} type {name}.')
+
+  @classmethod
+  def get(cls, type_: str | Enum):
+    if isinstance(type_, cls):
+      return type_
+    elif isinstance(type_, str):
+      return cls.get_by_name(type_)
+    else:
+      raise ValueError(f'Cannot find the {cls.__name__} type {type_}.')
+
