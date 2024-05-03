@@ -236,7 +236,7 @@ class TestShowGraph(unittest.TestCase):
 
   def test_show_lstm_graph(self):
     bc.environ.set(mode=bc.mixin.JointMode(bc.mixin.Batching(), bc.mixin.Training()))
-    cell = nn.LSTMCell(10, 20)
+    cell = nn.LSTMCell(10, 20, activation=jnp.tanh)
     bc.init_states(cell, 16)
 
     graph = nn.ETraceGraph(cell)
@@ -249,7 +249,7 @@ class TestShowGraph(unittest.TestCase):
 
   def test_show_gru_graph(self):
     bc.environ.set(mode=bc.mixin.JointMode(bc.mixin.Batching(), bc.mixin.Training()))
-    cell = nn.GRUCell(10, 20)
+    cell = nn.GRUCell(10, 20, activation=jnp.tanh)
     bc.init_states(cell, 16)
 
     graph = nn.ETraceGraph(cell)
