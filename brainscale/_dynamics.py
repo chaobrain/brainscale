@@ -17,18 +17,16 @@
 
 from __future__ import annotations
 
-from typing import Callable, Union, Optional
+from typing import Callable, Optional
 
 import braincore as bc
 import brainpy as bp
-import braintools as bts
 import jax
 import jax.numpy as jnp
 from braintools import init
 
 from ._base import ExplicitInOutSize
-from ._connections import Linear
-from ._etrace_concepts import ETraceVar, ETraceParamOp
+from ._etrace_concepts import ETraceVar
 from .typing import DTypeLike, ArrayLike, Current, Spike, Size
 
 __all__ = [
@@ -37,9 +35,6 @@ __all__ = [
 
   # synapse models
   'Synapse', 'Expon', 'STP', 'STD',
-
-  # RNN models
-  'ValinaRNNCell', 'GRUCell', 'LSTMCell', 'URLSTMCell',
 ]
 
 
@@ -345,7 +340,7 @@ class STP(Synapse):
     self.U = init.parameter(U, self.varshape)
 
     # integral function
-    self.integral = bp.odeint(self.derivative, method=self.method)
+    self.integral = bp.odeint(self.derivative, method=method)
 
   def init_state(self, batch_size: int = None, **kwargs):
     self.x = ETraceVar(init.parameter(init.Constant(1.), self.varshape, batch_size))
@@ -430,308 +425,3 @@ class STD(Synapse):
 
   def return_info(self):
     return self.x
-
-
-class ValinaRNNCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
-  """
-  Vanilla RNN cell.
-
-  Args:
-    num_in: int. The number of input units.
-    num_out: int. The number of hidden units.
-    state_init: callable, ArrayLike. The state initializer.
-    w_init: callable, ArrayLike. The input weight initializer.
-    b_init: optional, callable, ArrayLike. The bias weight initializer.
-    activation: str, callable. The activation function. It can be a string or a callable function.
-    mode: optional, bc.mixin.Mode. The mode of the module.
-    name: optional, str. The name of the module.
-  """
-  __module__ = 'brainscale'
-
-  def __init__(
-      self,
-      num_in: int,
-      num_out: int,
-      state_init: Union[ArrayLike, Callable] = init.ZeroInit(),
-      w_init: Union[ArrayLike, Callable] = init.XavierNormal(),
-      b_init: Union[ArrayLike, Callable] = init.ZeroInit(),
-      activation: str | Callable = 'relu',
-      mode: bc.mixin.Mode = None,
-      name: str = None,
-  ):
-    super().__init__(mode=mode, name=name)
-
-    # parameters
-    self._state_initializer = state_init
-    self.num_out = num_out
-
-    # parameters
-    self.num_in = num_in
-    self.in_size = (num_in,)
-    self.out_size = (num_out,)
-
-    # initializers
-    self._W_initializer = w_init
-    self._b_initializer = b_init
-
-    # activation function
-    if isinstance(activation, str):
-      self.activation = getattr(bts.functional, activation)
-    else:
-      assert callable(activation), "The activation function should be a string or a callable function. "
-      self.activation = activation
-
-    # weights
-    self.W = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_W')
-
-  def init_state(self, batch_size: int = None, **kwargs):
-    self.h = ETraceVar(init.parameter(self._state_initializer, self.num_out, batch_size))
-
-  def update(self, x):
-    xh = jnp.concatenate([x, self.h.value], axis=-1)
-    h = self.W(xh)
-    self.h.value = self.activation(h)
-    return self.h.value
-
-
-class GRUCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
-  """
-  Gated Recurrent Unit (GRU) cell.
-
-  Args:
-    num_in: int. The number of input units.
-    num_out: int. The number of hidden units.
-    state_init: callable, ArrayLike. The state initializer.
-    w_init: callable, ArrayLike. The input weight initializer.
-    b_init: optional, callable, ArrayLike. The bias weight initializer.
-    activation: str, callable. The activation function. It can be a string or a callable function.
-    mode: optional, bc.mixin.Mode. The mode of the module.
-    name: optional, str. The name of the module.
-  """
-  __module__ = 'brainscale'
-
-  def __init__(
-      self,
-      num_in: int,
-      num_out: int,
-      w_init: Union[ArrayLike, Callable] = init.Orthogonal(),
-      b_init: Union[ArrayLike, Callable] = init.ZeroInit(),
-      state_init: Union[ArrayLike, Callable] = init.ZeroInit(),
-      activation: str | Callable = 'tanh',
-      mode: bc.mixin.Mode = None,
-      name: str = None,
-  ):
-    super().__init__(mode=mode, name=name)
-
-    # parameters
-    self._state_initializer = state_init
-    self.num_out = num_out
-    self.num_in = num_in
-    self.in_size = (num_in,)
-    self.out_size = (num_out,)
-
-    # initializers
-    self._W_initializer = w_init
-    self._b_initializer = b_init
-
-    # activation function
-    if isinstance(activation, str):
-      self.activation = getattr(bts.functional, activation)
-    else:
-      assert callable(activation), "The activation function should be a string or a callable function. "
-      self.activation = activation
-
-    # weights
-    self.Wz = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_Wz')
-    self.Wr = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_Wr')
-    self.Wh = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_Wh')
-
-  def init_state(self, batch_size: int = None, **kwargs):
-    self.h = ETraceVar(init.parameter(self._state_initializer, [self.num_out], batch_size))
-
-  def update(self, x):
-    old_h = self.h.value
-    xh = jnp.concatenate([x, old_h], axis=-1)
-    z = bts.functional.sigmoid(self.Wz(xh))
-    r = bts.functional.sigmoid(self.Wr(xh))
-    rh = r * old_h
-    h = self.activation(self.Wh(jnp.concatenate([x, rh], axis=-1)))
-    h = (1 - z) * self.h.value + z * h
-    self.h.value = h
-    return h
-
-
-class LSTMCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
-  r"""Long short-term memory (LSTM) RNN core.
-
-  The implementation is based on (zaremba, et al., 2014) [1]_. Given
-  :math:`x_t` and the previous state :math:`(h_{t-1}, c_{t-1})` the core
-  computes
-
-  .. math::
-
-     \begin{array}{ll}
-     i_t = \sigma(W_{ii} x_t + W_{hi} h_{t-1} + b_i) \\
-     f_t = \sigma(W_{if} x_t + W_{hf} h_{t-1} + b_f) \\
-     g_t = \tanh(W_{ig} x_t + W_{hg} h_{t-1} + b_g) \\
-     o_t = \sigma(W_{io} x_t + W_{ho} h_{t-1} + b_o) \\
-     c_t = f_t c_{t-1} + i_t g_t \\
-     h_t = o_t \tanh(c_t)
-     \end{array}
-
-  where :math:`i_t`, :math:`f_t`, :math:`o_t` are input, forget and
-  output gate activations, and :math:`g_t` is a vector of cell updates.
-
-  The output is equal to the new hidden, :math:`h_t`.
-
-  Notes
-  -----
-
-  Forget gate initialization: Following (Jozefowicz, et al., 2015) [2]_ we add 1.0
-  to :math:`b_f` after initialization in order to reduce the scale of forgetting in
-  the beginning of the training.
-
-
-  Parameters
-  ----------
-  num_in: int
-    The dimension of the input vector
-  num_out: int
-    The number of hidden unit in the node.
-  state_init: callable, ArrayLike
-    The state initializer.
-  w_init: callable, ArrayLike
-    The input weight initializer.
-  b_init: optional, callable, ArrayLike
-    The bias weight initializer.
-  activation: str, callable
-    The activation function. It can be a string or a callable function.
-
-  References
-  ----------
-
-  .. [1] Zaremba, Wojciech, Ilya Sutskever, and Oriol Vinyals. "Recurrent neural
-         network regularization." arXiv preprint arXiv:1409.2329 (2014).
-  .. [2] Jozefowicz, Rafal, Wojciech Zaremba, and Ilya Sutskever. "An empirical
-         exploration of recurrent network architectures." In International conference
-         on machine learning, pp. 2342-2350. PMLR, 2015.
-  """
-  __module__ = 'brainscale'
-
-  def __init__(
-      self,
-      num_in: int,
-      num_out: int,
-      w_init: Union[ArrayLike, Callable] = init.XavierNormal(),
-      b_init: Union[ArrayLike, Callable] = init.ZeroInit(),
-      state_init: Union[ArrayLike, Callable] = init.ZeroInit(),
-      activation: str | Callable = 'tanh',
-      mode: bc.mixin.Mode = None,
-      name: str = None,
-  ):
-    super().__init__(mode=mode, name=name)
-
-    # parameters
-    self.num_out = num_out
-    self.num_in = num_in
-    self.in_size = (num_in,)
-    self.out_size = (num_out,)
-
-    # initializers
-    self._state_initializer = state_init
-    self._W_initializer = w_init
-    self._b_initializer = b_init
-
-    # activation function
-    if isinstance(activation, str):
-      self.activation = getattr(bts.functional, activation)
-    else:
-      assert callable(activation), "The activation function should be a string or a callable function. "
-      self.activation = activation
-
-    # weights
-    self.Wi = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_Wi')
-    self.Wg = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_Wg')
-    self.Wf = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_Wf')
-    self.Wo = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_Wo')
-
-  def init_state(self, batch_size: int = None, **kwargs):
-    self.c = ETraceVar(init.parameter(self._state_initializer, [self.num_out], batch_size))
-    self.h = ETraceVar(init.parameter(self._state_initializer, [self.num_out], batch_size))
-
-  def update(self, x):
-    h, c = self.h.value, self.c.value
-    xh = jnp.concat([x, h], axis=-1)
-    i = self.Wi(xh)
-    g = self.Wg(xh)
-    f = self.Wf(xh)
-    o = self.Wo(xh)
-    c = bts.functional.sigmoid(f + 1.) * c + bts.functional.sigmoid(i) * self.activation(g)
-    h = bts.functional.sigmoid(o) * self.activation(c)
-    self.h.value = h
-    self.c.value = c
-    return h
-
-
-class URLSTMCell(bc.Module, ExplicitInOutSize, bc.mixin.Delayed):
-  def __init__(
-      self,
-      num_in: int,
-      num_out: int,
-      w_init: Union[ArrayLike, Callable] = init.XavierNormal(),
-      b_init: Union[ArrayLike, Callable] = init.ZeroInit(),
-      state_init: Union[ArrayLike, Callable] = init.ZeroInit(),
-      activation: str | Callable = 'tanh',
-      mode: bc.mixin.Mode = None,
-      name: str = None,
-  ):
-    super().__init__(mode=mode, name=name)
-
-    # parameters
-    self.num_out = num_out
-    self.num_in = num_in
-    self.in_size = (num_in,)
-    self.out_size = (num_out,)
-
-    # initializers
-    self._state_initializer = state_init
-    self._W_initializer = w_init
-    self._b_initializer = b_init
-
-    # activation function
-    if isinstance(activation, str):
-      self.activation = getattr(bts.functional, activation)
-    else:
-      assert callable(activation), "The activation function should be a string or a callable function. "
-      self.activation = activation
-
-    # weights
-    self.Wu = Linear(num_in + num_out, num_out, w_init=w_init, b_init=None, name=self.name + '_Wg')
-    self.Wf = Linear(num_in + num_out, num_out, w_init=w_init, b_init=None, name=self.name + '_Wf')
-    self.Wr = Linear(num_in + num_out, num_out, w_init=w_init, b_init=None, name=self.name + '_Wi')
-    self.Wo = Linear(num_in + num_out, num_out, w_init=w_init, b_init=None, name=self.name + '_Wo')
-    self.bias = ETraceParamOp(self._forget_bias(), op=jnp.add, grad='full')
-
-  def _forget_bias(self):
-    u = bc.random.uniform(1 / self.num_out, 1 - 1 / self.num_out, (self.num_out,))
-    return -jnp.log(1 / u - 1)
-
-  def init_state(self, batch_size: int = None, **kwargs):
-    self.c = ETraceVar(init.parameter(self._state_initializer, [self.num_out], batch_size))
-    self.h = ETraceVar(init.parameter(self._state_initializer, [self.num_out], batch_size))
-
-  def update(self, x: ArrayLike) -> ArrayLike:
-    h, c = self.h.value, self.c.value
-    xh = jnp.concat([x, h], axis=-1)
-    f = self.Wf(xh)
-    r = self.Wr(xh)
-    u = self.Wu(xh)
-    o = self.Wo(xh)
-    f_ = bts.functional.sigmoid(self.bias.execute(f))
-    r_ = bts.functional.sigmoid(-self.bias.execute(-r))
-    g = 2 * r_ * f_ + (1 - 2 * r_) * f_ ** 2
-    next_cell = g * c + (1 - g) * self.activation(u)
-    next_hidden = bts.functional.sigmoid(o) * self.activation(next_cell)
-    self.h.value = next_hidden
-    self.c.value = next_cell
-    return next_hidden

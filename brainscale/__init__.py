@@ -34,6 +34,8 @@ from brainscale._etrace_concepts import *
 from brainscale._etrace_concepts import __all__ as concepts_all
 from brainscale._normalizations import *
 from brainscale._normalizations import __all__ as normalizations_all
+from brainscale._rate_rnns import *
+from brainscale._rate_rnns import __all__ as rate_rnns
 from brainscale._others import *
 from brainscale._others import __all__ as others_all
 from brainscale._poolings import *
@@ -54,6 +56,7 @@ __all__ = (['typing'] +
            normalizations_all +
            others_all +
            poolings_all +
+           rate_rnns +
            readout_all +
            synouts_all)
 
