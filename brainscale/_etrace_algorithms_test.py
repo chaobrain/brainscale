@@ -73,7 +73,7 @@ class TestDiagOn2(unittest.TestCase):
     algorithm.compile_graph(jax.ShapeDtypeStruct((n_in,), bc.environ.dftype()))
 
     def run_snn(i, inp_spk):
-      with bc.share.context(i=i, t=i * bc.environ.get_dt()):
+      with bc.environ.context(i=i, t=i * bc.environ.get_dt()):
         out = algorithm.update_model_and_etrace(inp_spk)
       return out
 
@@ -96,7 +96,7 @@ class TestDiagOn2(unittest.TestCase):
     algorithm.compile_graph(jax.ShapeDtypeStruct((n_batch, n_in), bc.environ.dftype()))
 
     def run_snn(i, inp_spk):
-      with bc.share.context(i=i, t=i * bc.environ.get_dt()):
+      with bc.environ.context(i=i, t=i * bc.environ.get_dt()):
         out = algorithm.update_model_and_etrace(inp_spk)
       return out
 
@@ -214,7 +214,7 @@ class TestDiagGrad(unittest.TestCase):
 
   def test1(self):
     bc.environ.set(mode=bc.mixin.JointMode(bc.mixin.Training(), bc.mixin.Batching()))
-    bc.share.set(i=0, t=0.)
+    bc.environ.set(i=0, t=0.)
 
     n_batch, n_in, n_rec = 16, 4, 10
     std_model = _LIF_STDExpCu_Dense_Layer(n_in, n_rec, inp_std=False)

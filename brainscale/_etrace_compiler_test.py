@@ -190,7 +190,7 @@ class TestCompiler(unittest.TestCase):
     bc.init_states(model, 16)
 
     def run_model(i, inp):
-      bc.share.set(i=i)
+      bc.environ.set(i=i)
       return model(inp)
 
     # algorithms

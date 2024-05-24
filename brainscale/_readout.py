@@ -28,6 +28,7 @@ from braintools import init
 from ._base import DnnLayer
 from ._dynamics import Neuron
 from ._etrace_concepts import ETraceParamOp, ETraceVar
+from ._etrace_operators import MatMulETraceOp
 from .typing import Size, ArrayLike, DTypeLike, Spike
 
 __all__ = [
@@ -61,7 +62,7 @@ class LeakyRateReadout(DnnLayer):
 
     # weights
     weight = init.parameter(w_init, (self.in_size[0], self.out_size[0]))
-    self.weight_op = ETraceParamOp(weight, jnp.matmul)
+    self.weight_op = ETraceParamOp(weight, MatMulETraceOp())
 
   def init_state(self, batch_size=None, **kwargs):
     self.r = ETraceVar(init.parameter(init.Constant(0.), self.out_size, batch_size))
@@ -99,7 +100,7 @@ class LeakySpikeReadout(Neuron):
 
     # weights
     weight = init.parameter(w_init, (self.in_size[0], self.out_size[0]))
-    self.weight_op = ETraceParamOp(weight, jnp.matmul)
+    self.weight_op = ETraceParamOp(weight, MatMulETraceOp())
 
     # integral
     self.integral = bp.odeint(self.dv, method='exp_euler')
@@ -126,6 +127,6 @@ class LeakySpikeReadout(Neuron):
     V_th = self.V_th if self.spk_reset == 'soft' else jax.lax.stop_gradient(last_V)
     V = last_V - V_th * last_spike
     # membrane potential
-    V = self.integral(V, None, self.weight_op.execute(x), bc.share.get('dt')) + self.sum_delta_inputs()
+    V = self.integral(V, None, self.weight_op.execute(x), bc.environ.get('dt')) + self.sum_delta_inputs()
     self.V.value = V
     return self.get_spike(V)

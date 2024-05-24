@@ -293,7 +293,7 @@ class Expon(Synapse):
     self.g = ETraceVar(init.parameter(init.Constant(0.), self.varshape, batch_size))
 
   def update(self, x: Spike = None):
-    self.g.value = self.integral(self.g.value, bc.share.get('t'), bc.environ.get('dt'))
+    self.g.value = self.integral(self.g.value, bc.environ.get('t'), bc.environ.get('dt'))
     if x is not None:
       self.align_post_input_add(x)
     return self.g.value
@@ -353,7 +353,7 @@ class STP(Synapse):
     return bp.JointEq(du, dx)
 
   def update(self, pre_spike: Spike):
-    t = bc.share.load('t')
+    t = bc.environ.get('t')
     u, x = self.integral(self.u.value, self.x.value, t, bc.environ.get_dt())
 
     # --- original code:
@@ -412,7 +412,7 @@ class STD(Synapse):
     self.x = ETraceVar(init.parameter(init.Constant(1.), self.varshape, batch_size))
 
   def update(self, pre_spike: Spike):
-    t = bc.share.get('t')
+    t = bc.environ.get('t')
     x = self.integral(self.x.value, t, bc.environ.get_dt())
 
     # --- original code:
