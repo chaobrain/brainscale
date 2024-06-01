@@ -33,6 +33,7 @@ __all__ = [
   'ETraceOp',  # the operator for the etrace-based learning
   'ETraceParamOp',  # the parameter and operator for the etrace-based learning, combining ETraceParam and ETraceOp
   'NormalParamOp',  # the parameter state with an associated operator
+  'NonTrainParamOp',
   'stop_param_gradients',
 ]
 
@@ -197,6 +198,23 @@ class NormalParamOp(bc.ParamState):
 
     # operation
     assert not isinstance(op, ETraceOp), f'{NormalParamOp.__name__} does not support {ETraceOp.__name__}.'
+    self.op = op
+
+  def execute(self, x: jax.Array) -> jax.Array:
+    return self.op(x, self.value)
+
+
+class NonTrainParamOp(object):
+  __module__ = 'brainscale'
+
+  def __init__(
+      self,
+      value: PyTree,
+      op: Callable
+  ):
+    super().__init__()
+
+    self.value = value
     self.op = op
 
   def execute(self, x: jax.Array) -> jax.Array:
