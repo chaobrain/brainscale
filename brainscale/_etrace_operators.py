@@ -39,20 +39,24 @@ class StandardETraceOp(ETraceOp):
   The standard operator for the eligibility trace.
   """
 
-  def etrace_update(self,
-                    mode: bc.mixin.Mode,
-                    w: PyTree,
-                    dh_to_dw: List[PyTree],
-                    diag_jac: List[jax.Array],
-                    ph_to_pwx: jax.Array,
-                    ph_to_pwy: jax.Array):
+  def etrace_update(
+      self,
+      mode: bc.mixin.Mode,
+      w: PyTree,
+      dh_to_dw: List[PyTree],
+      diag_jac: List[jax.Array],
+      ph_to_pwx: jax.Array,
+      ph_to_pwy: jax.Array
+  ):
     raise NotImplementedError
 
-  def hidden_to_etrace(self,
-                       mode: bc.mixin.Mode,
-                       w: PyTree,
-                       dl_to_dh: jax.Array,
-                       dh_to_dw: PyTree):
+  def hidden_to_etrace(
+      self,
+      mode: bc.mixin.Mode,
+      w: PyTree,
+      dl_to_dh: jax.Array,
+      dh_to_dw: PyTree
+  ):
     raise NotImplementedError
 
 
@@ -64,7 +68,12 @@ class GeneralETraceOp(StandardETraceOp):
   computational efficiency.
   """
 
-  def __init__(self, op: Callable, xinfo: jax.ShapeDtypeStruct, is_diagonal=False):
+  def __init__(
+      self,
+      op: Callable,
+      xinfo: jax.ShapeDtypeStruct,
+      is_diagonal: bool = False
+  ):
     super().__init__(op, is_diagonal=is_diagonal)
     #
     # calling the operator through:
@@ -76,13 +85,15 @@ class GeneralETraceOp(StandardETraceOp):
     #
     self.xinfo = xinfo
 
-  def etrace_update(self,
-                    mode: bc.mixin.Mode,
-                    w: PyTree,
-                    dh_to_dw: List[PyTree],
-                    diag_jac: List[jax.Array],
-                    ph_to_pwx: jax.Array,
-                    ph_to_pwy: jax.Array):
+  def etrace_update(
+      self,
+      mode: bc.mixin.Mode,
+      w: PyTree,
+      dh_to_dw: List[PyTree],
+      diag_jac: List[jax.Array],
+      ph_to_pwx: jax.Array,
+      ph_to_pwy: jax.Array
+  ):
 
     # compute: diagonal * dh_to_dw
     final_dw = None
@@ -109,11 +120,13 @@ class GeneralETraceOp(StandardETraceOp):
     new_bwg = jax.tree.map(jnp.add, final_dw, current_etrace)
     return new_bwg
 
-  def hidden_to_etrace(self,
-                       mode: bc.mixin.Mode,
-                       w: PyTree,
-                       dl_to_dh: jax.Array,
-                       dh_to_dw: PyTree):
+  def hidden_to_etrace(
+      self,
+      mode: bc.mixin.Mode,
+      w: PyTree,
+      dl_to_dh: jax.Array,
+      dh_to_dw: PyTree
+  ):
     # compute: dL/dW = (dL/dH) \circ (dH / dW)
     dg_weight = self._dy_to_weight(mode,
                                    w,
@@ -123,11 +136,13 @@ class GeneralETraceOp(StandardETraceOp):
     return jax.tree.map(jnp.multiply, dg_weight, dh_to_dw)
 
   @staticmethod
-  def _dy_to_weight(mode: bc.mixin.Mode,
-                    weight_vals: PyTree,
-                    op: Callable,
-                    xinfo: jax.ShapeDtypeStruct,
-                    dg_hidden: jax.Array) -> PyTree:
+  def _dy_to_weight(
+      mode: bc.mixin.Mode,
+      weight_vals: PyTree,
+      op: Callable,
+      xinfo: jax.ShapeDtypeStruct,
+      dg_hidden: jax.Array
+  ) -> PyTree:
     # [KEY]
     # For the following operation:
     #      dL/dW = (dL/dH) \circ (dH / dW)
@@ -151,11 +166,13 @@ class GeneralETraceOp(StandardETraceOp):
     return dG_hidden_like_weight
 
   @staticmethod
-  def _dx_dy_to_weight(mode: bc.mixin.Mode,
-                       weight_vals: PyTree,
-                       op: Callable,
-                       dg_x: jax.Array,
-                       dg_y: jax.Array) -> PyTree:
+  def _dx_dy_to_weight(
+      mode: bc.mixin.Mode,
+      weight_vals: PyTree,
+      op: Callable,
+      dg_x: jax.Array,
+      dg_y: jax.Array
+  ) -> PyTree:
     # [KEY]
     # For the following operation:
     #      dW = dy \otimes dx
@@ -176,7 +193,11 @@ class MatMulETraceOp(StandardETraceOp):
 
   """
 
-  def __init__(self, weight_mask: Optional[jax.Array] = None, is_diagonal: bool = False):
+  def __init__(
+      self,
+      weight_mask: Optional[jax.Array] = None,
+      is_diagonal: bool = False
+  ):
     super().__init__(self._operation, is_diagonal=is_diagonal)
     self.weight_mask = weight_mask
 
@@ -203,13 +224,15 @@ class MatMulETraceOp(StandardETraceOp):
     else:
       return jnp.matmul(x, weight) + bias
 
-  def etrace_update(self,
-                    mode: bc.mixin.Mode,
-                    w: PyTree,
-                    dh_to_dw: List[PyTree],
-                    diag_jac: List[jax.Array],
-                    ph_to_pwx: jax.Array,
-                    ph_to_pwy: jax.Array):
+  def etrace_update(
+      self,
+      mode: bc.mixin.Mode,
+      w: PyTree,
+      dh_to_dw: List[PyTree],
+      diag_jac: List[jax.Array],
+      ph_to_pwx: jax.Array,
+      ph_to_pwy: jax.Array
+  ):
 
     # 1. w: the wight value, a pytree
     # 2. dh_to_dw: derivative of hidden to weight, the number equals to the number of hidden states
@@ -240,11 +263,13 @@ class MatMulETraceOp(StandardETraceOp):
         dh_to_dbias = dh_to_dbias + ph_to_pwy
     return unflatten(dh_to_dweight, dh_to_dbias)
 
-  def hidden_to_etrace(self,
-                       mode: bc.mixin.Mode,
-                       w: PyTree,
-                       dl_to_dh: jax.Array,
-                       dh_to_dw: PyTree):
+  def hidden_to_etrace(
+      self,
+      mode: bc.mixin.Mode,
+      w: PyTree,
+      dl_to_dh: jax.Array,
+      dh_to_dw: PyTree
+  ):
     # 1. w: the wight value
     # 2. dl_to_dh: the derivative of the loss with respect to the hidden
     # 3. dh_to_dw: the derivative of the hidden with respect to the weight
@@ -271,7 +296,11 @@ class AbsMatMulETraceOp(MatMulETraceOp):
 
   """
 
-  def __init__(self, weight_mask: Optional[jax.Array] = None, is_diagonal: bool = False):
+  def __init__(
+      self,
+      weight_mask: Optional[jax.Array] = None,
+      is_diagonal: bool = False
+  ):
     super().__init__(weight_mask, is_diagonal=is_diagonal)
 
   def _operation(self, x, w):
@@ -291,7 +320,11 @@ class Conv2dETraceOp(StandardETraceOp):
 
   """
 
-  def __init__(self, weight_mask: Optional[jax.Array] = None, is_diagonal: bool = False):
+  def __init__(
+      self,
+      weight_mask: Optional[jax.Array] = None,
+      is_diagonal: bool = False
+  ):
     super().__init__(fun=self._operation, is_diagonal=is_diagonal)
     self.weight_mask = weight_mask
 

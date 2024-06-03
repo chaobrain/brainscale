@@ -89,7 +89,7 @@ class DropoutFixed(DnnLayer):
 
   def update(self, x):
     dtype = bc.math.get_dtype(x)
-    fit_phase = bc.share.load('fit', desc='Whether this is a fitting process. Bool.')
+    fit_phase = bc.environ.get('fit', desc='Whether this is a fitting process. Bool.')
     if fit_phase:
       assert self.mask.shape == x.shape, (f"Input shape {x.shape} does not match the mask shape {self.mask.shape}. "
                                           f"Please call `init_state()` method first.")

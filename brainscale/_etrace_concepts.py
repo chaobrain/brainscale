@@ -18,7 +18,6 @@
 from __future__ import annotations
 
 import contextlib
-from enum import Enum
 from typing import Callable, Sequence, Tuple, List, Optional
 
 import braincore as bc
@@ -34,6 +33,7 @@ __all__ = [
   'ETraceOp',  # the operator for the etrace-based learning
   'ETraceParamOp',  # the parameter and operator for the etrace-based learning, combining ETraceParam and ETraceOp
   'NormalParamOp',  # the parameter state with an associated operator
+  'NonTrainParamOp',
   'stop_param_gradients',
 ]
 
@@ -60,7 +60,7 @@ def is_etrace_op_enable_gradient(jit_param_name: str):
 # -------------------------------------------------------------------------------------- #
 
 
-class ETraceVar(bc.State):
+class ETraceVar(bc.ShortTermState):
   """
   The Eligibility Trace Hidden Variable.
 
@@ -107,7 +107,11 @@ class ETraceOp:
   """
   __module__ = 'brainscale'
 
-  def __init__(self, fun: Callable, is_diagonal: bool = False):
+  def __init__(
+      self,
+      fun: Callable,
+      is_diagonal: bool = False
+  ):
     super().__init__()
     self.fun = fun
     self.is_diagonal = is_diagonal
@@ -142,11 +146,13 @@ class ETraceParamOp(ETraceParam):
   __module__ = 'brainscale'
   op: ETraceOp  # operator
 
-  def __init__(self,
-               weight: PyTree,
-               op: Callable,
-               grad: Optional[str] = None,
-               is_diagonal: bool = None):
+  def __init__(
+      self,
+      weight: PyTree,
+      op: Callable,
+      grad: Optional[str] = None,
+      is_diagonal: bool = None
+  ):
     # weight value
     super().__init__(weight)
 
@@ -183,11 +189,32 @@ class NormalParamOp(bc.ParamState):
   __module__ = 'brainscale'
   op: Callable  # operator
 
-  def __init__(self, value: PyTree, op: Callable):
+  def __init__(
+      self,
+      value: PyTree,
+      op: Callable
+  ):
     super().__init__(value)
 
     # operation
     assert not isinstance(op, ETraceOp), f'{NormalParamOp.__name__} does not support {ETraceOp.__name__}.'
+    self.op = op
+
+  def execute(self, x: jax.Array) -> jax.Array:
+    return self.op(x, self.value)
+
+
+class NonTrainParamOp(object):
+  __module__ = 'brainscale'
+
+  def __init__(
+      self,
+      value: PyTree,
+      op: Callable
+  ):
+    super().__init__()
+
+    self.value = value
     self.op = op
 
   def execute(self, x: jax.Array) -> jax.Array:

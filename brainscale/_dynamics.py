@@ -68,10 +68,6 @@ class Neuron(bc.Dynamics, ExplicitInOutSize, bc.mixin.Delayed):
     self.spk_fun = spk_fun
     self.detach_spk = detach_spk
 
-  @property
-  def spike(self):
-    raise NotImplementedError
-
   def get_spike(self, *args, **kwargs):
     raise NotImplementedError
 
@@ -109,11 +105,8 @@ class IF(Neuron):
   def init_state(self, batch_size: int = None, **kwargs):
     self.V = ETraceVar(init.parameter(jnp.zeros, self.varshape, batch_size))
 
-  @property
-  def spike(self):
-    return self.get_spike(self.V.value)
-
-  def get_spike(self, V):
+  def get_spike(self, V=None):
+    V = self.V.value if V is None else V
     v_scaled = (V - self.V_th) / self.V_th
     return self.spk_fun(v_scaled)
 
@@ -166,11 +159,8 @@ class LIF(Neuron):
   def init_state(self, batch_size: int = None, **kwargs):
     self.V = ETraceVar(init.parameter(init.Constant(self.V_reset), self.varshape, batch_size))
 
-  @property
-  def spike(self):
-    return self.get_spike(self.V.value)
-
   def get_spike(self, V):
+    V = self.V.value if V is None else V
     v_scaled = (V - self.V_th) / self.V_th
     return self.spk_fun(v_scaled)
 
@@ -227,24 +217,22 @@ class ALIF(Neuron):
     self.V = ETraceVar(init.parameter(init.Constant(0.), self.varshape, batch_size))
     self.a = ETraceVar(init.parameter(init.Constant(0.), self.varshape, batch_size))
 
-  @property
-  def spike(self):
-    # return self.sps.value
-    return self.get_spike(self.V.value, self.a.value)
-
-  def get_spike(self, V, a):
+  def get_spike(self, V=None, a=None):
+    V = self.V.value if V is None else V
+    a = self.a.value if a is None else a
     v_scaled = (V - self.V_th - self.beta * a) / self.V_th
     return self.spk_fun(v_scaled)
 
   def update(self, x: Current = 0.):
     last_v = self.V.value
-    lst_spk = self.get_spike(last_v, self.a.value)
-    # lst_spk = self.sps.value
+    last_a = self.a.value
+    lst_spk = self.get_spike(last_v, last_a)
     V_th = self.V_th if self.spk_reset == 'soft' else jax.lax.stop_gradient(last_v)
     V = last_v - V_th * lst_spk
+    a = last_a + lst_spk
     # membrane potential
-    V = self.integral_v(V, None, x)
-    a = self.integral_a(self.a.value, None)
+    V = self.integral_v(V, bc.environ.get('t'), x, dt=bc.environ.get_dt())
+    a = self.integral_a(a, bc.environ.get('t'), dt=bc.environ.get_dt())
     self.V.value = V + self.sum_delta_inputs()
     self.a.value = a
     return self.get_spike(self.V.value, self.a.value)
@@ -293,7 +281,7 @@ class Expon(Synapse):
     self.g = ETraceVar(init.parameter(init.Constant(0.), self.varshape, batch_size))
 
   def update(self, x: Spike = None):
-    self.g.value = self.integral(self.g.value, bc.share.get('t'), bc.environ.get('dt'))
+    self.g.value = self.integral(self.g.value, bc.environ.get('t'), bc.environ.get('dt'))
     if x is not None:
       self.align_post_input_add(x)
     return self.g.value
@@ -353,7 +341,7 @@ class STP(Synapse):
     return bp.JointEq(du, dx)
 
   def update(self, pre_spike: Spike):
-    t = bc.share.load('t')
+    t = bc.environ.get('t')
     u, x = self.integral(self.u.value, self.x.value, t, bc.environ.get_dt())
 
     # --- original code:
@@ -412,7 +400,7 @@ class STD(Synapse):
     self.x = ETraceVar(init.parameter(init.Constant(1.), self.varshape, batch_size))
 
   def update(self, pre_spike: Spike):
-    t = bc.share.get('t')
+    t = bc.environ.get('t')
     x = self.integral(self.x.value, t, bc.environ.get_dt())
 
     # --- original code:

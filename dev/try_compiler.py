@@ -101,11 +101,11 @@ def try_if_delta_etrace_update():
   snn = IF_Delta_Dense_Layer(n_in, n_rec)
   snn = bc.init_states(snn, n_batch)
 
-  algorithm = nn.DiagExpSmOnAlgorithm(snn, decay=0.99)
+  algorithm = nn.DiagExpSmOnAlgorithm(snn, decay_or_rank=0.99)
   algorithm.compile_graph(jax.ShapeDtypeStruct((n_batch, n_in), bc.environ.dftype()))
 
   def run_snn(i, inp_spk):
-    bc.share.set(i=i, t=i * bc.environ.get_dt())
+    bc.environ.set(i=i, t=i * bc.environ.get_dt())
     out = algorithm.update_model_and_etrace(inp_spk)
     return out
 
@@ -125,7 +125,7 @@ def try_if_delta_etrace_update_On2():
   algorithm.compile_graph(jax.ShapeDtypeStruct((n_in,), bc.environ.dftype()))
 
   def run_snn(i, inp_spk):
-    bc.share.set(i=i, t=i * bc.environ.get_dt())
+    bc.environ.set(i=i, t=i * bc.environ.get_dt())
     out = algorithm.update_model_and_etrace(inp_spk)
     return out
 
@@ -145,7 +145,7 @@ def try_if_delta_etrace_update_batched_On2():
   algorithm.compile_graph(jax.ShapeDtypeStruct((n_batch, n_in,), bc.environ.dftype()))
 
   def run_snn(i, inp_spk):
-    bc.share.set(i=i, t=i * bc.environ.get_dt())
+    bc.environ.set(i=i, t=i * bc.environ.get_dt())
     out = algorithm.update_model_and_etrace(inp_spk)
     return out
 
@@ -167,7 +167,7 @@ def try_if_delta_etrace_update_and_grad():
 
   def run_snn(last_grads, inputs):
     i, inp_spk = inputs
-    bc.share.set(i=i, t=i * bc.environ.get_dt())
+    bc.environ.set(i=i, t=i * bc.environ.get_dt())
     out = algorithm.update_model_and_etrace(inp_spk)
 
     grads = bc.transform.grad(lambda x: algorithm.update_model_and_etrace(x).sum(),
@@ -190,15 +190,15 @@ def try_if_delta_etrace_grad_vs_bptt_grad():
 
   def etrace_grad(x):
     bc.init_states(snn, n_batch)
-    algorithm = nn.DiagExpSmOnAlgorithm(snn, decay=0.99)
+    algorithm = nn.DiagExpSmOnAlgorithm(snn, decay_or_rank=0.99)
     algorithm.compile_graph(jax.ShapeDtypeStruct((n_batch, n_in), bc.environ.dftype()))
 
     def run_snn(last_grads, inputs):
       i, inp_spk = inputs
-      bc.share.set(i=i, t=i * bc.environ.get_dt())
+      bc.environ.set(i=i, t=i * bc.environ.get_dt())
       out = algorithm.update_model_and_etrace(inp_spk)
 
-      grads = bc.transform.grad(lambda x: algorithm.update_model_and_etrace(x).sum(),
+      grads = bc.transform.grad(lambda x: algorithm(x, running_index=i).sum(),
                                 grad_vars=weights)(inp_spk)
       grads = jax.tree.map(jnp.add, last_grads, grads)
       return grads, out
@@ -211,7 +211,7 @@ def try_if_delta_etrace_grad_vs_bptt_grad():
     bc.init_states(snn, n_batch)
 
     def run_snn(i, inp_spk):
-      bc.share.set(i=i, t=i * bc.environ.get_dt())
+      bc.environ.set(i=i, t=i * bc.environ.get_dt())
       out = snn(inp_spk).sum()
       return out
 
@@ -245,7 +245,7 @@ def try_alif_compile_and_show_graph():
   snn = bc.init_states(snn, n_batch)
 
   def run_snn(i, inp):
-    with bc.share.context(i=i, t=i * bc.environ.get_dt()):
+    with bc.environ.context(i=i, t=i * bc.environ.get_dt()):
       out = snn(inp)
     return out
 
@@ -261,9 +261,9 @@ if __name__ == '__main__':
   # try_if_delta_etrace_update_On2()
   # try_if_delta_etrace_update_batched_On2()
   # try_if_delta_etrace_update_and_grad()
-  # try_if_delta_etrace_grad_vs_bptt_grad()
+  try_if_delta_etrace_grad_vs_bptt_grad()
   # try_traceback()
 
-  try_alif_compile_and_show_graph()
+  # try_alif_compile_and_show_graph()
 
 

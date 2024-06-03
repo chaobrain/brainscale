@@ -249,7 +249,7 @@ class _BatchNorm(DnnLayer):
 
   def update(self, x):
     self._check_input_dim(x)
-    fit_phase = bc.share.get('fit', desc='Whether this is a fitting process. Bool.')
+    fit_phase = bc.environ.get('fit', desc='Whether this is a fitting process. Bool.')
 
     # reduce the feature axis
     if self.mode.has(bc.mixin.Batching):

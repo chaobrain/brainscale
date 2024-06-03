@@ -28,7 +28,7 @@ from braintools import functional
 from braintools import init
 
 from ._base import DnnLayer
-from ._etrace_concepts import ETraceParamOp, NormalParamOp
+from ._etrace_concepts import ETraceParamOp, NormalParamOp, NonTrainParamOp
 from ._etrace_operators import MatMulETraceOp
 from .typing import ArrayLike
 
@@ -112,10 +112,15 @@ class Linear(DnnLayer):
     params = dict(weight=init.parameter(w_init, self.in_size + self.out_size, allow_none=False))
     if b_init is not None:
       params['bias'] = init.parameter(b_init, self.out_size, allow_none=False)
-    if as_etrace_weight:
-      self.weight_op = ETraceParamOp(params, op, grad='full' if full_etrace else None)
+
+    # weight + op
+    if self.mode.has(bc.mixin.Training):
+      if as_etrace_weight:
+        self.weight_op = ETraceParamOp(params, op, grad='full' if full_etrace else None)
+      else:
+        self.weight_op = NormalParamOp(params, op.fun)
     else:
-      self.weight_op = NormalParamOp(params, op.fun)
+      self.weight_op = NonTrainParamOp(params, op.fun)
 
   def update(self, x):
     return self.weight_op.execute(x)
@@ -132,7 +137,7 @@ class SignedWLinear(DnnLayer):
       in_size: Union[int, Sequence[int]],
       out_size: Union[int, Sequence[int]],
       w_init: Union[Callable, ArrayLike] = init.KaimingNormal(),
-      w_sign: Union[Callable, ArrayLike] = None,
+      w_sign: Optional[ArrayLike] = None,
       as_etrace_weight: bool = True,
       full_etrace: bool = False,
       name: str = None,
@@ -145,7 +150,7 @@ class SignedWLinear(DnnLayer):
     self.out_size = (out_size,) if isinstance(out_size, numbers.Integral) else tuple(out_size)
 
     # w_mask
-    self.w_sign = init.parameter(w_sign, (in_size, 1))
+    self.w_sign = w_sign
 
     # weights
     weight = init.parameter(w_init, self.in_size + self.out_size, allow_none=False)

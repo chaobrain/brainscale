@@ -165,6 +165,11 @@ class ETraceAlgorithm(bc.Module):
   """
   The base class for the eligibility trace algorithm.
 
+  Note than the :py:class:`ETraceAlgorithm` is a subclass of :py:class:`bc.Module`,
+  meaning that it is sensitive to the context/mode of the computation, for example,
+  the batching or non-batching mode of the model.
+
+
   Parameters:
   -----------
   model: Callable
@@ -1621,3 +1626,10 @@ class DiagHybridAlgorithm(DiagETraceAlgorithmForVJP):
       update_dict(dG_weights, id(st), dg)
 
     return list(dG_weights.values())
+
+
+class DiagOn2JacAlgorithm(DiagETraceAlgorithmForVJP):
+  pass
+
+
+

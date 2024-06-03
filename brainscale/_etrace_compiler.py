@@ -1092,7 +1092,7 @@ class JaxprEvaluationForHiddenPerturbation:
 
       if eqn.primitive.name == 'pjit':
         # TODO: how to rewrite pjit primitive?
-        self.revised_eqns.append(eqn.replace())
+        self._eval_eqn(eqn)
 
       elif eqn.primitive.name == 'scan':
         if _check_some_element_exist_in_the_set(eqn.outvars, self.hidden_invars):
