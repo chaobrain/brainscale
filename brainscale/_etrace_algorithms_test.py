@@ -43,7 +43,7 @@ class _IF_Delta_Dense_Layer(bc.Module):
     self.syn = nn.Linear(n_in + n_rec, n_rec, w_init=w_init)
 
   def update(self, spk):
-    spk = jnp.concat([spk, self.neu.spike], axis=-1)
+    spk = jnp.concat([spk, self.neu.get_spike()], axis=-1)
     return self.neu(self.syn(spk))
 
 
@@ -137,11 +137,11 @@ class _LIF_STDExpCu_Dense_Layer(bc.Module):
   def update(self, inp_spk):
     if self.std_inp is not None:
       inp_spk = self.std_inp(inp_spk) * inp_spk
-    last_spk = self.neu.spike
+    last_spk = self.neu.get_spike()
     inp = jnp.concat([inp_spk, last_spk * self.std(last_spk)], axis=-1)
     self.syn(inp)
     self.neu()
-    return self.neu.spike
+    return self.neu.get_spike()
 
 
 class _LIF_STPExpCu_Dense_Layer(bc.Module):
@@ -170,11 +170,11 @@ class _LIF_STPExpCu_Dense_Layer(bc.Module):
   def update(self, inp_spk):
     if self.inp_stp:
       inp_spk = self.stp_inp(inp_spk) * inp_spk
-    last_spk = self.neu.spike
+    last_spk = self.neu.get_spike()
     inp = jnp.concat([inp_spk, last_spk * self.stp(last_spk)], axis=-1)
     self.syn(inp)
     self.neu()
-    return self.neu.spike
+    return self.neu.get_spike()
 
 
 class TestDiagGrad(unittest.TestCase):

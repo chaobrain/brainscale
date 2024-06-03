@@ -119,7 +119,7 @@ class IF(Neuron):
     # membrane potential
     V = self.integral(V, None, x, bc.environ.get_dt()) + self.sum_delta_inputs()
     self.V.value = V
-    return self.spike
+    return self.get_spike(V)
 
 
 class LIF(Neuron):
@@ -159,7 +159,7 @@ class LIF(Neuron):
   def init_state(self, batch_size: int = None, **kwargs):
     self.V = ETraceVar(init.parameter(init.Constant(self.V_reset), self.varshape, batch_size))
 
-  def get_spike(self, V):
+  def get_spike(self, V=None):
     V = self.V.value if V is None else V
     v_scaled = (V - self.V_th) / self.V_th
     return self.spk_fun(v_scaled)
