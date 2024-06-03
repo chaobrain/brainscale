@@ -48,7 +48,7 @@ class IF_Delta_Dense_Layer(bc.Module):
     self.syn = linear_cls(n_in + n_rec, n_rec, w_init=init)
 
   def update(self, spk):
-    spk = jnp.concat([spk, self.neu.spike], axis=-1)
+    spk = jnp.concat([spk, self.neu.get_spike()], axis=-1)
     return self.neu(self.syn(spk))
 
 
