@@ -21,13 +21,11 @@ import collections.abc
 import numbers
 from typing import Callable, Tuple, Union, Sequence, Optional, TypeVar
 
-import braincore as bc
+import brainstate as bst
 import jax
 import jax.numpy as jnp
-from braintools import functional
-from braintools import init
+from brainstate import functional, init
 
-from ._base import DnnLayer
 from ._etrace_concepts import ETraceParamOp, NormalParamOp, NonTrainParamOp
 from ._etrace_operators import MatMulETraceOp
 from .typing import ArrayLike
@@ -80,7 +78,7 @@ def replicate(
                     f"sequence of length {num_replicate}.")
 
 
-class Linear(DnnLayer):
+class Linear(bst.nn.DnnLayer):
   """
   Linear layer.
   """
@@ -96,7 +94,7 @@ class Linear(DnnLayer):
       as_etrace_weight: bool = True,
       full_etrace: bool = False,
       name: Optional[str] = None,
-      mode: Optional[bc.mixin.Mixin] = None,
+      mode: Optional[bst.mixin.Mode] = None,
   ):
     super().__init__(name=name, mode=mode)
 
@@ -105,16 +103,16 @@ class Linear(DnnLayer):
     self.out_size = (out_size,) if isinstance(out_size, numbers.Integral) else tuple(out_size)
 
     # w_mask
-    self.w_mask = init.parameter(w_mask, self.in_size + self.out_size)
+    self.w_mask = init.param(w_mask, self.in_size + self.out_size)
 
     # weights
     op = MatMulETraceOp(self.w_mask)
-    params = dict(weight=init.parameter(w_init, self.in_size + self.out_size, allow_none=False))
+    params = dict(weight=init.param(w_init, self.in_size + self.out_size, allow_none=False))
     if b_init is not None:
-      params['bias'] = init.parameter(b_init, self.out_size, allow_none=False)
+      params['bias'] = init.param(b_init, self.out_size, allow_none=False)
 
     # weight + op
-    if self.mode.has(bc.mixin.Training):
+    if self.mode.has(bst.mixin.Training):
       if as_etrace_weight:
         self.weight_op = ETraceParamOp(params, op, grad='full' if full_etrace else None)
       else:
@@ -126,7 +124,7 @@ class Linear(DnnLayer):
     return self.weight_op.execute(x)
 
 
-class SignedWLinear(DnnLayer):
+class SignedWLinear(bst.nn.DnnLayer):
   """
   Linear layer with signed weights.
   """
@@ -140,8 +138,8 @@ class SignedWLinear(DnnLayer):
       w_sign: Optional[ArrayLike] = None,
       as_etrace_weight: bool = True,
       full_etrace: bool = False,
-      name: str = None,
-      mode: bc.mixin.Mode = None
+      name: Optional[str] = None,
+      mode: Optional[bst.mixin.Mode] = None
   ):
     super().__init__(name=name, mode=mode)
 
@@ -153,7 +151,7 @@ class SignedWLinear(DnnLayer):
     self.w_sign = w_sign
 
     # weights
-    weight = init.parameter(w_init, self.in_size + self.out_size, allow_none=False)
+    weight = init.param(w_init, self.in_size + self.out_size, allow_none=False)
     if as_etrace_weight:
       self.weight_op = ETraceParamOp(weight, self._operation, grad='full' if full_etrace else None)
     else:
@@ -169,7 +167,7 @@ class SignedWLinear(DnnLayer):
     return self.weight_op.execute(x)
 
 
-class ScaledWSLinear(DnnLayer):
+class ScaledWSLinear(bst.nn.DnnLayer):
   """
   Linear Layer with Weight Standardization.
 
@@ -212,8 +210,8 @@ class ScaledWSLinear(DnnLayer):
       full_etrace: bool = False,
       ws_gain: bool = True,
       eps: float = 1e-4,
-      name: str = None,
-      mode: bc.mixin.Mixin = None
+      name: Optional[str] = None,
+      mode: Optional[bst.mixin.Mode] = None
   ):
     super().__init__(name=name, mode=mode)
 
@@ -222,15 +220,15 @@ class ScaledWSLinear(DnnLayer):
     self.out_size = (out_size,) if isinstance(out_size, numbers.Integral) else tuple(out_size)
 
     # w_mask
-    self.w_mask = init.parameter(w_mask, (self.in_size[0], 1))
+    self.w_mask = init.param(w_mask, (self.in_size[0], 1))
 
     # parameters
     self.eps = eps
 
     # weights
-    params = dict(weight=init.parameter(w_init, self.in_size + self.out_size, allow_none=False))
+    params = dict(weight=init.param(w_init, self.in_size + self.out_size, allow_none=False))
     if b_init is not None:
-      params['bias'] = init.parameter(b_init, self.out_size, allow_none=False)
+      params['bias'] = init.param(b_init, self.out_size, allow_none=False)
     # gain
     if ws_gain:
       s = params['weight'].shape
@@ -256,11 +254,11 @@ class ScaledWSLinear(DnnLayer):
     return y
 
 
-class CSRLinear(DnnLayer):
+class CSRLinear(bst.nn.DnnLayer):
   __module__ = 'brainscale'
 
 
-class _BaseConv(DnnLayer):
+class _BaseConv(bst.nn.DnnLayer):
   # the number of spatial dimensions
   num_spatial_dims: int
 
@@ -278,8 +276,8 @@ class _BaseConv(DnnLayer):
       rhs_dilation: Union[int, Tuple[int, ...]] = 1,
       groups: int = 1,
       w_mask: Optional[Union[ArrayLike, Callable]] = None,
-      mode: bc.mixin.Mixin = None,
-      name: str = None,
+      mode: Optional[bst.mixin.Mode] = None,
+      name: Optional[str] = None,
   ):
     super().__init__(name=name, mode=mode)
 
@@ -325,7 +323,7 @@ class _BaseConv(DnnLayer):
     # kernel shape and w_mask
     kernel_shape = tuple(self.kernel_size) + (self.in_channels // self.groups, self.out_channels)
     self.kernel_shape = kernel_shape
-    self.w_mask = init.parameter(w_mask, kernel_shape, allow_none=True)
+    self.w_mask = init.param(w_mask, kernel_shape, allow_none=True)
 
   def _check_input_dim(self, x):
     if x.ndim == self.num_spatial_dims + 2:
@@ -375,8 +373,8 @@ class _Conv(_BaseConv):
       w_mask: Optional[Union[ArrayLike, Callable]] = None,
       as_etrace_weight: bool = True,
       full_etrace: bool = False,
-      mode: bc.mixin.Mixin = None,
-      name: str = None,
+      mode: Optional[bst.mixin.Mode] = None,
+      name: Optional[str] = None,
   ):
     super().__init__(in_size=in_size,
                      out_channels=out_channels,
@@ -394,11 +392,11 @@ class _Conv(_BaseConv):
     self.b_initializer = b_init
 
     # --- weights --- #
-    weight = init.parameter(self.w_initializer, self.kernel_shape, allow_none=False)
+    weight = init.param(self.w_initializer, self.kernel_shape, allow_none=False)
     params = dict(weight=weight)
     if self.b_initializer is not None:
       bias_shape = (1,) * len(self.kernel_size) + (self.out_channels,)
-      bias = init.parameter(self.b_initializer, bias_shape, allow_none=True)
+      bias = init.param(self.b_initializer, bias_shape, allow_none=True)
       params['bias'] = bias
 
     # The weight operation
@@ -544,8 +542,8 @@ class _ScaledWSConv(_BaseConv):
       w_mask: Optional[Union[ArrayLike, Callable]] = None,
       as_etrace_weight: bool = True,
       full_etrace: bool = False,
-      mode: bc.mixin.Mixin = None,
-      name: str = None,
+      mode: Optional[bst.mixin.Mode] = None,
+      name: Optional[str] = None,
   ):
     super().__init__(in_size=in_size,
                      out_channels=out_channels,
@@ -563,11 +561,11 @@ class _ScaledWSConv(_BaseConv):
     self.b_initializer = b_init
 
     # --- weights --- #
-    weight = init.parameter(self.w_initializer, self.kernel_shape, allow_none=False)
+    weight = init.param(self.w_initializer, self.kernel_shape, allow_none=False)
     params = dict(weight=weight)
     if self.b_initializer is not None:
       bias_shape = (1,) * len(self.kernel_size) + (self.out_channels,)
-      bias = init.parameter(self.b_initializer, bias_shape, allow_none=True)
+      bias = init.param(self.b_initializer, bias_shape, allow_none=True)
       params['bias'] = bias
 
     # gain

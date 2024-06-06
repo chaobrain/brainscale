@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Sequence, Union, FrozenSet, List
 
-import braincore as bc
+import brainstate as bst
 import jax
 
 __all__ = [
@@ -33,15 +33,15 @@ __all__ = [
   'Hid2WeightJacobian', 'Hid2HidJacobian', 'Hid2HidDiagJacobian',
 ]
 
-ArrayLike = bc.typing.ArrayLike
-DType = bc.typing.DType
-DTypeLike = bc.typing.DTypeLike
+ArrayLike = bst.typing.ArrayLike
+DType = bst.typing.DType
+DTypeLike = bst.typing.DTypeLike
 
 # --- types --- #
 PyTree = Any
 StateID = int
 WeightID = int
-Size = bc.typing.Size
+Size = bst.typing.Size
 Axis = int
 Axes = Union[int, Sequence[int]]
 

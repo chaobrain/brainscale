@@ -45,9 +45,7 @@ classifiers = [
 keywords = ["brainpy", "brain simulation", "brain-inspired computing"]
 
 dependencies = [
-    'braincore',
-    'braintools',
-    'brainpy',
+    'brainstate',
 ]
 
 dynamic = ['version']

@@ -20,12 +20,12 @@ from __future__ import annotations
 import numbers
 from typing import Callable, Union, Sequence, Optional, Any
 
-import braincore as bc
+import brainstate as bst
+import brainstate.nn as nn
 import jax
 import jax.numpy as jnp
-from braintools import init
+from brainstate import init
 
-from ._base import DnnLayer
 from ._etrace_concepts import ETraceParamOp, NormalParamOp
 from .typing import DTypeLike, ArrayLike, Size, Axes
 
@@ -34,9 +34,7 @@ __all__ = [
 ]
 
 
-def _canonicalize_axes(ndim: int, feature_axes: Sequence[int], mode: Optional[bc.mixin.Mode] = None):
-  if isinstance(mode, bc.mixin.Mode) and mode.has(bc.mixin.Batching):
-    ndim = ndim - 1
+def _canonicalize_axes(ndim: int, feature_axes: Sequence[int]):
   axes = []
   for axis in feature_axes:
     if axis < 0:
@@ -92,7 +90,7 @@ def _compute_stats(
     dtype = jax.numpy.result_type(x)
   # promote x to at least float32, this avoids half precision computation
   # but preserves double or complex floating points
-  dtype = jax.numpy.promote_types(dtype, bc.environ.dftype())
+  dtype = jax.numpy.promote_types(dtype, bst.environ.dftype())
   x = jnp.asarray(x, dtype)
 
   # Compute mean and mean of squared values.
@@ -162,7 +160,7 @@ def _normalize(
   return jnp.asarray(y, dtype)
 
 
-class _BatchNorm(DnnLayer):
+class _BatchNorm(nn.DnnLayer):
   __module__ = 'brainscale'
   num_spatial_dims: int = None
 
@@ -180,13 +178,13 @@ class _BatchNorm(DnnLayer):
       axis_index_groups: Optional[Sequence[Sequence[int]]] = None,
       as_etrace_weight: bool = False,
       full_etrace: bool = False,
-      mode: Optional[bc.mixin.Mode] = None,
+      mode: Optional[bst.mixin.Mode] = None,
       name: Optional[str] = None,
       dtype: Any = None,
   ):
     super().__init__(name=name, mode=mode)
 
-    if not self.mode.has(bc.mixin.Batching):
+    if not self.mode.has(bst.mixin.Batching):
       raise ValueError('BatchNorm layers require the Batching mode.')
 
     # parameters
@@ -195,7 +193,7 @@ class _BatchNorm(DnnLayer):
     self.affine = affine
     self.bias_initializer = bias_initializer
     self.scale_initializer = scale_initializer
-    self.dtype = dtype or bc.environ.dftype()
+    self.dtype = dtype or bst.environ.dftype()
     self.track_running_stats = track_running_stats
     self.momentum = jnp.asarray(momentum, dtype=self.dtype)
     self.epsilon = jnp.asarray(epsilon, dtype=self.dtype)
@@ -209,8 +207,8 @@ class _BatchNorm(DnnLayer):
     # variables
     feature_shape = tuple([ax if i in self.feature_axis else 1 for i, ax in enumerate(in_size)])
     if self.track_running_stats:
-      self.running_mean = bc.LongTermState(jnp.zeros(feature_shape, dtype=self.dtype))
-      self.running_var = bc.LongTermState(jnp.ones(feature_shape, dtype=self.dtype))
+      self.running_mean = bst.LongTermState(jnp.zeros(feature_shape, dtype=self.dtype))
+      self.running_var = bst.LongTermState(jnp.ones(feature_shape, dtype=self.dtype))
     else:
       self.running_mean = None
       self.running_var = None
@@ -218,11 +216,11 @@ class _BatchNorm(DnnLayer):
     # parameters
     if self.affine:
       assert track_running_stats, "Affine parameters are not needed when track_running_stats is False."
-      bias = init.parameter(self.bias_initializer, feature_shape)
-      scale = init.parameter(self.scale_initializer, feature_shape)
+      bias = init.param(self.bias_initializer, feature_shape)
+      scale = init.param(self.scale_initializer, feature_shape)
       weight = dict(bias=bias, scale=scale)
       if as_etrace_weight:
-        self.weight = ETraceParamOp(weight, op=self._operation, full_grad=full_etrace)
+        self.weight = ETraceParamOp(weight, op=self._operation, grad='full' if full_etrace else None)
       else:
         self.weight = NormalParamOp(weight, op=self._operation)
     else:
@@ -249,10 +247,10 @@ class _BatchNorm(DnnLayer):
 
   def update(self, x):
     self._check_input_dim(x)
-    fit_phase = bc.environ.get('fit', desc='Whether this is a fitting process. Bool.')
+    fit_phase = bst.environ.get('fit', desc='Whether this is a fitting process. Bool.')
 
     # reduce the feature axis
-    if self.mode.has(bc.mixin.Batching):
+    if self.mode.has(bst.mixin.Batching):
       reduction_axes = tuple(i for i in range(x.ndim) if (i - 1) not in self.feature_axis)
     else:
       reduction_axes = tuple(i for i in range(x.ndim) if i not in self.feature_axis)
