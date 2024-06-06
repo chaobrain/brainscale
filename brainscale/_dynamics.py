@@ -20,10 +20,9 @@ from __future__ import annotations
 from typing import Callable, Optional
 
 import brainstate as bst
-import brainstate.nn as nn
 import jax
 import jax.numpy as jnp
-from brainstate import surrogate, init
+from brainstate import surrogate, init, nn
 
 from ._etrace_concepts import ETraceVar
 from .typing import DTypeLike, ArrayLike, Current, Spike, Size

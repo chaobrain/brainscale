@@ -23,8 +23,7 @@ from typing import Callable, Optional
 import brainstate as bst
 import jax
 import jax.numpy as jnp
-from brainstate import init, surrogate
-from brainstate import nn
+from brainstate import init, surrogate, nn
 
 from ._etrace_concepts import ETraceParamOp, ETraceVar
 from ._etrace_operators import MatMulETraceOp

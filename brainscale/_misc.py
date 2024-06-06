@@ -19,18 +19,18 @@ from __future__ import annotations
 from enum import Enum
 from typing import Sequence
 
-import braincore as bc
+import brainstate as bst
 
 git_issue_addr = 'https://github.com/brainpy/brainscale/issues'
 
 
-def state_traceback(states: Sequence[bc.State]):
+def state_traceback(states: Sequence[bst.State]):
   """
   Traceback the states of the brain model.
 
   Parameters
   ----------
-  states : Sequence[bc.State]
+  states : Sequence[bst.State]
     The states of the brain model.
 
   Returns
@@ -54,7 +54,6 @@ def set_module_as(module: str = 'brainscale'):
   return wrapper
 
 
-
 class BaseEnum(Enum):
   @classmethod
   def get_by_name(cls, name: str):
@@ -71,4 +70,3 @@ class BaseEnum(Enum):
       return cls.get_by_name(type_)
     else:
       raise ValueError(f'Cannot find the {cls.__name__} type {type_}.')
-

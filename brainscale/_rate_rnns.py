@@ -19,9 +19,8 @@ from __future__ import annotations
 from typing import Callable, Union, Optional
 
 import brainstate as bst
-import brainstate.nn as nn
 import jax.numpy as jnp
-from brainstate import init, functional
+from brainstate import init, functional, nn
 
 from ._connections import Linear
 from ._etrace_concepts import ETraceVar, ETraceParamOp

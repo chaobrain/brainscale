@@ -18,15 +18,15 @@ import unittest
 from functools import partial, reduce
 from typing import Callable
 
-import braincore as bc
 import jax
 import jax.numpy as jnp
-from braintools import init
+import brainstate as bst
+from brainstate import init
 
 import brainscale as nn
 
 
-class _IF_Delta_Dense_Layer(bc.Module):
+class _IF_Delta_Dense_Layer(bst.Module):
   def __init__(
       self,
       n_in,
@@ -51,70 +51,70 @@ class TestDiagOn2(unittest.TestCase):
 
   def test_if_delta_etrace_update_On2(self):
     for mode in [
-      bc.mixin.Batching(),
-      bc.mixin.Training(),
-      bc.mixin.JointMode(bc.mixin.Batching(), bc.mixin.Training()),
+      bst.mixin.Batching(),
+      bst.mixin.Training(),
+      bst.mixin.JointMode(bst.mixin.Batching(), bst.mixin.Training()),
     ]:
-      bc.environ.set(mode=mode)
+      bst.environ.set(mode=mode)
 
       n_in, n_rec = 4, 10
       snn = _IF_Delta_Dense_Layer(n_in, n_rec)
-      snn = bc.init_states(snn)
+      snn = bst.init_states(snn)
       algorithm = nn.DiagOn2Algorithm(snn)
 
   def test_non_batched_On2_algorithm(self):
-    bc.environ.set(mode=bc.mixin.Training())
+    bst.environ.set(mode=bst.mixin.Training())
 
     n_in, n_rec = 4, 10
     snn = _IF_Delta_Dense_Layer(n_in, n_rec)
-    snn = bc.init_states(snn)
+    snn = bst.init_states(snn)
 
     algorithm = nn.DiagOn2Algorithm(snn)
-    algorithm.compile_graph(jax.ShapeDtypeStruct((n_in,), bc.environ.dftype()))
+    algorithm.compile_graph(jax.ShapeDtypeStruct((n_in,), bst.environ.dftype()))
 
     def run_snn(i, inp_spk):
-      with bc.environ.context(i=i, t=i * bc.environ.get_dt()):
+      with bst.environ.context(i=i, t=i * bst.environ.get_dt()):
         out = algorithm.update_model_and_etrace(inp_spk)
       return out
 
     nt = 100
-    inputs = jnp.asarray(bc.random.rand(nt, n_in) < 0.2, dtype=bc.environ.dftype())
-    outs = bc.transform.for_loop(run_snn, jnp.arange(nt), inputs)
+    inputs = jnp.asarray(bst.random.rand(nt, n_in) < 0.2, dtype=bst.environ.dftype())
+    outs = bst.transform.for_loop(run_snn, jnp.arange(nt), inputs)
     print(outs.shape)
     self.assertEqual(outs.shape, (nt, n_rec))
 
   def test_batched_On2_algorithm(self):
-    bc.environ.set(mode=bc.mixin.JointMode(bc.mixin.Training(),
-                                           bc.mixin.Batching()))
+    bst.environ.set(mode=bst.mixin.JointMode(bst.mixin.Training(),
+                                           bst.mixin.Batching()))
 
     n_batch = 16
     n_in, n_rec = 4, 10
     snn = _IF_Delta_Dense_Layer(n_in, n_rec)
-    snn = bc.init_states(snn, n_batch)
+    snn = bst.init_states(snn, n_batch)
 
     algorithm = nn.DiagOn2Algorithm(snn)
-    algorithm.compile_graph(jax.ShapeDtypeStruct((n_batch, n_in), bc.environ.dftype()))
+    algorithm.compile_graph(jax.ShapeDtypeStruct((n_batch, n_in), bst.environ.dftype()))
 
     def run_snn(i, inp_spk):
-      with bc.environ.context(i=i, t=i * bc.environ.get_dt()):
+      with bst.environ.context(i=i, t=i * bst.environ.get_dt()):
         out = algorithm.update_model_and_etrace(inp_spk)
       return out
 
     nt = 100
-    inputs = jnp.asarray(bc.random.rand(nt, n_batch, n_in) < 0.2, dtype=bc.environ.dftype())
-    outs = bc.transform.for_loop(run_snn, jnp.arange(nt), inputs)
+    inputs = jnp.asarray(bst.random.rand(nt, n_batch, n_in) < 0.2, dtype=bst.environ.dftype())
+    outs = bst.transform.for_loop(run_snn, jnp.arange(nt), inputs)
     print(outs.shape)
     self.assertEqual(outs.shape, (nt, n_batch, n_rec))
 
 
-class _LIF_STDExpCu_Dense_Layer(bc.Module):
+class _LIF_STDExpCu_Dense_Layer(bst.Module):
   """
   The RTRL layer with LIF neurons and dense connected STD-based exponential current synapses.
   """
 
   def __init__(
       self, n_in, n_rec, inp_std=False, tau_mem=5., tau_syn=10., V_th=1., tau_std=500.,
-      spk_fun: Callable = bc.surrogate.ReluGrad(),
+      spk_fun: Callable = bst.surrogate.ReluGrad(),
       spk_reset: str = 'soft',
       rec_init: Callable = init.KaimingNormal(),
       ff_init: Callable = init.KaimingNormal()
@@ -127,10 +127,10 @@ class _LIF_STDExpCu_Dense_Layer(bc.Module):
     else:
       self.std_inp = None
 
-    self.syn = bc.HalfProjAlignPostMg(
+    self.syn = bst.nn.HalfProjAlignPostMg(
       comm=nn.Linear(n_in + n_rec, n_rec, jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0)),
       syn=nn.Expon.delayed(size=n_rec, tau=tau_syn),
-      out=nn.CUBA.delayed(),
+      out=bst.nn.CUBA.delayed(),
       post=self.neu
     )
 
@@ -144,11 +144,11 @@ class _LIF_STDExpCu_Dense_Layer(bc.Module):
     return self.neu.get_spike()
 
 
-class _LIF_STPExpCu_Dense_Layer(bc.Module):
+class _LIF_STPExpCu_Dense_Layer(bst.Module):
   def __init__(
       self,
       n_in, n_rec, inp_stp=False, tau_mem=5., tau_syn=10., V_th=1.,
-      spk_fun: Callable = bc.surrogate.ReluGrad(),
+      spk_fun: Callable = bst.surrogate.ReluGrad(),
       spk_reset: str = 'soft',
       rec_init: Callable = init.KaimingNormal(),
       ff_init: Callable = init.KaimingNormal()
@@ -160,10 +160,10 @@ class _LIF_STPExpCu_Dense_Layer(bc.Module):
     if inp_stp:
       self.stp_inp = nn.STP(n_in, tau_f=500., tau_d=100.)
 
-    self.syn = bc.HalfProjAlignPostMg(
+    self.syn = bst.nn.HalfProjAlignPostMg(
       comm=nn.Linear(n_in + n_rec, n_rec, jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])])),
       syn=nn.Expon.delayed(size=n_rec, tau=tau_syn),
-      out=nn.CUBA.delayed(),
+      out=bst.nn.CUBA.delayed(),
       post=self.neu
     )
 
@@ -189,11 +189,11 @@ class TestDiagGrad(unittest.TestCase):
     else:
       return etrace_vars.to_dict_values()
 
-  def _whether_collective_and_independent_are_same(self, model: bc.Module, inputs):
+  def _whether_collective_and_independent_are_same(self, model: bst.Module, inputs):
     states = model.states()
     state_vals = states.to_dict_values()
     etrace_vars, other_states = states.split(nn.ETraceVar)
-    etrace_grads = jax.tree.map(bc.random.randn_like, etrace_vars.to_dict_values())
+    etrace_grads = jax.tree.map(bst.random.randn_like, etrace_vars.to_dict_values())
 
     # collective solve
     fun = partial(self._hidden_to_hidden, model, other_states.to_dict_values(), inputs=inputs)
@@ -204,7 +204,7 @@ class TestDiagGrad(unittest.TestCase):
     new_grads2 = dict()
     for key in etrace_vars:
       fun = partial(self._hidden_to_hidden, model, other_states.to_dict_values(), inputs=inputs, out_hidden=key)
-      jac = bc.transform.vector_grad(fun, argnums=0)(etrace_vars.to_dict_values())
+      jac = bst.transform.vector_grad(fun, argnums=0)(etrace_vars.to_dict_values())
       states.assign_values(state_vals)
 
       leaves = jax.tree.leaves(jax.tree.map(jnp.multiply, jac, etrace_grads))
@@ -213,19 +213,19 @@ class TestDiagGrad(unittest.TestCase):
       self.assertTrue(jnp.allclose(grad, new_grads1[key], atol=1e-5), f"key: {key}")
 
   def test1(self):
-    bc.environ.set(mode=bc.mixin.JointMode(bc.mixin.Training(), bc.mixin.Batching()))
-    bc.environ.set(i=0, t=0.)
+    bst.environ.set(mode=bst.mixin.JointMode(bst.mixin.Training(), bst.mixin.Batching()))
+    bst.environ.set(i=0, t=0.)
 
     n_batch, n_in, n_rec = 16, 4, 10
     std_model = _LIF_STDExpCu_Dense_Layer(n_in, n_rec, inp_std=False)
     stp_model = _LIF_STPExpCu_Dense_Layer(n_in, n_rec, inp_stp=False)
 
-    bc.init_states(std_model, n_batch)
-    std_model.neu.V.value = bc.random.uniform(-1., 1.5, std_model.neu.V.value.shape)
-    bc.init_states(stp_model, n_batch)
-    stp_model.neu.V.value = bc.random.uniform(-1., 1.5, stp_model.neu.V.value.shape)
+    bst.init_states(std_model, n_batch)
+    std_model.neu.V.value = bst.random.uniform(-1., 1.5, std_model.neu.V.value.shape)
+    bst.init_states(stp_model, n_batch)
+    stp_model.neu.V.value = bst.random.uniform(-1., 1.5, stp_model.neu.V.value.shape)
 
-    inputs = jnp.asarray(bc.random.rand(n_batch, n_in) < 0.2, dtype=bc.environ.dftype())
+    inputs = jnp.asarray(bst.random.rand(n_batch, n_in) < 0.2, dtype=bst.environ.dftype())
 
     self._whether_collective_and_independent_are_same(std_model, inputs)
     self._whether_collective_and_independent_are_same(stp_model, inputs)

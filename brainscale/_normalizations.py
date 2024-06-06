@@ -21,10 +21,9 @@ import numbers
 from typing import Callable, Union, Sequence, Optional, Any
 
 import brainstate as bst
-import brainstate.nn as nn
 import jax
 import jax.numpy as jnp
-from brainstate import init
+from brainstate import init, nn
 
 from ._etrace_concepts import ETraceParamOp, NormalParamOp
 from .typing import DTypeLike, ArrayLike, Size, Axes

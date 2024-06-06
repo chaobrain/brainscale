@@ -22,13 +22,13 @@
 from __future__ import annotations
 
 import itertools
+from enum import Enum
 from functools import partial
 from typing import Callable, NamedTuple, List, Dict, Sequence, Tuple, Set, FrozenSet, Optional
 
-import braincore as bc
+import brainstate as bst
 import jax.core
 import jax.numpy as jnp
-from enum import Enum
 from jax.extend import linear_util as lu
 from jax.extend import source_info_util
 from jax.interpreters import partial_eval as pe
@@ -42,6 +42,7 @@ from ._etrace_concepts import (is_etrace_op,
                                ETraceParam,
                                ETraceVar)
 from ._jaxpr_to_source_code import (jaxpr_to_python_code, )
+from ._misc import BaseEnum
 from ._misc import (git_issue_addr,
                     state_traceback,
                     set_module_as)
@@ -59,7 +60,6 @@ from .typing import (PyTree,
                      WeightVals,
                      Hid2WeightJacobian,
                      Hid2HidJacobian)
-from ._misc import BaseEnum
 
 # TODO
 # - [ ] The visualization of the etrace graph.
@@ -139,7 +139,7 @@ def fun_compose(*funs: Callable) -> Callable:
 
 
 def split_state_values(
-    states: Sequence[bc.State],
+    states: Sequence[bst.State],
     state_values: List[PyTree],
     include_weight: bool = True
 ) -> (Tuple[WeightVals, HiddenVals, StateVals] | Tuple[HiddenVals, StateVals]):
@@ -152,7 +152,7 @@ def split_state_values(
 
   Parameters:
   -----------
-  states: Sequence[bc.State]
+  states: Sequence[bst.State]
     The states of the model.
   state_values: List[PyTree]
     The values of the states.
@@ -174,7 +174,7 @@ def split_state_values(
   if include_weight:
     weight_vals, hidden_vals, other_vals = [], [], []
     for st, val in zip(states, state_values):
-      if isinstance(st, bc.ParamState):
+      if isinstance(st, bst.ParamState):
         weight_vals.append(val)
       elif isinstance(st, ETraceVar):
         hidden_vals.append(val)
@@ -184,7 +184,7 @@ def split_state_values(
   else:
     hidden_vals, other_vals = [], []
     for st, val in zip(states, state_values):
-      if isinstance(st, bc.ParamState):
+      if isinstance(st, bst.ParamState):
         pass
       elif isinstance(st, ETraceVar):
         hidden_vals.append(val)
@@ -1207,6 +1207,7 @@ def _summarize_source_info(
                 for frame in frames]
   return '\n'.join(reversed(frame_strs))
 
+
 class DiagJacobian(BaseEnum):
   exact = 'exact'
   vjp = 'vjp'
@@ -1258,7 +1259,7 @@ class ETraceGraph:
     # Please always use ``functools.partial`` to fix the static arguments.
     #
     # wrap the model so that we can track the iteration number
-    self.stateful_model = bc.transform.StatefulFunction(model)
+    self.stateful_model = bst.transform.StatefulFunction(model)
 
     # --- jaxpr for the model computation --- #
 
