@@ -20,6 +20,7 @@ import unittest
 from typing import Callable
 
 import brainstate as bst
+import jax
 import jax.numpy as jnp
 
 import brainscale as nn
@@ -163,7 +164,8 @@ class TestCompiler(unittest.TestCase):
 
     inp_spk = jnp.asarray(bst.random.rand(16, 10) < 0.3, dtype=bst.environ.dftype())
     graph = nn.ETraceGraph(model)
-    graph.compile_graph(inp_spk)
+    with jax.disable_jit():
+      graph.compile_graph(inp_spk)
 
     bst.util.clear_buffer_memory()
 
@@ -195,7 +197,7 @@ class TestCompiler(unittest.TestCase):
       return model(inp)
 
     # algorithms
-    algorithm = nn.DiagExpSmOnAlgorithm(run_model, decay_or_rank=100)
+    algorithm = nn.DiagIODimAlgorithm(run_model, decay_or_rank=100)
     algorithm.compile_graph(0, inp_spk)
     out = algorithm(0, inp_spk, running_index=0)
 

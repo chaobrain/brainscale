@@ -55,10 +55,10 @@ class RNNCell(bst.Module):
       self,
       num_in: int,
       num_out: int,
-      state_initializer: Callable = bt.init.ZeroInit(),
-      w_initializer: Callable = bt.init.XavierNormal(),
-      b_initializer: Callable = bt.init.ZeroInit(),
-      activation: Callable = bt.functional.relu,
+      state_initializer: Callable = bst.init.ZeroInit(),
+      w_initializer: Callable = bst.init.XavierNormal(),
+      b_initializer: Callable = bst.init.ZeroInit(),
+      activation: Callable = bst.functional.relu,
       train_state: bool = False,
   ):
     super().__init__()
@@ -79,18 +79,18 @@ class RNNCell(bst.Module):
     self.activation = activation
 
     # weights
-    self.W = bt.init.parameter(self._w_initializer, (num_in + num_out, self.num_out))
-    self.b = bt.init.parameter(self._b_initializer, (self.num_out,))
+    self.W = bst.init.param(self._w_initializer, (num_in + num_out, self.num_out))
+    self.b = bst.init.param(self._b_initializer, (self.num_out,))
     if self.mode.has(bst.mixin.Training):
       self.W = bst.ParamState(self.W)
       self.b = None if (self.b is None) else bst.ParamState(self.b)
 
     # state
     if train_state and self.mode.has(bst.mixin.Training):
-      self.state2train = bst.ParamState(bt.init.parameter(bt.init.ZeroInit(), (self.num_out,), allow_none=False))
+      self.state2train = bst.ParamState(bst.init.param(bst.init.ZeroInit(), (self.num_out,), allow_none=False))
 
   def init_state(self, batch_size=None, **kwargs):
-    self.state = bst.State(bt.init.parameter(self._state_initializer, (self.num_out,), batch_size))
+    self.state = bst.State(bst.init.param(self._state_initializer, (self.num_out,), batch_size))
     if self.train_state:
       self.state.value = jnp.repeat(jnp.expand_dims(self.state2train.value, axis=0), batch_size, axis=0)
 
@@ -126,7 +126,7 @@ def f_predict(inputs):
 
 def f_loss(inputs, targets, l2_reg=2e-4):
   predictions = f_predict(inputs)
-  mse = bt.metric.squared_error(predictions, targets)
+  mse = bt.metric.squared_error(predictions, targets).mean()
   l2 = 0.0
   for leaf in jax.tree.leaves(weights.to_dict_values()):
     l2 += jnp.sum(leaf ** 2)
@@ -134,8 +134,8 @@ def f_loss(inputs, targets, l2_reg=2e-4):
 
 
 # define optimizer
-lr = bt.optim.ExponentialDecayLR(lr=0.025, decay_steps=1, decay_rate=0.99975)
-opt = bt.optim.Adam(lr=lr, eps=1e-1)
+lr = bst.optim.ExponentialDecayLR(lr=0.025, decay_steps=1, decay_rate=0.99975)
+opt = bst.optim.Adam(lr=lr, eps=1e-1)
 opt.register_trainable_weights(weights)
 
 

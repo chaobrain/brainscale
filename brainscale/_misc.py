@@ -24,6 +24,14 @@ import brainstate as bst
 git_issue_addr = 'https://github.com/brainpy/brainscale/issues'
 
 
+class NotSupportedError(Exception):
+  __module__ = 'brainscale'
+
+
+class CompilationError(Exception):
+  __module__ = 'brainscale'
+
+
 def state_traceback(states: Sequence[bst.State]):
   """
   Traceback the states of the brain model.

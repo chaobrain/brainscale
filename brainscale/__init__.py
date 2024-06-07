@@ -17,7 +17,6 @@
 
 __version__ = "0.0.1"
 
-from brainscale import typing
 from brainscale._connections import *
 from brainscale._connections import __all__ as connections_all
 from brainscale._dynamics import *
@@ -35,8 +34,7 @@ from brainscale._rate_rnns import __all__ as rate_rnns
 from brainscale._readout import *
 from brainscale._readout import __all__ as readout_all
 
-__all__ = (['typing'] +
-           concepts_all +
+__all__ = (concepts_all +
            connections_all +
            dynamics_all +
            etrace_algorithms +

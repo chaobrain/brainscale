@@ -27,7 +27,7 @@ from brainstate import init, surrogate, nn
 
 from ._etrace_concepts import ETraceParamOp, ETraceVar
 from ._etrace_operators import MatMulETraceOp
-from .typing import Size, ArrayLike, DTypeLike, Spike
+from ._typing import Size, ArrayLike, DTypeLike, Spike
 
 __all__ = [
   'LeakyRateReadout',

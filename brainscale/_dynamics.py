@@ -25,7 +25,7 @@ import jax.numpy as jnp
 from brainstate import surrogate, init, nn
 
 from ._etrace_concepts import ETraceVar
-from .typing import DTypeLike, ArrayLike, Current, Spike, Size
+from ._typing import DTypeLike, ArrayLike, Current, Spike, Size
 
 __all__ = [
   # neuron models

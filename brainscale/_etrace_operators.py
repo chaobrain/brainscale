@@ -24,7 +24,7 @@ import jax.core
 import jax.numpy as jnp
 
 from ._etrace_concepts import ETraceOp
-from .typing import PyTree
+from ._typing import PyTree
 
 __all__ = [
   'StandardETraceOp',

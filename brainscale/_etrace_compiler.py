@@ -33,8 +33,6 @@ from jax.extend import linear_util as lu
 from jax.extend import source_info_util
 from jax.interpreters import partial_eval as pe
 
-from ._errors import (NotSupportedError,
-                      CompilationError)
 from ._etrace_concepts import (assign_state_values,
                                split_states_v2)
 from ._etrace_concepts import (is_etrace_op,
@@ -42,24 +40,26 @@ from ._etrace_concepts import (is_etrace_op,
                                ETraceParam,
                                ETraceVar)
 from ._jaxpr_to_source_code import (jaxpr_to_python_code, )
-from ._misc import BaseEnum
 from ._misc import (git_issue_addr,
                     state_traceback,
-                    set_module_as)
-from .typing import (PyTree,
-                     StateID,
-                     WeightID,
-                     WeightXVar,
-                     WeightYVar,
-                     HiddenInVar,
-                     HiddenOutVar,
-                     TempData,
-                     Outputs,
-                     HiddenVals,
-                     StateVals,
-                     WeightVals,
-                     Hid2WeightJacobian,
-                     Hid2HidJacobian)
+                    set_module_as,
+                    NotSupportedError,
+                    CompilationError,
+                    BaseEnum)
+from ._typing import (PyTree,
+                      StateID,
+                      WeightID,
+                      WeightXVar,
+                      WeightYVar,
+                      HiddenInVar,
+                      HiddenOutVar,
+                      TempData,
+                      Outputs,
+                      HiddenVals,
+                      StateVals,
+                      WeightVals,
+                      Hid2WeightJacobian,
+                      Hid2HidJacobian)
 
 # TODO
 # - [ ] The visualization of the etrace graph.
@@ -292,13 +292,18 @@ class HiddenGroupRelation(NamedTuple):
   input_vars: List[WeightXVar]  # the input variables for the computing hidden state transitions
   jaxpr: jax.core.Jaxpr  # the jaxpr for the hidden state transitions
 
-  def is_this_relation(self, hiddens: Sequence[HiddenOutVar]) -> bool:
+  def is_this_relation(
+      self,
+      hiddens: Sequence[HiddenOutVar]
+  ) -> bool:
     return set(self.hidden_outvars) == set(hiddens)
 
-  def state_transition(self,
-                       old_hidden_vals: HiddenVals,
-                       input_vals: WeightVals,
-                       return_index: int = None) -> HiddenVals | jax.Array:
+  def state_transition(
+      self,
+      old_hidden_vals: HiddenVals,
+      input_vals: WeightVals,
+      return_index: Optional[int] = None
+  ) -> HiddenVals | jax.Array:
     """
     Computing the hidden state transitions.
 
@@ -1229,23 +1234,28 @@ class ETraceGraph:
   """
   __module__ = 'brainscale'
 
-  # attributes for the graph
+  # [ Attributes for the graph ]
   out_all_jaxvars: List[jax.core.Var]  # all outvars except the function returns
   out_state_jaxvars: List[jax.core.Var]  # the state vars
   out_wx_jaxvars: List[jax.core.Var]  # the weight x
   hid2hid_jaxvars: List[jax.core.Var]  # the hidden to hidden vars
-  ret_num: int  # the number of function returns
+  num_out: int  # the number of function returns
   hidden_id_to_outvar: Dict[StateID, jax.core.Var]  # the hidden state's jax outvar
   hidden_outvar_to_invar: Dict[HiddenOutVar, HiddenInVar]  # the hidden state's jax outvar to invar
 
   # [ KEY ]
-  # The most important data structure for the graph, which implementing
-  # the relationship between the etrace weights and the etrace variables.
+  # 1. The most important data structure for the graph, which implementing
+  #    the relationship between the etrace weights and the etrace variables.
   hidden_param_op_relations: List[HiddenWeightOpRelation]
-  # The relationship between the hidden states.
+
+  # 2. The relationship between the hidden states.
   hidden_group_relations: Dict[FrozenSet[HiddenInVar], HiddenGroupRelation]
 
-  def __init__(self, model: Callable, diag_jacobian: str | Enum = 'exact'):
+  def __init__(
+      self,
+      model: Callable,
+      diag_jacobian: str | Enum = 'exact',
+  ):
     # The original model
     self.model = model
 
@@ -1261,13 +1271,8 @@ class ETraceGraph:
     # wrap the model so that we can track the iteration number
     self.stateful_model = bst.transform.StatefulFunction(model)
 
-    # --- jaxpr for the model computation --- #
-
-    # the revised jaxpr to return necessary variables
-    self.revised_jaxpr: jax.core.ClosedJaxpr = None
-
-    # the revised jaxpr with hidden state perturbations and return necessary variables
-    self.jaxpr_with_hidden_perturb: jax.core.ClosedJaxpr = None
+    # The augmented jaxpr to return all necessary variables
+    self.augmented_jaxpr: jax.core.ClosedJaxpr = None
 
   @property
   def states(self):
@@ -1276,7 +1281,11 @@ class ETraceGraph:
     """
     return self.stateful_model.get_states()
 
-  def compile_graph(self, *args, **kwargs):
+  def compile_graph(
+      self,
+      *args,
+      **kwargs,
+  ):
     """
     Building the eligibility trace graph for the model according to the given inputs.
     """
@@ -1291,6 +1300,7 @@ class ETraceGraph:
     # -- states -- #
     states = self.stateful_model.get_states()
     id_to_state = {id(st): st for st in states}
+    self.id_to_state = id_to_state
 
     # -- jaxpr -- #
     closed_jaxpr = self.stateful_model.get_jaxpr()
@@ -1299,35 +1309,42 @@ class ETraceGraph:
     # -- finding the corresponding in/out vars of etrace states and weights -- #
     out_shapes = self.stateful_model.get_out_shapes()[0]
     state_vals = [state.value for state in states]
-    arg_avals, _ = jax.tree.flatten((args, kwargs))
-    ret_avals, _ = jax.tree.flatten(out_shapes)
-    ret_num = len(ret_avals)
+    in_avals, _ = jax.tree.flatten((args, kwargs))
+    out_avals, _ = jax.tree.flatten(out_shapes)
+    num_in = len(in_avals)
+    num_out = len(out_avals)
     state_avals, state_tree = jax.tree.flatten(state_vals)
-    assert len(jaxpr.invars) == len(arg_avals) + len(state_avals)
-    assert len(jaxpr.outvars) == ret_num + len(state_avals)
-    self.ret_num = ret_num
-    invars_with_state_tree = jax.tree.unflatten(state_tree, jaxpr.invars[len(arg_avals):])
-    outvars_with_state_tree = jax.tree.unflatten(state_tree, jaxpr.outvars[ret_num:])
+    assert len(jaxpr.invars) == len(in_avals) + len(state_avals)
+    assert len(jaxpr.outvars) == num_out + len(state_avals)
+    self.num_out = num_out
+    invars_with_state_tree = jax.tree.unflatten(state_tree, jaxpr.invars[num_in:])
+    outvars_with_state_tree = jax.tree.unflatten(state_tree, jaxpr.outvars[num_out:])
 
     # -- checking weights as invar -- #
-    weight_id_to_invar = {id(st): jax.tree.leaves(invar)
-                          for invar, st in zip(invars_with_state_tree, states)
-                          if isinstance(st, ETraceParam)}
-    hidden_id_to_invar = {id(st): invar
-                          for invar, st in zip(invars_with_state_tree, states)
-                          if isinstance(st, ETraceVar)}  # ETraceVar only contains one Array, "invar" is the jaxpr var
-    invar_to_weight_id = {v: k for k, vs in weight_id_to_invar.items() for v in vs}
+    weight_id_to_invar = {
+      id(st): jax.tree.leaves(invar)
+      for invar, st in zip(invars_with_state_tree, states) if isinstance(st, ETraceParam)
+    }
+    hidden_id_to_invar = {
+      id(st): invar  # ETraceVar only contains one Array, "invar" is the jaxpr var
+      for invar, st in zip(invars_with_state_tree, states) if isinstance(st, ETraceVar)
+    }
+    invar_to_weight_id = {
+      v: k for k, vs in weight_id_to_invar.items() for v in vs
+    }
+    self.hidden_id_to_invar = hidden_id_to_invar
 
     # -- checking states as outvar -- #
     hidden_id_to_outvar = {
-      id(st): outvar
-      for outvar, st in zip(outvars_with_state_tree, states)
-      if isinstance(st, ETraceVar)
-    }  # ETraceVar only contains one Array, "outvar" is the jaxpr var
-    outvar_to_state_id = {v: state_id for state_id, v in hidden_id_to_outvar.items()}
+      id(st): outvar  # ETraceVar only contains one Array, "outvar" is the jaxpr var
+      for outvar, st in zip(outvars_with_state_tree, states) if isinstance(st, ETraceVar)
+    }
+    self.outvar_to_state_id = {v: state_id for state_id, v in hidden_id_to_outvar.items()}
     self.hidden_id_to_outvar = hidden_id_to_outvar
-    self.hidden_outvar_to_invar = {outvar: hidden_id_to_invar[hid]
-                                   for hid, outvar in hidden_id_to_outvar.items()}
+    self.hidden_outvar_to_invar = {
+      outvar: hidden_id_to_invar[hid]
+      for hid, outvar in hidden_id_to_outvar.items()
+    }
     self.hidden_outvar_to_hidden = {
       outvar: st
       for outvar, st in zip(outvars_with_state_tree, states)
@@ -1358,7 +1375,9 @@ class ETraceGraph:
 
     else:
       hidden_param_op_relations = [_trace_simplify(tracer) for tracer in hid_param_op_tracers]
+      # empty dict if we use the VJP or JVP method to compute the hidden-hidden Jacobian
       self.hidden_group_relations = dict()
+
     self.hidden_param_op_relations = hidden_param_op_relations
 
     # --- Collect the Var needed to compute the weight spatial gradients --- #
@@ -1367,7 +1386,7 @@ class ETraceGraph:
     # -- new outvars -- #
 
     # all states jaxpr var
-    self.out_state_jaxvars = list(jaxpr.outvars[ret_num:])
+    self.out_state_jaxvars = list(jaxpr.outvars[num_out:])
     weight_jaxvar_tree, hidden_jaxvar, other_state_jaxvar_tree = split_state_values(states, outvars_with_state_tree)
 
     # all weight jaxpr var
@@ -1380,43 +1399,49 @@ class ETraceGraph:
     self.out_othstate_jaxvars = jax.tree.leaves(other_state_jaxvar_tree)
 
     # all weight x
-    self.out_wx_jaxvars = list(set([relation.x for relation in hidden_param_op_relations]))
+    self.out_wx_jaxvars = list(
+      set([relation.x for relation in hidden_param_op_relations])
+    )
 
     # all y-to-hidden vars
     out_wy2hid_jaxvars = list(
-      set([v for relation in self.hidden_param_op_relations
-           for v in (relation.jaxpr_y2hid.invars + relation.jaxpr_y2hid.constvars)])
+      set(
+        [v for relation in self.hidden_param_op_relations
+         for v in (relation.jaxpr_y2hid.invars + relation.jaxpr_y2hid.constvars)]
+      )
     )
 
     # hidden-hidden transition vars
     self.hid2hid_jaxvars = list(
-      set([v for group in self.hidden_group_relations.values() for v in group.input_vars] +
-          [v for group in self.hidden_group_relations.values() for v in group.hidden_invars])
+      set(
+        [v for group in self.hidden_group_relations.values() for v in group.input_vars] +
+        [v for group in self.hidden_group_relations.values() for v in group.hidden_invars]
+      )
     )
-    all_outvars = list(set(self.out_state_jaxvars +
-                           self.out_wx_jaxvars +
-                           out_wy2hid_jaxvars +
-                           self.hid2hid_jaxvars))
-    self.out_all_jaxvars = jaxpr.outvars[:ret_num] + all_outvars
+    all_outvars = list(
+      set(
+        self.out_state_jaxvars +  # all state variables
+        self.out_wx_jaxvars +  # all weight x
+        out_wy2hid_jaxvars +  # all y-to-hidden invars
+        self.hid2hid_jaxvars  # all hidden-hidden transition vars
+      )
+    )
+    self.out_all_jaxvars = jaxpr.outvars[:num_out] + all_outvars
 
-    # new jaxpr
-    jaxpr = jax.core.Jaxpr(constvars=list(jaxpr.constvars),
-                           invars=list(jaxpr.invars),
-                           outvars=list(self.out_all_jaxvars),
-                           eqns=list(jaxpr.eqns))
+    # Rewrite jaxpr to return all necessary variables, including
+    #   1. the original function outputs
+    #   2. the hidden states
+    #   3. the weight x   ===>  for computing the weight spatial gradients
+    #   4. the y-to-hidden variables   ===>  for computing the weight spatial gradients
+    #   5. the hidden-hidden transition variables   ===>  for computing the hidden-hidden jacobian
+    jaxpr = jax.core.Jaxpr(
+      constvars=list(jaxpr.constvars),
+      invars=list(jaxpr.invars),
+      outvars=list(self.out_all_jaxvars),
+      eqns=list(jaxpr.eqns)
+    )
     closed_jaxpr = jax.core.ClosedJaxpr(jaxpr, closed_jaxpr.consts)
-    self.revised_jaxpr = closed_jaxpr
-
-    # ---               add perturbations to the hidden states                  --- #
-    # --- new jaxpr with hidden state perturbations for computing the residuals --- #
-    evaluator = JaxprEvaluationForHiddenPerturbation(
-      closed_jaxpr=closed_jaxpr,
-      hidden_outvars=self.out_hidden_jaxvars,
-      outvar_to_state_id=outvar_to_state_id,
-      id_to_state=id_to_state,
-      hidden_invars=list(hidden_id_to_invar.values()),
-    )
-    self.jaxpr_with_hidden_perturb = evaluator.compile()
+    self.augmented_jaxpr = closed_jaxpr
 
     return self
 
@@ -1424,7 +1449,7 @@ class ETraceGraph:
     """
     Showing the graph about the relationship between weight, operator, and hidden states.
     """
-    if self.revised_jaxpr is None:
+    if self.augmented_jaxpr is None:
       raise ValueError(f'Please compile the graph first by calling ".{self.compile_graph.__name__}()" function.')
 
     for i, hpo_relation in enumerate(self.hidden_param_op_relations):
@@ -1455,19 +1480,100 @@ class ETraceGraph:
       msg += '---' * 40 + '\n\n'
       print(msg)
 
-  def _call_org_model(self, *args, **kwargs):
-    """
-    Calling the original model according to the given inputs and parameters.
-    """
-    return self.model(*args, **kwargs)
+  def solve_h2w_h2h_jacobian(
+      self,
+      *args,
+  ) -> Tuple[Outputs, HiddenVals, StateVals, Hid2WeightJacobian, Hid2HidJacobian]:
+    r"""
+    Solving the hidden-to-weight and hidden-to-hidden Jacobian according to the given inputs and parameters.
 
-  def _call_org_model_with_jaxpr(self, *args):
-    """
-    Calling the original model with the model's jaxpr representation.
-    """
-    return self.stateful_model.jaxpr_call(*args)
+    This function is typically used for computing the forward propagation of hidden-to-weight Jacobian.
 
-  def _jaxpr_compute_model(self, *args, **kwargs) -> Tuple[PyTree, HiddenVals, StateVals, TempData]:
+    Particularly, this function aims to solve:
+
+    1. The Jacobian matrix of hidden-to-weight. That is,
+       :math:`\partial h / \partial w`, where :math:`h` is the hidden state and :math:`w` is the weight.
+    2. The Jacobian matrix of hidden-to-hidden. That is,
+       :math:`\partial h / \partial h`, where :math:`h` is the hidden state.
+
+    Args:
+      *args: The positional arguments for the model.
+
+    Returns:
+      The outputs, hidden states, other states, and the spatial gradients of the weights.
+    """
+    raise NotImplementedError
+
+  def solve_h2w_h2h_jacobian_and_l2h_vjp(
+      self,
+      *args,
+  ) -> Tuple[Outputs, HiddenVals, StateVals, Hid2WeightJacobian, Hid2HidJacobian, Residuals]:
+    r"""
+    Solving the hidden-to-weight and hidden-to-hidden Jacobian and the VJP transformed loss-to-hidden
+    gradients according to the given inputs.
+
+    This function is typically used for computing both the forward propagation of hidden-to-weight Jacobian
+    and the loss-to-hidden gradients at the current time-step.
+
+    Particularly, this function aims to solve:
+
+    1. The Jacobian matrix of hidden-to-weight. That is,
+       :math:`\partial h / \partial w`, where :math:`h` is the hidden state and :math:`w` is the weight.
+    2. The Jacobian matrix of hidden-to-hidden. That is,
+       :math:`\partial h / \partial h`, where :math:`h` is the hidden state.
+    3. The partial gradients of the loss with respect to the hidden states.
+       That is, :math:`\partial L / \partial h`, where :math:`L` is the loss and :math:`h` is the hidden state.
+
+    Args:
+      *args: The positional arguments for the model.
+
+    Returns:
+      The outputs, hidden states, other states, the spatial gradients of the weights, and the residuals.
+    """
+    raise NotImplementedError
+
+
+class ETraceGraphForVJP(ETraceGraph):
+  def __init__(
+      self,
+      model: Callable,
+      diag_jacobian: str | Enum = 'exact',
+      vjp_time: str = 'current',
+  ):
+    super().__init__(model, diag_jacobian)
+
+    # the revised jaxpr with hidden state perturbations and return necessary variables
+    self.jaxpr_with_hidden_perturb: jax.core.ClosedJaxpr = None
+
+    # the time for computing the VJP
+    assert vjp_time in ['current', 'last'], 'The VJP time should be either "current" or "last".'
+    self.vjp_time = vjp_time
+
+  def compile_graph(
+      self,
+      *args,
+      **kwargs,
+  ):
+    super().compile_graph(*args, **kwargs)
+
+    if self.vjp_time == 'current':
+      # ---               add perturbations to the hidden states                  --- #
+      # --- new jaxpr with hidden state perturbations for computing the residuals --- #
+      evaluator = JaxprEvaluationForHiddenPerturbation(
+        closed_jaxpr=self.augmented_jaxpr,
+        hidden_outvars=self.out_hidden_jaxvars,
+        outvar_to_state_id=self.outvar_to_state_id,
+        id_to_state=self.id_to_state,
+        hidden_invars=list(self.hidden_id_to_invar.values()),
+      )
+      self.jaxpr_with_hidden_perturb = evaluator.compile()
+    return self
+
+  def _jaxpr_compute_model(
+      self,
+      *args,
+      **kwargs,
+  ) -> Tuple[PyTree, HiddenVals, StateVals, TempData]:
     """
     Computing the model according to the given inputs and parameters by using the compiled jaxpr.
     """
@@ -1478,74 +1584,28 @@ class ETraceGraph:
     args = jax.tree.flatten((args, kwargs, old_state_vals))[0]
 
     # calling the function
-    jaxpr_outs = jax.core.eval_jaxpr(self.revised_jaxpr.jaxpr, self.revised_jaxpr.consts, *args)
+    jaxpr_outs = jax.core.eval_jaxpr(self.augmented_jaxpr.jaxpr, self.augmented_jaxpr.consts, *args)
 
     # intermediate values
-    temps = {v: r for v, r in zip(self.out_all_jaxvars[self.ret_num:], jaxpr_outs[self.ret_num:])}
+    temps = {v: r for v, r in zip(self.out_all_jaxvars[self.num_out:], jaxpr_outs[self.num_out:])}
 
     # recovery outputs of ``stateful_model``
     state_outs = [temps[v] for v in self.out_state_jaxvars]
-    out, new_state_vals = self.stateful_model.get_out_treedef().unflatten(jaxpr_outs[:self.ret_num] + state_outs)
+    out, new_state_vals = self.stateful_model.get_out_treedef().unflatten(jaxpr_outs[:self.num_out] + state_outs)
 
     # state value assignment
     assert len(old_state_vals) == len(new_state_vals), 'State length mismatch.'
     # TODO: [KEY] assuming that the weight values are not changed
-    hidden_vals, oth_state_vals = split_state_values(self.stateful_model.get_states(),
-                                                     new_state_vals,
-                                                     include_weight=False)
+    hidden_vals, oth_state_vals = split_state_values(
+      self.stateful_model.get_states(),
+      new_state_vals,
+      include_weight=False
+    )
     return out, hidden_vals, oth_state_vals, temps
 
-  def _jaxpr_compute_vjp_model(self, *args) -> Tuple[PyTree, HiddenVals, StateVals, TempData, Residuals]:
-    """
-    Computing the VJP transformed model according to the given inputs and parameters by using the compiled jaxpr.
-    """
-    _, hidden_states, non_etrace_weight_states, other_states = split_states_v2(self.stateful_model.get_states())
-
-    def fun_for_vjp(inputs, hiddens, non_etrace_weights, oth_states, perturbs):
-      # assign and get state values
-      assign_state_values(hidden_states, hiddens)
-      assign_state_values(non_etrace_weight_states, non_etrace_weights)
-      assign_state_values(other_states, oth_states)
-      old_state_vals = [st.value for st in self.stateful_model.get_states()]
-
-      # calling the function
-      jaxpr_outs = jax.core.eval_jaxpr(self.jaxpr_with_hidden_perturb.jaxpr,
-                                       self.jaxpr_with_hidden_perturb.consts,
-                                       *jax.tree.leaves((inputs, old_state_vals, perturbs)))
-
-      # intermediate values
-      temps = {v: r for v, r in zip(self.out_all_jaxvars[self.ret_num:], jaxpr_outs[self.ret_num:])}
-
-      # outputs
-      state_outs = [temps[v] for v in self.out_state_jaxvars]
-      out, new_state_vals = self.stateful_model.get_out_treedef().unflatten(jaxpr_outs[:self.ret_num] + state_outs)
-      new_hiddens, new_others = split_state_values(self.stateful_model.get_states(),
-                                                   new_state_vals,
-                                                   include_weight=False)
-      return (out, new_hiddens, new_others), temps
-
-    # TODO:
-    #  [KEY] assuming that the weight values (including etrace weights and normal param weights) are not changed
-    hidden_perturbs = [jnp.zeros(v.aval.shape, v.aval.dtype) for v in self.out_hidden_jaxvars]
-    hidden_vals = [st.value for st in hidden_states]
-    non_etrace_weight_vals = [st.value for st in non_etrace_weight_states]
-    other_vals = [st.value for st in other_states]
-    # VJP calling
-    (out, hidden_vals, other_vals), f_vjp, temps = jax.vjp(
-      fun_for_vjp,  # the function
-      args, hidden_vals, non_etrace_weight_vals, other_vals, hidden_perturbs,  # the inputs
-      has_aux=True
-    )
-    out_flat, out_tree = jax.tree.flatten(((out, hidden_vals, other_vals),))
-    rule, in_tree = jax.api_util.flatten_fun_nokwargs(lu.wrap_init(f_vjp), out_tree)
-    out_avals = [jax.core.get_aval(x).at_least_vspace() for x in out_flat]
-    jaxpr, _, consts = pe.trace_to_jaxpr_dynamic(rule, out_avals)
-    # recovering the other non-etrace weights, although the weights are not changed
-    assign_state_values(non_etrace_weight_states, non_etrace_weight_vals)
-    return out, hidden_vals, other_vals, temps, Residuals(jaxpr, in_tree(), out_tree, consts)
-
   def _compute_hid2weight_jacobian(
-      self, intermediate_values: dict
+      self,
+      intermediate_values: dict
   ) -> Tuple[Dict[WeightXVar, jax.Array], Dict[Tuple[WeightYVar, HiddenOutVar], jax.Array]]:
     """
     Computing the weight x and df values for the spatial gradients.
@@ -1564,7 +1624,7 @@ class ETraceGraph:
     for relation in self.hidden_param_op_relations:
       consts = [intermediate_values[var] for var in relation.jaxpr_y2hid.constvars]
       invars = [intermediate_values[var] for var in relation.jaxpr_y2hid.invars]  # weight y
-      assert len(invars) == 1
+      assert len(invars) == 1, 'The weight y should be unique.'
 
       # [ KEY ]
       #
@@ -1582,9 +1642,11 @@ class ETraceGraph:
       # However, for general cases, we choose to use ``jax.vjp`` to compute the gradients.
       #
       # # ---- Method 3: using ``jax.jvp`` ---- #
-      primals, tangents = jax.jvp(lambda x: jax.core.eval_jaxpr(relation.jaxpr_y2hid, consts, x),
-                                  invars,
-                                  [jnp.ones(invars[0].shape, invars[0].dtype)])
+      primals, tangents = jax.jvp(
+        lambda x: jax.core.eval_jaxpr(relation.jaxpr_y2hid, consts, x),
+        invars,
+        [jnp.ones(invars[0].shape, invars[0].dtype)]
+      )
 
       # get the df we want
       for i, hidden_var in enumerate(relation.jaxpr_y2hid.outvars):  # hidden states
@@ -1593,17 +1655,24 @@ class ETraceGraph:
     # all x and df values
     return xs, dfs
 
-  def _compute_hid2hid_needed_data(self, temps, ):
+  def _compute_hid2hid_needed_data(self, temps):
     return {v: temps[v] for v in self.hid2hid_jaxvars}
 
-  def solve_h2w_jacobian(
-      self, *args,
+  def solve_h2w_h2h_jacobian(
+      self,
+      *args,
   ) -> Tuple[Outputs, HiddenVals, StateVals, Hid2WeightJacobian, Hid2HidJacobian]:
     r"""
-    Solving the weight Jacobian according to the given inputs and parameters.
+    Solving the hidden-to-weight and hidden-to-hidden Jacobian according to the given inputs and parameters.
 
-    Particularly, this function aims to solve the Jacobian matrix of hidden states with respect to the weights.
-    That is, :math:`\partial h / \partial w`, where :math:`h` is the hidden state and :math:`w` is the weight.
+    This function is typically used for computing the forward propagation of hidden-to-weight Jacobian.
+
+    Particularly, this function aims to solve:
+
+    1. The Jacobian matrix of hidden-to-weight. That is,
+       :math:`\partial h / \partial w`, where :math:`h` is the hidden state and :math:`w` is the weight.
+    2. The Jacobian matrix of hidden-to-hidden. That is,
+       :math:`\partial h / \partial h`, where :math:`h` is the hidden state.
 
     Args:
       *args: The positional arguments for the model.
@@ -1612,7 +1681,7 @@ class ETraceGraph:
       The outputs, hidden states, other states, and the spatial gradients of the weights.
     """
     # --- compile the model --- #
-    if self.revised_jaxpr is None:
+    if self.augmented_jaxpr is None:
       raise ValueError('The ETraceGraph object has not been built yet.')
 
     # --- call the model --- #
@@ -1623,18 +1692,151 @@ class ETraceGraph:
     hid2hid_data = self._compute_hid2hid_needed_data(temps)
     return out, hiddens, others, hid2weight_jac, hid2hid_data
 
-  def solve_h2w_jacobian_and_l2h_vjp(
-      self, *args,
+  def _jaxpr_compute_vjp_model_at_current(
+      self,
+      *args
+  ) -> Tuple[PyTree, HiddenVals, StateVals, TempData, Residuals]:
+    """
+    Computing the VJP transformed model according to the given inputs and parameters by using the compiled jaxpr.
+    """
+    _, hidden_states, non_etrace_weight_states, other_states = split_states_v2(self.stateful_model.get_states())
+
+    def fun_for_vjp(inputs, hiddens, non_etrace_weights, oth_states, perturbs):
+      # assign state values
+      assign_state_values(hidden_states, hiddens)
+      assign_state_values(non_etrace_weight_states, non_etrace_weights)
+      assign_state_values(other_states, oth_states)
+      # get state values by the "stateful_model", to preserve the order of states
+      old_state_vals = [st.value for st in self.stateful_model.get_states()]
+
+      # calling the function
+      jaxpr_outs = jax.core.eval_jaxpr(
+        self.jaxpr_with_hidden_perturb.jaxpr,
+        self.jaxpr_with_hidden_perturb.consts,
+        *jax.tree.leaves((inputs, old_state_vals, perturbs))
+      )
+
+      # intermediate values
+      temps = {v: r for v, r in zip(self.out_all_jaxvars[self.num_out:], jaxpr_outs[self.num_out:])}
+
+      # outputs
+      state_outs = [temps[v] for v in self.out_state_jaxvars]
+      out, new_state_vals = self.stateful_model.get_out_treedef().unflatten(jaxpr_outs[:self.num_out] + state_outs)
+      new_hiddens, new_others = split_state_values(
+        self.stateful_model.get_states(),
+        new_state_vals,
+        include_weight=False
+      )
+      return (out, new_hiddens, new_others), temps
+
+    #  [KEY]
+    #  The most important assumption here is
+    #  that the weight values (including etrace weights and normal param weights) are not changed
+
+    hidden_perturbs = [jnp.zeros(v.aval.shape, v.aval.dtype) for v in self.out_hidden_jaxvars]
+    hidden_vals = [st.value for st in hidden_states]
+    non_etrace_weight_vals = [st.value for st in non_etrace_weight_states]
+    other_vals = [st.value for st in other_states]
+
+    # VJP calling
+    (out, hidden_vals, other_vals), f_vjp, temps = jax.vjp(
+      fun_for_vjp,  # the function
+      args, hidden_vals, non_etrace_weight_vals, other_vals, hidden_perturbs,  # the inputs
+      has_aux=True
+    )
+    out_flat, out_tree = jax.tree.flatten(((out, hidden_vals, other_vals),))
+    rule, in_tree = jax.api_util.flatten_fun_nokwargs(lu.wrap_init(f_vjp), out_tree)
+    out_avals = [jax.core.get_aval(x).at_least_vspace() for x in out_flat]
+    jaxpr, _, consts = pe.trace_to_jaxpr_dynamic(rule, out_avals)
+
+    # recovering the other non-etrace weights, although the weights are not changed
+    assign_state_values(non_etrace_weight_states, non_etrace_weight_vals)
+    return out, hidden_vals, other_vals, temps, Residuals(jaxpr, in_tree(), out_tree, consts)
+
+  def _jaxpr_compute_vjp_model_at_last(
+      self,
+      *args
+  ) -> Tuple[PyTree, HiddenVals, StateVals, TempData, Residuals]:
+    """
+    Computing the VJP transformed model according to the given inputs and parameters by using the compiled jaxpr.
+    """
+    etrace_param_states, hidden_states, non_etrace_weight_states, other_states = (
+      split_states_v2(self.stateful_model.get_states()))
+
+    def fun_for_vjp(inputs, hiddens, non_etrace_weights, etrace_weights, oth_states):
+      # assign state values
+      assign_state_values(hidden_states, hiddens)
+      assign_state_values(etrace_param_states, etrace_weights)
+      assign_state_values(non_etrace_weight_states, non_etrace_weights)
+      assign_state_values(other_states, oth_states)
+      # get state values by the "stateful_model", to preserve the order of states
+      old_state_vals = [st.value for st in self.stateful_model.get_states()]
+
+      # calling the function
+      jaxpr_outs = jax.core.eval_jaxpr(
+        self.augmented_jaxpr.jaxpr,
+        self.augmented_jaxpr.consts,
+        *jax.tree.leaves((inputs, old_state_vals))
+      )
+
+      # intermediate values
+      temps = {v: r for v, r in zip(self.out_all_jaxvars[self.num_out:], jaxpr_outs[self.num_out:])}
+
+      # outputs
+      state_outs = [temps[v] for v in self.out_state_jaxvars]
+      out, new_state_vals = self.stateful_model.get_out_treedef().unflatten(jaxpr_outs[:self.num_out] + state_outs)
+      # get new state values, do not return the weight values, since they are not changed
+      new_hiddens, new_others = split_state_values(
+        self.stateful_model.get_states(),
+        new_state_vals,
+        include_weight=False
+      )
+      return (out, new_hiddens, new_others), temps
+
+    #  [KEY]
+    #  The most important assumption here is
+    #  that the weight values (including etrace weights and normal param weights) are not changed
+
+    etrace_weight_vals = [st.value for st in etrace_param_states]
+    non_etrace_weight_vals = [st.value for st in non_etrace_weight_states]
+    hidden_vals = [st.value for st in hidden_states]
+    other_vals = [st.value for st in other_states]
+
+    # VJP calling
+    (out, hidden_vals, other_vals), f_vjp, temps = jax.vjp(
+      fun_for_vjp,  # the function
+      args, hidden_vals, non_etrace_weight_vals, etrace_weight_vals, other_vals,  # the inputs
+      has_aux=True
+    )
+    out_flat, out_tree = jax.tree.flatten(((out, hidden_vals, other_vals),))
+    rule, in_tree = jax.api_util.flatten_fun_nokwargs(lu.wrap_init(f_vjp), out_tree)
+    out_avals = [jax.core.get_aval(x).at_least_vspace() for x in out_flat]
+    jaxpr, _, consts = pe.trace_to_jaxpr_dynamic(rule, out_avals)
+
+    # recovering the other non-etrace weights,
+    # although the weights are not changed
+    assign_state_values(non_etrace_weight_states, non_etrace_weight_vals)
+    return out, hidden_vals, other_vals, temps, Residuals(jaxpr, in_tree(), out_tree, consts)
+
+  def solve_h2w_h2h_jacobian_and_l2h_vjp(
+      self,
+      *args,
   ) -> Tuple[Outputs, HiddenVals, StateVals, Hid2WeightJacobian, Hid2HidJacobian, Residuals]:
     r"""
-    Solving the weight Jacobian and the VJP transformed loss to hidden gradients according to the given inputs.
+    Solving the hidden-to-weight and hidden-to-hidden Jacobian and the VJP transformed loss-to-hidden
+    gradients according to the given inputs.
 
-    Particularly, this function aims to solve two parts of gradients:
+    This function is typically used for computing both the forward propagation of hidden-to-weight Jacobian
+    and the loss-to-hidden gradients at the current time-step.
 
-    1. The partial gradients of the loss with respect to the hidden states.
+    Particularly, this function aims to solve:
+
+    1. The Jacobian matrix of hidden-to-weight. That is,
+       :math:`\partial h / \partial w`, where :math:`h` is the hidden state and :math:`w` is the weight.
+    2. The Jacobian matrix of hidden-to-hidden. That is,
+       :math:`\partial h / \partial h`, where :math:`h` is the hidden state.
+    3. The partial gradients of the loss with respect to the hidden states.
        That is, :math:`\partial L / \partial h`, where :math:`L` is the loss and :math:`h` is the hidden state.
-    2. The partial gradients of the hidden states with respect to the weights.
-       That is, :math:`\partial h / \partial w`, where :math:`h` is the hidden state and :math:`w` is the weight.
 
     Args:
       *args: The positional arguments for the model.
@@ -1642,11 +1844,16 @@ class ETraceGraph:
     Returns:
       The outputs, hidden states, other states, the spatial gradients of the weights, and the residuals.
     """
-    if self.jaxpr_with_hidden_perturb is None:
+    if not hasattr(self, 'jaxpr_with_hidden_perturb'):
       raise ValueError('The ETraceGraph object has not been built yet.')
 
     # --- call the model --- #
-    out, hidden_vals, other_vals, temps, vjp_residual = self._jaxpr_compute_vjp_model(*args)
+    if self.vjp_time == 'current':
+      out, hidden_vals, other_vals, temps, vjp_residual = self._jaxpr_compute_vjp_model_at_current(*args)
+    elif self.vjp_time == 'last':
+      out, hidden_vals, other_vals, temps, vjp_residual = self._jaxpr_compute_vjp_model_at_last(*args)
+    else:
+      raise ValueError('The VJP time should be either "current" or "last".')
     hid2weight_jac = self._compute_hid2weight_jacobian(temps)
 
     # --- other returns --- #

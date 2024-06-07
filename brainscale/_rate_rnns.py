@@ -24,7 +24,7 @@ from brainstate import init, functional, nn
 
 from ._connections import Linear
 from ._etrace_concepts import ETraceVar, ETraceParamOp
-from .typing import ArrayLike
+from ._typing import ArrayLike
 
 __all__ = [
   'ValinaRNNCell', 'GRUCell', 'MGUCell', 'LSTMCell', 'URLSTMCell',
@@ -82,8 +82,7 @@ class ValinaRNNCell(nn.RNNCell):
 
   def update(self, x):
     xh = jnp.concatenate([x, self.h.value], axis=-1)
-    h = self.W(xh)
-    self.h.value = self.activation(h)
+    self.h.value = self.activation(self.W(xh))
     return self.h.value
 
 

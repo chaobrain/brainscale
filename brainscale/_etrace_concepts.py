@@ -24,7 +24,7 @@ import jax.lax
 import brainstate as bst
 
 from ._misc import BaseEnum
-from .typing import PyTree
+from ._typing import PyTree
 
 __all__ = [
   # eligibility trace related concepts
@@ -32,8 +32,8 @@ __all__ = [
   'ETraceParam',  # the parameter/weight for the etrace-based learning
   'ETraceOp',  # the operator for the etrace-based learning
   'ETraceParamOp',  # the parameter and operator for the etrace-based learning, combining ETraceParam and ETraceOp
-  'NormalParamOp',  # the parameter state with an associated operator
-  'NonTrainParamOp',
+  'BackpropParamOp',  # the parameter state with an associated operator
+  'NoGradParamOp',
   'stop_param_gradients',
 ]
 
@@ -129,7 +129,7 @@ class ETraceOp:
     return y
 
 
-class ETraceGrad(BaseEnum):
+class _ETraceGrad(BaseEnum):
   full = 'full'
   approx = 'approx'
   adaptive = 'adaptive'
@@ -160,7 +160,7 @@ class ETraceParamOp(ETraceParam):
     if grad is None:
       grad = 'adaptive'
     assert isinstance(grad, str), f'Currently, {ETraceParamOp.__name__} only supports str.'
-    self.gradient = ETraceGrad.get(grad)
+    self.gradient = _ETraceGrad.get(grad)
 
     # operation
     if isinstance(op, ETraceOp):
@@ -174,7 +174,7 @@ class ETraceParamOp(ETraceParam):
     return self.op(x, self.value)
 
 
-class NormalParamOp(bst.ParamState):
+class BackpropParamOp(bst.ParamState):
   """
   The Normal Parameter State with an Associated Operator.
 
@@ -192,19 +192,27 @@ class NormalParamOp(bst.ParamState):
   def __init__(
       self,
       value: PyTree,
-      op: Callable
+      op: Callable,
   ):
     super().__init__(value)
 
     # operation
-    assert not isinstance(op, ETraceOp), f'{NormalParamOp.__name__} does not support {ETraceOp.__name__}.'
+    if isinstance(op, ETraceOp):
+      op = op.fun
     self.op = op
 
   def execute(self, x: jax.Array) -> jax.Array:
     return self.op(x, self.value)
 
 
-class NonTrainParamOp(object):
+class NoGradParamOp(object):
+  """
+  The Parameter State with an Associated Operator that does not require to compute gradients.
+
+  Args:
+    value: The value of the parameter.
+    op: The operator for the parameter.
+  """
   __module__ = 'brainscale'
 
   def __init__(
@@ -215,6 +223,9 @@ class NonTrainParamOp(object):
     super().__init__()
 
     self.value = value
+    if isinstance(op, ETraceOp):
+      op = op.fun
+      # raise TypeError(f'{NoGradParamOp.__name__} does not support {ETraceOp.__name__}. Please use ETraceOp.fun instead.')
     self.op = op
 
   def execute(self, x: jax.Array) -> jax.Array:

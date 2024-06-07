@@ -26,9 +26,9 @@ import jax
 import jax.numpy as jnp
 from brainstate import functional, init
 
-from ._etrace_concepts import ETraceParamOp, NormalParamOp, NonTrainParamOp
+from ._etrace_concepts import ETraceParamOp, BackpropParamOp, NoGradParamOp
 from ._etrace_operators import MatMulETraceOp
-from .typing import ArrayLike
+from ._typing import ArrayLike
 
 T = TypeVar('T')
 
@@ -116,9 +116,9 @@ class Linear(bst.nn.DnnLayer):
       if as_etrace_weight:
         self.weight_op = ETraceParamOp(params, op, grad='full' if full_etrace else None)
       else:
-        self.weight_op = NormalParamOp(params, op.fun)
+        self.weight_op = BackpropParamOp(params, op.fun)
     else:
-      self.weight_op = NonTrainParamOp(params, op.fun)
+      self.weight_op = NoGradParamOp(params, op.fun)
 
   def update(self, x):
     return self.weight_op.execute(x)
@@ -155,7 +155,7 @@ class SignedWLinear(bst.nn.DnnLayer):
     if as_etrace_weight:
       self.weight_op = ETraceParamOp(weight, self._operation, grad='full' if full_etrace else None)
     else:
-      self.weight_op = NormalParamOp(weight, self._operation)
+      self.weight_op = BackpropParamOp(weight, self._operation)
 
   def _operation(self, x, w):
     if self.w_sign is None:
@@ -238,7 +238,7 @@ class ScaledWSLinear(bst.nn.DnnLayer):
     if as_etrace_weight:
       self.weight_op = ETraceParamOp(params, self._operation, grad='full' if full_etrace else None)
     else:
-      self.weight_op = NormalParamOp(params, self._operation)
+      self.weight_op = BackpropParamOp(params, self._operation)
 
   def update(self, x):
     return self.weight_op.execute(x)
@@ -263,7 +263,7 @@ class _BaseConv(bst.nn.DnnLayer):
   num_spatial_dims: int
 
   # the weight and its operations
-  weight_op: ETraceParamOp | NormalParamOp
+  weight_op: ETraceParamOp | BackpropParamOp
 
   def __init__(
       self,
@@ -403,7 +403,7 @@ class _Conv(_BaseConv):
     if as_etrace_weight:
       self.weight_op = ETraceParamOp(params, op=self._conv_op, grad='full' if full_etrace else None)
     else:
-      self.weight_op = NormalParamOp(params, op=self._conv_op)
+      self.weight_op = BackpropParamOp(params, op=self._conv_op)
 
     # Evaluate the output shape
     abstract_y = jax.eval_shape(self._conv_op,
@@ -581,7 +581,7 @@ class _ScaledWSConv(_BaseConv):
     if as_etrace_weight:
       self.weight_op = ETraceParamOp(params, op=self._conv_op, grad='full' if full_etrace else None)
     else:
-      self.weight_op = NormalParamOp(params, op=self._conv_op)
+      self.weight_op = BackpropParamOp(params, op=self._conv_op)
 
     # Evaluate the output shape
     abstract_y = jax.eval_shape(self._conv_op,
