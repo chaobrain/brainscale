@@ -1,4 +1,4 @@
-# Enabling scalable online learning in biological neural networks
+# Enabling Scalable Online Learning in Biological Neural Networks
 
 <p align="center">
   	<img alt="Header image of brainscale." src="https://github.com/brainpy/brainscale/blob/main/docs/_static/brainscale.jpg" width=50%>
@@ -39,7 +39,6 @@ The official documentation is hosted on Read the Docs: [https://brainscale.readt
 
 - [``braintaichi``](https://github.com/brainpy/braintaichi): Leveraging Taichi Lang to customize brain dynamics operators.
 
-- [``braintools``](https://github.com/brainpy/braintools): The toolbox for the brain dynamics simulation, training and analysis.
-
 - [``brainscale``](https://github.com/brainpy/brainscale): The scalable online learning framework for biological neural networks.
 
+- [``braintools``](https://github.com/brainpy/braintools): The toolbox for the brain dynamics simulation, training and analysis.

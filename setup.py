@@ -49,7 +49,7 @@ packages = find_packages(
 setup(
   name='brainscale',
   version=version,
-  description='The Scalable Online Learning Algorithm and Framework for Biological Spiking Neural Networks.',
+  description='Enabling Scalable Online Learning in Biological Neural Networks.',
   long_description=README,
   long_description_content_type="text/markdown",
   author='BrainPy Team, Chaoming Wang',
