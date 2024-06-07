@@ -24,10 +24,10 @@ from __future__ import annotations
 from functools import partial
 from typing import Dict, Tuple, Any, Callable, List, Protocol, Optional
 
-import braincore as bc
+import brainstate as bst
 import jax.core
 import jax.numpy as jnp
-from braincore.transform._autograd import functional_vector_grad as vgrad
+from brainstate.transform._autograd import functional_vector_grad as vgrad
 
 from ._etrace_compiler import (ETraceGraph,
                                HiddenWeightOpRelation,
@@ -161,11 +161,11 @@ def _normalize(x):
   return jnp.where(jnp.allclose(max_, 0), x, x / max_)
 
 
-class ETraceAlgorithm(bc.Module):
+class ETraceAlgorithm(bst.Module):
   """
   The base class for the eligibility trace algorithm.
 
-  Note than the :py:class:`ETraceAlgorithm` is a subclass of :py:class:`bc.Module`,
+  Note than the :py:class:`ETraceAlgorithm` is a subclass of :py:class:`bst.Module`,
   meaning that it is sensitive to the context/mode of the computation, for example,
   the batching or non-batching mode of the model.
 
@@ -187,16 +187,16 @@ class ETraceAlgorithm(bc.Module):
       Supported only when the ``diag_jacobian`` is ``'vjp'`` or ``'jvp'``. Default is ``None``.
   name: str, optional
       The name of the etrace algorithm.
-  mode: bc.mixin.Mode, optional
+  mode: bst.mixin.Mode, optional
       The mode of the etrace algorithm.
 
   """
   __module__ = 'brainscale'
 
   graph: ETraceGraph  # the etrace graph
-  param_states: List[bc.ParamState]  # the weight states
+  param_states: List[bst.ParamState]  # the weight states
   hidden_states: List[ETraceVar]  # the hidden states
-  other_states: List[bc.State]  # the other states
+  other_states: List[bst.State]  # the other states
   is_compiled: bool  # whether the etrace algorithm has been compiled
   diag_normalize: bool  # whether to normalize the hidden Jacobian diagonal matrix
 
@@ -205,7 +205,7 @@ class ETraceAlgorithm(bc.Module):
                diag_normalize: bool | None = None,
                diag_jacobian: str = 'exact',
                name: str | None = None,
-               mode: bc.mixin.Mode | None = None):
+               mode: bst.mixin.Mode | None = None):
     super().__init__(name=name, mode=mode)
 
     # The method to compute the hidden Jacobian diagonal matrix,
@@ -576,10 +576,10 @@ class DiagETraceAlgorithmForVJP(FakedETraceAlgorithm):
 
 class _OnAlgorithm(Protocol):
   num_snap: int
-  etrace_xs: Dict[WeightXVar, bc.State]
-  etrace_chunked_xs: Dict[WeightXVar, bc.State]
-  etrace_dfs: Dict[Tuple[WeightYVar, HiddenOutVar], bc.State]
-  etrace_chunked_dfs: Dict[Tuple[WeightYVar, HiddenOutVar], bc.State]
+  etrace_xs: Dict[WeightXVar, bst.State]
+  etrace_chunked_xs: Dict[WeightXVar, bst.State]
+  etrace_dfs: Dict[Tuple[WeightYVar, HiddenOutVar], bst.State]
+  etrace_chunked_dfs: Dict[Tuple[WeightYVar, HiddenOutVar], bst.State]
 
 
 def _init_on_state(
@@ -589,18 +589,18 @@ def _init_on_state(
   if relation.x not in self.etrace_xs:
     shape = relation.x.aval.shape
     dtype = relation.x.aval.dtype
-    self.etrace_xs[relation.x] = bc.State(jnp.zeros(shape, dtype))
+    self.etrace_xs[relation.x] = bst.State(jnp.zeros(shape, dtype))
     if self.num_snap > 0:
-      self.etrace_chunked_xs[relation.x] = bc.State(jnp.zeros((self.num_snap + 1,) + shape, dtype))
+      self.etrace_chunked_xs[relation.x] = bst.State(jnp.zeros((self.num_snap + 1,) + shape, dtype))
   for hidden_var in relation.hidden_vars:
     key = (relation.y, hidden_var)
     if key in self.etrace_dfs:
       raise ValueError(f'The relation {key} has been added. ')
     shape = relation.y.aval.shape
     dtype = relation.y.aval.dtype
-    self.etrace_dfs[key] = bc.State(jnp.zeros(shape, dtype))
+    self.etrace_dfs[key] = bst.State(jnp.zeros(shape, dtype))
     if self.num_snap > 0:
-      self.etrace_chunked_dfs[key] = bc.State(jnp.zeros((self.num_snap + 1,) + shape, dtype))
+      self.etrace_chunked_dfs[key] = bst.State(jnp.zeros((self.num_snap + 1,) + shape, dtype))
 
 
 def _update_on_etrace_with_exact_jac(
@@ -622,19 +622,19 @@ def _update_on_etrace_with_exact_jac(
   # is a tuple, including the weight x and df values.
   #
   # For the weight x, it is a dictionary,
-  #    {WeightXVar: bc.State}
+  #    {WeightXVar: bst.State}
   # For the weight df, it is a dictionary,
-  #    {(WeightYVar, HiddenOutVar): bc.State}
+  #    {(WeightYVar, HiddenOutVar): bst.State}
   #
   xs, dfs = hid2weight_jac
 
   #
   # the history etrace values
   #
-  # - hist_xs: {WeightXVar: bc.State}
-  # - hist_dfs: {(WeightYVar, HiddenOutVar): bc.State}
-  # - hist_chunk_xs: {WeightXVar: bc.State}
-  # - hist_chunk_dfs: {(WeightYVar, HiddenOutVar): bc.State}
+  # - hist_xs: {WeightXVar: bst.State}
+  # - hist_dfs: {(WeightYVar, HiddenOutVar): bst.State}
+  # - hist_chunk_xs: {WeightXVar: bst.State}
+  # - hist_chunk_dfs: {(WeightYVar, HiddenOutVar): bst.State}
   #
   hist_xs, hist_dfs, hist_chunk_xs, hist_chunk_dfs = hist_etrace_vals
 
@@ -873,16 +873,16 @@ class DiagExpSmOnAlgorithm(DiagETraceAlgorithmForVJP):
       Supported only when the ``diag_jacobian`` is ``'vjp'`` or ``'jvp'``. Default is ``None``.
   name: str, optional
       The name of the etrace algorithm.
-  mode: bc.mixin.Mode, optional
+  mode: bst.mixin.Mode, optional
       The mode of the etrace algorithm.
   """
 
   __module__ = 'brainscale'
 
-  etrace_xs: Dict[WeightXVar, bc.State]  # the spatial gradients of the weights
-  etrace_dfs: Dict[Tuple[WeightYVar, HiddenOutVar], bc.State]  # the spatial gradients of the hidden states
-  etrace_chunked_xs: Dict[WeightXVar, bc.State]  # the chunked spatial gradients of the weights
-  etrace_chunked_dfs: Dict[Tuple[WeightYVar, HiddenOutVar], bc.State]  # the chunked hidden spatial gradients
+  etrace_xs: Dict[WeightXVar, bst.State]  # the spatial gradients of the weights
+  etrace_dfs: Dict[Tuple[WeightYVar, HiddenOutVar], bst.State]  # the spatial gradients of the hidden states
+  etrace_chunked_xs: Dict[WeightXVar, bst.State]  # the chunked spatial gradients of the weights
+  etrace_chunked_dfs: Dict[Tuple[WeightYVar, HiddenOutVar], bst.State]  # the chunked hidden spatial gradients
   decay: float  # the exponential smoothing decay factor
   num_snap: int  # the number of snap shoot
   snap_freq: int  # the frequency of the snap shoot
@@ -895,7 +895,7 @@ class DiagExpSmOnAlgorithm(DiagETraceAlgorithmForVJP):
                diag_normalize: bool | None = None,
                diag_jacobian: str = 'exact',
                name: str | None = None,
-               mode: bc.mixin.Mode | None = None):
+               mode: bst.mixin.Mode | None = None):
     super().__init__(model,
                      diag_jacobian=diag_jacobian,
                      diag_normalize=diag_normalize,
@@ -913,10 +913,10 @@ class DiagExpSmOnAlgorithm(DiagETraceAlgorithmForVJP):
     # The states of weight spatial gradients:
     #   1. x
     #   2. df
-    self.etrace_xs = bc.visible_state_dict()
-    self.etrace_dfs = bc.visible_state_dict()
-    self.etrace_chunked_xs = bc.visible_state_dict()
-    self.etrace_chunked_dfs = bc.visible_state_dict()
+    self.etrace_xs = bst.visible_state_dict()
+    self.etrace_dfs = bst.visible_state_dict()
+    self.etrace_chunked_xs = bst.visible_state_dict()
+    self.etrace_chunked_dfs = bst.visible_state_dict()
     for relation in self.graph.hidden_param_op_relations:
       _init_on_state(self, relation)
 
@@ -1005,19 +1005,21 @@ class DiagExpSmOnAlgorithm(DiagETraceAlgorithmForVJP):
 
 
 class _On2Algorithm(Protocol):
-  etrace_bwg: Dict[Tuple[WeightID, WeightXVar, HiddenOutVar], bc.State]
-  mode: bc.mixin.Mode
+  etrace_bwg: Dict[Tuple[WeightID, WeightXVar, HiddenOutVar], bst.State]
+  mode: bst.mixin.Mode
 
 
 def _init_on2_state(self: _On2Algorithm, relation: HiddenWeightOpRelation):
   # TODO: assume the batch size is the first dimension
-  batch_size = relation.x.aval.shape[0] if self.mode.has(bc.mixin.Batching) else None
+  batch_size = relation.x.aval.shape[0] if self.mode.has(bst.mixin.Batching) else None
   for hidden_var in relation.hidden_vars:
     key = (id(relation.weight), relation.x, hidden_var)
     if key in self.etrace_bwg:
       raise ValueError(f'The relation {key} has been added. ')
-    self.etrace_bwg[key] = bc.State(jax.tree.map(partial(batched_zeros_like, batch_size),
-                                                 relation.weight.value))
+    self.etrace_bwg[key] = bst.State(
+      jax.tree.map(partial(batched_zeros_like, batch_size),
+                   relation.weight.value)
+    )
 
 
 def _update_on2_etrace_with_exact_jac(
@@ -1029,7 +1031,7 @@ def _update_on2_etrace_with_exact_jac(
     hid_group_relations,
     hidden_outvar_to_invar: Dict,
     diag_normalize: bool,
-    mode: bc.mixin.Mode
+    mode: bst.mixin.Mode
 ):
   #
   # + "hist_etrace_vals" has the following structure:
@@ -1113,7 +1115,7 @@ def _update_on2_etrace_with_jvp_or_vjp_jac(hist_etrace_vals: Dict,
                                            weight_id_to_its_val: Dict,
                                            weight_hidden_relations,
                                            diag_normalize: bool,
-                                           mode: bc.mixin.Mode):
+                                           mode: bst.mixin.Mode):
   #
   # 1. "temporal_jacobian" has the following structure:
   #    - key: the hidden state jax var
@@ -1186,7 +1188,7 @@ def _solve_on2_weight_gradients(
     dG_hiddens: Dict[HiddenOutVar, jax.Array],
     weight_hidden_relations,
     weight_id_to_its_val,
-    mode: bc.mixin.Mode
+    mode: bst.mixin.Mode
 ):
   # update the etrace weight gradients
   temp_data = dict()
@@ -1224,7 +1226,7 @@ def _solve_on2_weight_gradients(
       update_dict(temp_data, weight_id, dg_weight)
 
   # sum up the batched weight gradients
-  if mode.has(bc.mixin.Batching):
+  if mode.has(bst.mixin.Batching):
     for key, val in temp_data.items():
       temp_data[key] = jax.tree_map(lambda x: jnp.sum(x, axis=0), val)
 
@@ -1257,18 +1259,18 @@ class DiagOn2Algorithm(DiagETraceAlgorithmForVJP):
       Supported only when the ``diag_jacobian`` is ``'vjp'`` or ``'jvp'``. Default is ``None``.
   name: str, optional
       The name of the etrace algorithm.
-  mode: bc.mixin.Mode, optional
+  mode: bst.mixin.Mode, optional
       The mode of the etrace algorithm.
   """
 
-  etrace_bwg: Dict[Tuple[WeightID, WeightXVar, HiddenOutVar], bc.State]  # batch of weight gradients
+  etrace_bwg: Dict[Tuple[WeightID, WeightXVar, HiddenOutVar], bst.State]  # batch of weight gradients
 
   def __init__(self,
                model: Callable,
                diag_jacobian: str = 'exact',
                diag_normalize: bool | None = None,
                name: str | None = None,
-               mode: bc.mixin.Mode | None = None):
+               mode: bst.mixin.Mode | None = None):
     super().__init__(model,
                      diag_jacobian=diag_jacobian,
                      diag_normalize=diag_normalize,
@@ -1277,7 +1279,7 @@ class DiagOn2Algorithm(DiagETraceAlgorithmForVJP):
 
   def init_etrace_state(self, *args, **kwargs):
     # The states of batched weight gradients
-    self.etrace_bwg = bc.visible_state_dict()
+    self.etrace_bwg = bst.visible_state_dict()
     for relation in self.graph.hidden_param_op_relations:
       _init_on2_state(self, relation)
 
@@ -1352,13 +1354,13 @@ def _numel(pytree: PyTree):
 
 def _is_weight_need_full_grad(
     relation: HiddenWeightOpRelation,
-    mode: bc.mixin.Mode
+    mode: bst.mixin.Mode
 ):
   if isinstance(relation.weight, ETraceParamOp):
     if relation.weight.gradient == ETraceGrad.full:
       return True
 
-  batch_size = relation.x.shape[0] if mode.has(bc.mixin.Batching) else 1
+  batch_size = relation.x.shape[0] if mode.has(bst.mixin.Batching) else 1
   if _numel(relation.x) + _numel(relation.y) > batch_size * _numel(relation.weight.value):
     return True
 
@@ -1399,16 +1401,16 @@ class DiagHybridAlgorithm(DiagETraceAlgorithmForVJP):
       Supported only when the ``diag_jacobian`` is ``'vjp'`` or ``'jvp'``. Default is ``None``.
   name: str, optional
       The name of the etrace algorithm.
-  mode: bc.mixin.Mode, optional
+  mode: bst.mixin.Mode, optional
       The mode of the etrace algorithm.
   """
-  etrace_xs: Dict[WeightXVar, bc.State]  # the spatial gradients of the weights
-  etrace_dfs: Dict[Tuple[WeightYVar, HiddenOutVar], bc.State]  # the spatial gradients of the hidden states
-  etrace_chunked_xs: Dict[WeightXVar, bc.State]  # the chunked spatial gradients of the weights
+  etrace_xs: Dict[WeightXVar, bst.State]  # the spatial gradients of the weights
+  etrace_dfs: Dict[Tuple[WeightYVar, HiddenOutVar], bst.State]  # the spatial gradients of the hidden states
+  etrace_chunked_xs: Dict[WeightXVar, bst.State]  # the chunked spatial gradients of the weights
   # the chunked spatial gradients of the hidden states
-  etrace_chunked_dfs: Dict[Tuple[WeightYVar, HiddenOutVar], bc.State]
+  etrace_chunked_dfs: Dict[Tuple[WeightYVar, HiddenOutVar], bst.State]
   # batch of weight gradients
-  etrace_bwg: Dict[Tuple[WeightID, WeightXVar, HiddenOutVar], bc.State]
+  etrace_bwg: Dict[Tuple[WeightID, WeightXVar, HiddenOutVar], bst.State]
   decay: float  # the exponential smoothing decay factor
 
   def __init__(self,
@@ -1419,7 +1421,7 @@ class DiagHybridAlgorithm(DiagETraceAlgorithmForVJP):
                diag_jacobian: str = 'exact',
                diag_normalize: bool | None = None,
                name: str | None = None,
-               mode: bc.mixin.Mode | None = None):
+               mode: bst.mixin.Mode | None = None):
     super().__init__(model,
                      diag_jacobian=diag_jacobian,
                      diag_normalize=diag_normalize,
@@ -1440,11 +1442,11 @@ class DiagHybridAlgorithm(DiagETraceAlgorithmForVJP):
     #   2. df
     #   3. batched weight gradients
     #
-    self.etrace_xs = bc.visible_state_dict()
-    self.etrace_dfs = bc.visible_state_dict()
-    self.etrace_bwg = bc.visible_state_dict()
-    self.etrace_chunked_xs = bc.visible_state_dict()
-    self.etrace_chunked_dfs = bc.visible_state_dict()
+    self.etrace_xs = bst.visible_state_dict()
+    self.etrace_dfs = bst.visible_state_dict()
+    self.etrace_bwg = bst.visible_state_dict()
+    self.etrace_chunked_xs = bst.visible_state_dict()
+    self.etrace_chunked_dfs = bst.visible_state_dict()
 
     for relation in self.graph.hidden_param_op_relations:
       if isinstance(relation.weight, ETraceParamOp):
@@ -1469,7 +1471,7 @@ class DiagHybridAlgorithm(DiagETraceAlgorithmForVJP):
           _init_on_state(self, relation)
           continue
 
-      batch_size = relation.x.shape[0] if self.mode.has(bc.mixin.Batching) else 1
+      batch_size = relation.x.shape[0] if self.mode.has(bst.mixin.Batching) else 1
       if _numel(relation.x) + _numel(relation.y) > batch_size * _numel(relation.weight.value):
         #
         # When the number of elements in the inputs and outputs are bigger than the weight number,
@@ -1630,6 +1632,3 @@ class DiagHybridAlgorithm(DiagETraceAlgorithmForVJP):
 
 class DiagOn2JacAlgorithm(DiagETraceAlgorithmForVJP):
   pass
-
-
-

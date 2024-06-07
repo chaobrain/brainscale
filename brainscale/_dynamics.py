@@ -19,60 +19,24 @@ from __future__ import annotations
 
 from typing import Callable, Optional
 
-import braincore as bc
-import brainpy as bp
+import brainstate as bst
 import jax
 import jax.numpy as jnp
-from braintools import init
+from brainstate import surrogate, init, nn
 
-from ._base import ExplicitInOutSize
 from ._etrace_concepts import ETraceVar
 from .typing import DTypeLike, ArrayLike, Current, Spike, Size
 
 __all__ = [
   # neuron models
-  'Neuron', 'IF', 'LIF', 'ALIF',
+  'IF', 'LIF', 'ALIF',
 
   # synapse models
-  'Synapse', 'Expon', 'STP', 'STD',
+  'Expon', 'STP', 'STD',
 ]
 
 
-class Neuron(bc.Dynamics, ExplicitInOutSize, bc.mixin.Delayed):
-  """
-  Base class for neuronal dynamics.
-
-  Note here we use the ``ExplicitInOutSize`` mixin to explicitly specify the input and output shape.
-
-  Moreover, all neuron models are differentiable since they use surrogate gradient functions to
-  generate the spiking state.
-  """
-  __module__ = 'brainscale'
-
-  def __init__(
-      self,
-      in_size: Size,
-      keep_size: bool = False,
-      spk_fun: Callable = bc.surrogate.InvSquareGrad(),
-      spk_dtype: DTypeLike = None,
-      spk_reset: str = 'soft',
-      detach_spk: bool = False,
-      mode: Optional[bc.mixin.Mode] = None,
-      name: Optional[str] = None,
-  ):
-    super().__init__(in_size, keep_size=keep_size, mode=mode, name=name)
-    self.in_size = tuple(self.varshape)
-    self.out_size = tuple(self.varshape)
-    self.spk_reset = spk_reset
-    self.spk_dtype = spk_dtype
-    self.spk_fun = spk_fun
-    self.detach_spk = detach_spk
-
-  def get_spike(self, *args, **kwargs):
-    raise NotImplementedError
-
-
-class IF(Neuron):
+class IF(bst.nn.Neuron):
   """Integrate-and-fire neuron model."""
   __module__ = 'brainscale'
 
@@ -82,28 +46,25 @@ class IF(Neuron):
       keep_size: bool = False,
       tau: ArrayLike = 5.,
       V_th: ArrayLike = 1.,
-      spk_fun: Callable = bc.surrogate.ReluGrad(),
+      spk_fun: Callable = surrogate.ReluGrad(),
       spk_dtype: DTypeLike = None,
       spk_reset: str = 'soft',
-      mode: bc.mixin.Mode = None,
+      mode: bst.mixin.Mode = None,
       name: str = None,
   ):
     super().__init__(in_size, keep_size=keep_size, name=name, mode=mode,
                      spk_fun=spk_fun, spk_dtype=spk_dtype, spk_reset=spk_reset)
 
     # parameters
-    self.tau = init.parameter(tau, self.varshape)
-    self.V_th = init.parameter(V_th, self.varshape)
-
-    # integral
-    self.integral = bp.odeint(self.dv, method='exp_euler')
+    self.tau = init.param(tau, self.varshape)
+    self.V_th = init.param(V_th, self.varshape)
 
   def dv(self, v, t, x):
     x = self.sum_current_inputs(v, init=x)
     return (-v + x) / self.tau
 
   def init_state(self, batch_size: int = None, **kwargs):
-    self.V = ETraceVar(init.parameter(jnp.zeros, self.varshape, batch_size))
+    self.V = ETraceVar(init.param(jnp.zeros, self.varshape, batch_size))
 
   def get_spike(self, V=None):
     V = self.V.value if V is None else V
@@ -117,12 +78,12 @@ class IF(Neuron):
     V_th = self.V_th if self.spk_reset == 'soft' else jax.lax.stop_gradient(last_V)
     V = last_V - V_th * last_spike
     # membrane potential
-    V = self.integral(V, None, x, bc.environ.get_dt()) + self.sum_delta_inputs()
+    V = nn.exp_euler_step(self.dv, V, None, x) + self.sum_delta_inputs()
     self.V.value = V
     return self.get_spike(V)
 
 
-class LIF(Neuron):
+class LIF(bst.nn.Neuron):
   """Leaky integrate-and-fire neuron model."""
   __module__ = 'brainscale'
 
@@ -134,30 +95,27 @@ class LIF(Neuron):
       V_th: ArrayLike = 1.,
       V_reset: ArrayLike = 0.,
       V_rest: ArrayLike = 0.,
-      spk_fun: Callable = bc.surrogate.ReluGrad(),
+      spk_fun: Callable = surrogate.ReluGrad(),
       spk_dtype: DTypeLike = None,
       spk_reset: str = 'soft',
-      mode: bc.mixin.Mode = None,
+      mode: bst.mixin.Mode = None,
       name: str = None,
   ):
     super().__init__(in_size, keep_size=keep_size, name=name, mode=mode, spk_fun=spk_fun,
                      spk_dtype=spk_dtype, spk_reset=spk_reset)
 
     # parameters
-    self.tau = init.parameter(tau, self.varshape)
-    self.V_th = init.parameter(V_th, self.varshape)
-    self.V_rest = init.parameter(V_rest, self.varshape)
-    self.V_reset = init.parameter(V_reset, self.varshape)
-
-    # integral
-    self.integral = bp.odeint(self.dv, method='exp_euler')
+    self.tau = init.param(tau, self.varshape)
+    self.V_th = init.param(V_th, self.varshape)
+    self.V_rest = init.param(V_rest, self.varshape)
+    self.V_reset = init.param(V_reset, self.varshape)
 
   def dv(self, v, t, x):
     x = self.sum_current_inputs(v, init=x)
     return (-v + self.V_rest + x) / self.tau
 
   def init_state(self, batch_size: int = None, **kwargs):
-    self.V = ETraceVar(init.parameter(init.Constant(self.V_reset), self.varshape, batch_size))
+    self.V = ETraceVar(init.param(init.Constant(self.V_reset), self.varshape, batch_size))
 
   def get_spike(self, V=None):
     V = self.V.value if V is None else V
@@ -170,12 +128,12 @@ class LIF(Neuron):
     V_th = self.V_th if self.spk_reset == 'soft' else jax.lax.stop_gradient(last_v)
     V = last_v - (V_th - self.V_reset) * lst_spk
     # membrane potential
-    V = self.integral(V, None, x) + self.sum_delta_inputs()
+    V = nn.exp_euler_step(self.dv, V, None, x) + self.sum_delta_inputs()
     self.V.value = V
     return self.get_spike(V)
 
 
-class ALIF(Neuron):
+class ALIF(bst.nn.Neuron):
   """Adaptive Leaky Integrate-and-Fire (LIF) neuron model."""
   __module__ = 'brainscale'
 
@@ -187,24 +145,20 @@ class ALIF(Neuron):
       tau_a: ArrayLike = 100.,
       V_th: ArrayLike = 1.,
       beta: ArrayLike = 0.1,
-      spk_fun: Callable = bc.surrogate.ReluGrad(),
+      spk_fun: Callable = surrogate.ReluGrad(),
       spk_dtype: DTypeLike = None,
       spk_reset: str = 'soft',
-      mode: bc.mixin.Mode = None,
+      mode: bst.mixin.Mode = None,
       name: str = None,
   ):
     super().__init__(in_size, keep_size=keep_size, name=name, mode=mode, spk_fun=spk_fun,
                      spk_dtype=spk_dtype, spk_reset=spk_reset)
 
     # parameters
-    self.tau = init.parameter(tau, self.varshape)
-    self.tau_a = init.parameter(tau_a, self.varshape)
-    self.V_th = init.parameter(V_th, self.varshape)
-    self.beta = init.parameter(beta, self.varshape)
-
-    # integral
-    self.integral_v = bp.odeint(self.dv, method='exp_euler')
-    self.integral_a = bp.odeint(self.da, method='exp_euler')
+    self.tau = init.param(tau, self.varshape)
+    self.tau_a = init.param(tau_a, self.varshape)
+    self.V_th = init.param(V_th, self.varshape)
+    self.beta = init.param(beta, self.varshape)
 
   def dv(self, v, t, x):
     x = self.sum_current_inputs(v, init=x)
@@ -214,8 +168,8 @@ class ALIF(Neuron):
     return -a / self.tau_a
 
   def init_state(self, batch_size: int = None, **kwargs):
-    self.V = ETraceVar(init.parameter(init.Constant(0.), self.varshape, batch_size))
-    self.a = ETraceVar(init.parameter(init.Constant(0.), self.varshape, batch_size))
+    self.V = ETraceVar(init.param(init.Constant(0.), self.varshape, batch_size))
+    self.a = ETraceVar(init.param(init.Constant(0.), self.varshape, batch_size))
 
   def get_spike(self, V=None, a=None):
     V = self.V.value if V is None else V
@@ -231,21 +185,14 @@ class ALIF(Neuron):
     V = last_v - V_th * lst_spk
     a = last_a + lst_spk
     # membrane potential
-    V = self.integral_v(V, bc.environ.get('t'), x, dt=bc.environ.get_dt())
-    a = self.integral_a(a, bc.environ.get('t'), dt=bc.environ.get_dt())
+    V = nn.exp_euler_step(self.dv, V, bst.environ.get('t'), x)
+    a = nn.exp_euler_step(self.da, a, bst.environ.get('t'))
     self.V.value = V + self.sum_delta_inputs()
     self.a.value = a
     return self.get_spike(self.V.value, self.a.value)
 
 
-class Synapse(bc.Dynamics, bc.mixin.AlignPost, bc.mixin.Delayed):
-  """
-  Base class for synapse dynamics.
-  """
-  __module__ = 'brainscale'
-
-
-class Expon(Synapse):
+class Expon(bst.nn.Synapse):
   r"""Exponential decay synapse model.
 
   Args:
@@ -258,9 +205,8 @@ class Expon(Synapse):
       self,
       size: Size,
       keep_size: bool = False,
-      method: str = 'exp_auto',
       name: Optional[str] = None,
-      mode: Optional[bc.mixin.Mode] = None,
+      mode: Optional[bst.mixin.Mode] = None,
       tau: ArrayLike = 8.0,
   ):
     super().__init__(name=name,
@@ -269,19 +215,16 @@ class Expon(Synapse):
                      keep_size=keep_size)
 
     # parameters
-    self.tau = init.parameter(tau, self.varshape)
+    self.tau = init.param(tau, self.varshape)
 
-    # function
-    self.integral = bp.odeint(self.derivative, method=method)
-
-  def derivative(self, g, t):
+  def dg(self, g, t):
     return -g / self.tau
 
   def init_state(self, batch_size: int = None, **kwargs):
-    self.g = ETraceVar(init.parameter(init.Constant(0.), self.varshape, batch_size))
+    self.g = ETraceVar(init.param(init.Constant(0.), self.varshape, batch_size))
 
   def update(self, x: Spike = None):
-    self.g.value = self.integral(self.g.value, bc.environ.get('t'), bc.environ.get('dt'))
+    self.g.value = nn.exp_euler_step(self.dg, self.g.value, bst.environ.get('t'))
     if x is not None:
       self.align_post_input_add(x)
     return self.g.value
@@ -293,7 +236,7 @@ class Expon(Synapse):
     return self.g
 
 
-class STP(Synapse):
+class STP(bst.nn.Synapse):
   r"""Synaptic output with short-term plasticity.
 
   %s
@@ -310,9 +253,8 @@ class STP(Synapse):
       self,
       size: Size,
       keep_size: bool = False,
-      method: str = 'exp_auto',
       name: Optional[str] = None,
-      mode: Optional[bc.mixin.Mode] = None,
+      mode: Optional[bst.mixin.Mode] = None,
       U: ArrayLike = 0.15,
       tau_f: ArrayLike = 1500.,
       tau_d: ArrayLike = 200.,
@@ -323,26 +265,24 @@ class STP(Synapse):
                      keep_size=keep_size)
 
     # parameters
-    self.tau_f = init.parameter(tau_f, self.varshape)
-    self.tau_d = init.parameter(tau_d, self.varshape)
-    self.U = init.parameter(U, self.varshape)
-
-    # integral function
-    self.integral = bp.odeint(self.derivative, method=method)
+    self.tau_f = init.param(tau_f, self.varshape)
+    self.tau_d = init.param(tau_d, self.varshape)
+    self.U = init.param(U, self.varshape)
 
   def init_state(self, batch_size: int = None, **kwargs):
-    self.x = ETraceVar(init.parameter(init.Constant(1.), self.varshape, batch_size))
-    self.u = ETraceVar(init.parameter(init.Constant(self.U), self.varshape, batch_size))
+    self.x = ETraceVar(init.param(init.Constant(1.), self.varshape, batch_size))
+    self.u = ETraceVar(init.param(init.Constant(self.U), self.varshape, batch_size))
 
-  @property
-  def derivative(self):
-    du = lambda u, t: self.U - u / self.tau_f
-    dx = lambda x, t: (1 - x) / self.tau_d
-    return bp.JointEq(du, dx)
+  def du(self, u, t):
+    return self.U - u / self.tau_f
 
-  def update(self, pre_spike: Spike):
-    t = bc.environ.get('t')
-    u, x = self.integral(self.u.value, self.x.value, t, bc.environ.get_dt())
+  def dx(self, x, t):
+    return (1 - x) / self.tau_d
+
+  def update(self, pre_spike):
+    t = bst.environ.get('t')
+    u = nn.exp_euler_step(self.du, self.u.value, t)
+    x = nn.exp_euler_step(self.dx, self.x.value, t)
 
     # --- original code:
     #   if pre_spike.dtype == jax.numpy.bool_:
@@ -361,7 +301,7 @@ class STP(Synapse):
     return u * x
 
 
-class STD(Synapse):
+class STD(bst.nn.Synapse):
   r"""Synaptic output with short-term depression.
 
   %s
@@ -377,9 +317,8 @@ class STD(Synapse):
       self,
       size: Size,
       keep_size: bool = False,
-      method: str = 'exp_auto',
       name: Optional[str] = None,
-      mode: Optional[bc.mixin.Mode] = None,
+      mode: Optional[bst.mixin.Mode] = None,
       # synapse parameters
       tau: ArrayLike = 200.,
       U: ArrayLike = 0.07,
@@ -390,18 +329,18 @@ class STD(Synapse):
                      keep_size=keep_size)
 
     # parameters
-    self.tau = init.parameter(tau, self.varshape)
-    self.U = init.parameter(U, self.varshape)
+    self.tau = init.param(tau, self.varshape)
+    self.U = init.param(U, self.varshape)
 
-    # integral function
-    self.integral = bp.odeint(lambda x, t: (1 - x) / self.tau, method=method)
+  def dx(self, x, t):
+    return (1 - x) / self.tau
 
   def init_state(self, batch_size: int = None, **kwargs):
-    self.x = ETraceVar(init.parameter(init.Constant(1.), self.varshape, batch_size))
+    self.x = ETraceVar(init.param(init.Constant(1.), self.varshape, batch_size))
 
   def update(self, pre_spike: Spike):
-    t = bc.environ.get('t')
-    x = self.integral(self.x.value, t, bc.environ.get_dt())
+    t = bst.environ.get('t')
+    x = nn.exp_euler_step(self.dx, self.x.value, t)
 
     # --- original code:
     # self.x.value = bm.where(pre_spike, x - self.U * self.x, x)

@@ -1,4 +1,1 @@
-numpy
-braincore
-braintools
-brainpy
+brainstate

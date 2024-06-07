@@ -18,15 +18,13 @@
 from __future__ import annotations
 
 import numbers
-from typing import Callable
+from typing import Callable, Optional
 
-import braincore as bc
+import brainstate as bst
 import jax
 import jax.numpy as jnp
-from braintools import init
+from brainstate import init, surrogate, nn
 
-from ._base import DnnLayer
-from ._dynamics import Neuron
 from ._etrace_concepts import ETraceParamOp, ETraceVar
 from ._etrace_operators import MatMulETraceOp
 from .typing import Size, ArrayLike, DTypeLike, Spike
@@ -37,7 +35,7 @@ __all__ = [
 ]
 
 
-class LeakyRateReadout(DnnLayer):
+class LeakyRateReadout(nn.DnnLayer):
   """
   Leaky dynamics for the read-out module used in the Real-Time Recurrent Learning.
   """
@@ -49,23 +47,23 @@ class LeakyRateReadout(DnnLayer):
       out_size: Size,
       tau: ArrayLike = 5.,
       w_init: Callable = init.KaimingNormal(),
-      mode: bc.mixin.Mode = None,
-      name: str = None,
+      mode: Optional[bst.mixin.Mode] = None,
+      name: Optional[str] = None,
   ):
     super().__init__(mode=mode, name=name)
 
     # parameters
     self.in_size = (in_size,) if isinstance(in_size, numbers.Integral) else tuple(in_size)
     self.out_size = (out_size,) if isinstance(out_size, numbers.Integral) else tuple(out_size)
-    self.tau = init.parameter(tau, self.in_size)
-    self.decay = jnp.exp(-bc.environ.get_dt() / self.tau)
+    self.tau = init.param(tau, self.in_size)
+    self.decay = jnp.exp(-bst.environ.get_dt() / self.tau)
 
     # weights
-    weight = init.parameter(w_init, (self.in_size[0], self.out_size[0]))
+    weight = init.param(w_init, (self.in_size[0], self.out_size[0]))
     self.weight_op = ETraceParamOp(weight, MatMulETraceOp())
 
   def init_state(self, batch_size=None, **kwargs):
-    self.r = ETraceVar(init.parameter(init.Constant(0.), self.out_size, batch_size))
+    self.r = ETraceVar(init.param(init.Constant(0.), self.out_size, batch_size))
 
   def update(self, x):
     r = self.decay * self.r.value + self.weight_op.execute(x)
@@ -73,7 +71,7 @@ class LeakyRateReadout(DnnLayer):
     return r
 
 
-class LeakySpikeReadout(Neuron):
+class LeakySpikeReadout(nn.Neuron):
   """Integrate-and-fire neuron model."""
 
   __module__ = 'brainscale'
@@ -85,32 +83,29 @@ class LeakySpikeReadout(Neuron):
       tau: ArrayLike = 5.,
       V_th: ArrayLike = 1.,
       w_init: Callable = init.KaimingNormal(),
-      spk_fun: Callable = bc.surrogate.ReluGrad(),
+      spk_fun: Callable = surrogate.ReluGrad(),
       spk_dtype: DTypeLike = None,
       spk_reset: str = 'soft',
-      mode: bc.mixin.Mode = None,
+      mode: bst.mixin.Mode = None,
       name: str = None,
   ):
     super().__init__(in_size, keep_size=keep_size, name=name, mode=mode,
                      spk_fun=spk_fun, spk_dtype=spk_dtype, spk_reset=spk_reset)
 
     # parameters
-    self.tau = init.parameter(tau, (self.num,))
-    self.V_th = init.parameter(V_th, (self.num,))
+    self.tau = init.param(tau, (self.num,))
+    self.V_th = init.param(V_th, (self.num,))
 
     # weights
-    weight = init.parameter(w_init, (self.in_size[0], self.out_size[0]))
+    weight = init.param(w_init, (self.in_size[0], self.out_size[0]))
     self.weight_op = ETraceParamOp(weight, MatMulETraceOp())
-
-    # integral
-    self.integral = bp.odeint(self.dv, method='exp_euler')
 
   def dv(self, v, t, x):
     x = self.sum_current_inputs(v, init=x)
     return (-v + x) / self.tau
 
   def init_state(self, batch_size, **kwargs):
-    self.V = ETraceVar(init.parameter(init.Constant(0.), self.varshape, batch_size))
+    self.V = ETraceVar(init.param(init.Constant(0.), self.varshape, batch_size))
 
   @property
   def spike(self):
@@ -127,6 +122,6 @@ class LeakySpikeReadout(Neuron):
     V_th = self.V_th if self.spk_reset == 'soft' else jax.lax.stop_gradient(last_V)
     V = last_V - V_th * last_spike
     # membrane potential
-    V = self.integral(V, None, self.weight_op.execute(x), bc.environ.get('dt')) + self.sum_delta_inputs()
+    V = nn.exp_euler_step(self.dv, V, None, self.weight_op.execute(x)) + self.sum_delta_inputs()
     self.V.value = V
     return self.get_spike(V)

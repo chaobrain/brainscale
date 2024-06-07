@@ -18,7 +18,7 @@ from __future__ import annotations
 from functools import partial, reduce
 from typing import Tuple, Callable, List, Optional
 
-import braincore as bc
+import brainstate as bst
 import jax
 import jax.core
 import jax.numpy as jnp
@@ -41,7 +41,7 @@ class StandardETraceOp(ETraceOp):
 
   def etrace_update(
       self,
-      mode: bc.mixin.Mode,
+      mode: bst.mixin.Mode,
       w: PyTree,
       dh_to_dw: List[PyTree],
       diag_jac: List[jax.Array],
@@ -52,7 +52,7 @@ class StandardETraceOp(ETraceOp):
 
   def hidden_to_etrace(
       self,
-      mode: bc.mixin.Mode,
+      mode: bst.mixin.Mode,
       w: PyTree,
       dl_to_dh: jax.Array,
       dh_to_dw: PyTree
@@ -87,7 +87,7 @@ class GeneralETraceOp(StandardETraceOp):
 
   def etrace_update(
       self,
-      mode: bc.mixin.Mode,
+      mode: bst.mixin.Mode,
       w: PyTree,
       dh_to_dw: List[PyTree],
       diag_jac: List[jax.Array],
@@ -122,7 +122,7 @@ class GeneralETraceOp(StandardETraceOp):
 
   def hidden_to_etrace(
       self,
-      mode: bc.mixin.Mode,
+      mode: bst.mixin.Mode,
       w: PyTree,
       dl_to_dh: jax.Array,
       dh_to_dw: PyTree
@@ -137,7 +137,7 @@ class GeneralETraceOp(StandardETraceOp):
 
   @staticmethod
   def _dy_to_weight(
-      mode: bc.mixin.Mode,
+      mode: bst.mixin.Mode,
       weight_vals: PyTree,
       op: Callable,
       xinfo: jax.ShapeDtypeStruct,
@@ -156,7 +156,7 @@ class GeneralETraceOp(StandardETraceOp):
 
     # transform
     fun = lambda dh, x: jax.vjp(partial(op, x), weight_vals)[1](dh)[0]
-    if mode.has(bc.mixin.Batching):
+    if mode.has(bst.mixin.Batching):
       x_data = jnp.expand_dims(x_data, axis=1)
       dg_hidden = jnp.expand_dims(dg_hidden, axis=1)
       dG_hidden_like_weight = jax.vmap(fun)(dg_hidden, x_data)
@@ -167,7 +167,7 @@ class GeneralETraceOp(StandardETraceOp):
 
   @staticmethod
   def _dx_dy_to_weight(
-      mode: bc.mixin.Mode,
+      mode: bst.mixin.Mode,
       weight_vals: PyTree,
       op: Callable,
       dg_x: jax.Array,
@@ -180,7 +180,7 @@ class GeneralETraceOp(StandardETraceOp):
     # we can compute the gradient of the weight using the following two merging operations:
 
     fun = lambda dx, dy: jax.vjp(partial(op, dx), weight_vals)[1](dy)[0]
-    if mode.has(bc.mixin.Batching):
+    if mode.has(bst.mixin.Batching):
       dG_weight = jax.vmap(fun)(jnp.expand_dims(dg_x, axis=1), jnp.expand_dims(dg_y, axis=1))
     else:
       dG_weight = fun(dg_x, dg_y)
@@ -226,7 +226,7 @@ class MatMulETraceOp(StandardETraceOp):
 
   def etrace_update(
       self,
-      mode: bc.mixin.Mode,
+      mode: bst.mixin.Mode,
       w: PyTree,
       dh_to_dw: List[PyTree],
       diag_jac: List[jax.Array],
@@ -245,7 +245,7 @@ class MatMulETraceOp(StandardETraceOp):
     diag_mul_dhdw = jax.tree.map(lambda *xs: reduce(jnp.add, xs), *diag_mul_dhdw)
 
     (dh_to_dweight, dh_to_dbias), unflatten = self._format_weight(diag_mul_dhdw)
-    if mode.has(bc.mixin.Batching):
+    if mode.has(bst.mixin.Batching):
       # dh_to_dweight: (batch_size, input_size, hidden_size,)
       # dh_to_dbias: (batch_size, hidden_size,)
       # ph_to_pwx: (batch_size, input_size,)
@@ -265,7 +265,7 @@ class MatMulETraceOp(StandardETraceOp):
 
   def hidden_to_etrace(
       self,
-      mode: bc.mixin.Mode,
+      mode: bst.mixin.Mode,
       w: PyTree,
       dl_to_dh: jax.Array,
       dh_to_dw: PyTree
@@ -275,7 +275,7 @@ class MatMulETraceOp(StandardETraceOp):
     # 3. dh_to_dw: the derivative of the hidden with respect to the weight
 
     (dh_to_dweight, dh_to_dbias), unflatten = self._format_weight(dh_to_dw)
-    if mode.has(bc.mixin.Batching):
+    if mode.has(bst.mixin.Batching):
       # dl_to_dh: (batch_size, hidden_size,)
       # dh_to_dw: (batch_size, input_size, hidden_size,)
       dh_to_dweight = jnp.expand_dims(dl_to_dh, axis=1) * dh_to_dweight

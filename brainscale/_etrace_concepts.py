@@ -20,8 +20,8 @@ from __future__ import annotations
 import contextlib
 from typing import Callable, Sequence, Tuple, List, Optional
 
-import braincore as bc
 import jax.lax
+import brainstate as bst
 
 from ._misc import BaseEnum
 from .typing import PyTree
@@ -60,7 +60,7 @@ def is_etrace_op_enable_gradient(jit_param_name: str):
 # -------------------------------------------------------------------------------------- #
 
 
-class ETraceVar(bc.ShortTermState):
+class ETraceVar(bst.ShortTermState):
   """
   The Eligibility Trace Hidden Variable.
 
@@ -75,7 +75,7 @@ class ETraceVar(bc.ShortTermState):
     self._check_tree = False
 
 
-class ETraceParam(bc.ParamState):
+class ETraceParam(bst.ParamState):
   """
   The Eligibility Trace Weight.
 
@@ -174,7 +174,7 @@ class ETraceParamOp(ETraceParam):
     return self.op(x, self.value)
 
 
-class NormalParamOp(bc.ParamState):
+class NormalParamOp(bst.ParamState):
   """
   The Normal Parameter State with an Associated Operator.
 
@@ -256,7 +256,7 @@ def assign_state_values(states, state_values):
     st.value = val
 
 
-def split_states(states: Sequence[bc.State]) -> Tuple[List[bc.ParamState], List[ETraceVar], List[bc.State]]:
+def split_states(states: Sequence[bst.State]) -> Tuple[List[bst.ParamState], List[ETraceVar], List[bst.State]]:
   """
   Split the states into weight states, hidden states, and other states.
 
@@ -273,7 +273,7 @@ def split_states(states: Sequence[bc.State]) -> Tuple[List[bc.ParamState], List[
   for st in states:
     if isinstance(st, ETraceVar):  # etrace hidden variables
       hidden_states.append(st)
-    elif isinstance(st, bc.ParamState):  # including all weight states, ParamState, ETraceParam
+    elif isinstance(st, bst.ParamState):  # including all weight states, ParamState, ETraceParam
       param_states.append(st)
     else:
       other_states.append(st)
@@ -281,8 +281,8 @@ def split_states(states: Sequence[bc.State]) -> Tuple[List[bc.ParamState], List[
 
 
 def split_states_v2(
-    states: Sequence[bc.State]
-) -> Tuple[List[ETraceParam], List[ETraceVar], List[bc.ParamState], List[bc.State]]:
+    states: Sequence[bst.State]
+) -> Tuple[List[ETraceParam], List[ETraceVar], List[bst.ParamState], List[bst.State]]:
   """
   Split the states into weight states, hidden states, and other states.
 
@@ -314,7 +314,7 @@ def split_states_v2(
       else:
         etrace_param_states.append(st)
     else:
-      if isinstance(st, bc.ParamState):
+      if isinstance(st, bst.ParamState):
         # The ParamState which is not an ETraceParam,
         # should be treated as a normal parameter state
         # and be trained with spatial gradients only
