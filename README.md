@@ -1,3 +1,5 @@
+# Enabling scalable online learning in biological neural networks
+
 <p align="center">
   	<img alt="Header image of brainscale." src="https://github.com/brainpy/brainscale/blob/main/docs/_static/brainscale.jpg" width=50%>
 </p> 
@@ -31,11 +33,13 @@ The official documentation is hosted on Read the Docs: [https://brainscale.readt
 
 ## See also the BDP ecosystem
 
-- [``brainpy``](https://github.com/brainpy/BrainPy): The solution for the general-purpose brain dynamics programming.
+- [``brainstate``](https://github.com/brainpy/brainstate): A ``State``-based transformation system for brain dynamics programming.
 
-- [``braincore``](https://github.com/brainpy/braincore): The core system for the next generation of BrainPy framework.
+- [``brainunit``](https://github.com/brainpy/brainunit): The unit system for brain dynamics programming.
 
-- [``braintools``](https://github.com/brainpy/braintools): The tools for the brain dynamics simulation and analysis.
+- [``braintaichi``](https://github.com/brainpy/braintaichi): Leveraging Taichi Lang to customize brain dynamics operators.
 
-- [``brainscale``](https://github.com/brainpy/brainscale): The scalable online learning for biological spiking neural networks.
+- [``braintools``](https://github.com/brainpy/braintools): The toolbox for the brain dynamics simulation, training and analysis.
+
+- [``brainscale``](https://github.com/brainpy/brainscale): The scalable online learning framework for biological neural networks.
 
