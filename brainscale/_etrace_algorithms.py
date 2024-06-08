@@ -1156,11 +1156,11 @@ class DiagIODimAlgorithm(DiagETraceAlgorithmForVJP):
 
   def _update_etrace_data(
       self,
+      running_index: Optional[int],
       hist_etrace_vals: PyTree,
       hid2weight_jac_at_t: Tuple[Dict[WeightXVar, jax.Array], Dict[Tuple[WeightYVar, HiddenOutVar], jax.Array]],
       data_for_hid2hid_jac_at_t: Dict,
       weight_id_to_its_val: Dict[WeightID, PyTree],
-      running_index: Optional[int]
   ) -> ETraceVals:
 
     if self.diag_jacobian == _DiagJacobian.exact:
@@ -1523,11 +1523,11 @@ class DiagParamDimAlgorithm(DiagETraceAlgorithmForVJP):
 
   def _update_etrace_data(
       self,
+      running_index: Optional[int],
       hist_etrace_vals: Dict[Tuple[WeightID, WeightXVar, HiddenOutVar], PyTree],
       hid2weight_jac_at_t: Tuple[Dict[WeightXVar, jax.Array], Dict[Tuple[WeightYVar, HiddenOutVar], jax.Array]],
       data_for_hid2hid_jac_at_t,
       weight_id_to_its_val: Dict[WeightID, PyTree],
-      running_index: Optional[int]
   ) -> Dict[Tuple[WeightID, WeightXVar, HiddenOutVar], PyTree]:
     if self.diag_jacobian == _DiagJacobian.exact:
       return _update_on2_etrace_with_exact_jac(
@@ -1739,11 +1739,11 @@ class DiagHybridDimAlgorithm(DiagETraceAlgorithmForVJP):
 
   def _update_etrace_data(
       self,
+      running_index: Optional[int],
       hist_etrace_vals: Tuple[Dict, ...],
       hid2weight_jac_at_t: Tuple[Dict[WeightXVar, jax.Array], Dict[Tuple[WeightYVar, HiddenOutVar], jax.Array]],
       data_for_hid2hid_jac_at_t,
       weight_id_to_its_val: Dict[WeightID, PyTree],
-      running_index: Optional[int]
   ) -> Tuple[Dict, ...]:
 
     # the history etrace values
