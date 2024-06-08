@@ -1213,10 +1213,15 @@ def _summarize_source_info(
   return '\n'.join(reversed(frame_strs))
 
 
-class DiagJacobian(BaseEnum):
+class _DiagJacobian(BaseEnum):
   exact = 'exact'
   vjp = 'vjp'
   jvp = 'jvp'
+
+
+class _VJPTime(BaseEnum):
+  t = 't'
+  t_minus_1 = 't-1'
 
 
 class ETraceGraph:
@@ -1260,7 +1265,7 @@ class ETraceGraph:
     self.model = model
 
     # the way to compute diagonal Jacobian
-    self.diag_jacobian = DiagJacobian.get(diag_jacobian)
+    self.diag_jacobian = _DiagJacobian.get(diag_jacobian)
 
     # --- stateful model, for extracting states, weights, and variables --- #
     #
@@ -1281,13 +1286,14 @@ class ETraceGraph:
     """
     return self.stateful_model.get_states()
 
-  def compile_graph(
-      self,
-      *args,
-      **kwargs,
-  ):
+  def compile_graph(self, *args, **kwargs):
     """
     Building the eligibility trace graph for the model according to the given inputs.
+
+    This is the most important method for the eligibility trace graph. It builds the
+    graph for the model, which is used for computing the weight spatial gradients and
+    the hidden state Jacobian.
+
     """
     # -- compile the model -- #
     #
@@ -1363,7 +1369,7 @@ class ETraceGraph:
     hid_param_op_tracers = evaluator.compile()
 
     # -- evaluating the jaxpr for (hidden, hidden) relationships -- #
-    if self.diag_jacobian == DiagJacobian.exact:
+    if self.diag_jacobian == _DiagJacobian.exact:
       evaluator = JaxprEvaluationForHiddenRelation(
         jaxpr=jaxpr,
         hidden_outvars=set(hidden_id_to_outvar.values()),
@@ -1440,8 +1446,7 @@ class ETraceGraph:
       outvars=list(self.out_all_jaxvars),
       eqns=list(jaxpr.eqns)
     )
-    closed_jaxpr = jax.core.ClosedJaxpr(jaxpr, closed_jaxpr.consts)
-    self.augmented_jaxpr = closed_jaxpr
+    self.augmented_jaxpr = jax.core.ClosedJaxpr(jaxpr, closed_jaxpr.consts)
 
     return self
 
@@ -1538,7 +1543,7 @@ class ETraceGraphForVJP(ETraceGraph):
       self,
       model: Callable,
       diag_jacobian: str | Enum = 'exact',
-      vjp_time: str = 'current',
+      vjp_time: str | Enum = 't',
   ):
     super().__init__(model, diag_jacobian)
 
@@ -1546,8 +1551,7 @@ class ETraceGraphForVJP(ETraceGraph):
     self.jaxpr_with_hidden_perturb: jax.core.ClosedJaxpr = None
 
     # the time for computing the VJP
-    assert vjp_time in ['current', 'last'], 'The VJP time should be either "current" or "last".'
-    self.vjp_time = vjp_time
+    self.vjp_time = _VJPTime.get(vjp_time)
 
   def compile_graph(
       self,
@@ -1556,7 +1560,7 @@ class ETraceGraphForVJP(ETraceGraph):
   ):
     super().compile_graph(*args, **kwargs)
 
-    if self.vjp_time == 'current':
+    if self.vjp_time == _VJPTime.t:
       # ---               add perturbations to the hidden states                  --- #
       # --- new jaxpr with hidden state perturbations for computing the residuals --- #
       evaluator = JaxprEvaluationForHiddenPerturbation(
@@ -1659,8 +1663,7 @@ class ETraceGraphForVJP(ETraceGraph):
     return {v: temps[v] for v in self.hid2hid_jaxvars}
 
   def solve_h2w_h2h_jacobian(
-      self,
-      *args,
+      self, *args,
   ) -> Tuple[Outputs, HiddenVals, StateVals, Hid2WeightJacobian, Hid2HidJacobian]:
     r"""
     Solving the hidden-to-weight and hidden-to-hidden Jacobian according to the given inputs and parameters.
@@ -1693,8 +1696,7 @@ class ETraceGraphForVJP(ETraceGraph):
     return out, hiddens, others, hid2weight_jac, hid2hid_data
 
   def _jaxpr_compute_vjp_model_at_current(
-      self,
-      *args
+      self, *args
   ) -> Tuple[PyTree, HiddenVals, StateVals, TempData, Residuals]:
     """
     Computing the VJP transformed model according to the given inputs and parameters by using the compiled jaxpr.
@@ -1754,8 +1756,7 @@ class ETraceGraphForVJP(ETraceGraph):
     return out, hidden_vals, other_vals, temps, Residuals(jaxpr, in_tree(), out_tree, consts)
 
   def _jaxpr_compute_vjp_model_at_last(
-      self,
-      *args
+      self, *args
   ) -> Tuple[PyTree, HiddenVals, StateVals, TempData, Residuals]:
     """
     Computing the VJP transformed model according to the given inputs and parameters by using the compiled jaxpr.
@@ -1819,8 +1820,7 @@ class ETraceGraphForVJP(ETraceGraph):
     return out, hidden_vals, other_vals, temps, Residuals(jaxpr, in_tree(), out_tree, consts)
 
   def solve_h2w_h2h_jacobian_and_l2h_vjp(
-      self,
-      *args,
+      self, *args,
   ) -> Tuple[Outputs, HiddenVals, StateVals, Hid2WeightJacobian, Hid2HidJacobian, Residuals]:
     r"""
     Solving the hidden-to-weight and hidden-to-hidden Jacobian and the VJP transformed loss-to-hidden
@@ -1848,9 +1848,9 @@ class ETraceGraphForVJP(ETraceGraph):
       raise ValueError('The ETraceGraph object has not been built yet.')
 
     # --- call the model --- #
-    if self.vjp_time == 'current':
+    if self.vjp_time == _VJPTime.t:
       out, hidden_vals, other_vals, temps, vjp_residual = self._jaxpr_compute_vjp_model_at_current(*args)
-    elif self.vjp_time == 'last':
+    elif self.vjp_time == _VJPTime.t_minus_1:
       out, hidden_vals, other_vals, temps, vjp_residual = self._jaxpr_compute_vjp_model_at_last(*args)
     else:
       raise ValueError('The VJP time should be either "current" or "last".')
@@ -1862,7 +1862,11 @@ class ETraceGraphForVJP(ETraceGraph):
 
 
 @set_module_as('brainscale')
-def build_etrace_graph(model, *args, **kwargs) -> ETraceGraph:
+def build_etrace_graph(
+    model: Callable,
+    diag_jacobian: str | Enum = 'exact',
+    vjp_time: str | Enum = 't',
+) -> Callable[..., ETraceGraph]:
   """
   Build the eligibility trace graph of the given model.
 
@@ -1871,14 +1875,38 @@ def build_etrace_graph(model, *args, **kwargs) -> ETraceGraph:
   - the spatial gradients of the weights
   - the VJP gradients of the etrace variables
 
+  Example:
+
+    ```python
+    import jax
+    import brainscale
+
+    # the model
+    def model(x, w):
+      return jax.nn.relu(jnp.dot(x, w))
+
+    # define and compile the etrace graph
+    etrace_graph = brainscale.build_etrace_graph(model, diag_jacobian='exact', vjp_time='t')(x, w)
+    ```
+
+
   Args:
     model: The model function. Can be any Python callable function.
-    *args: The positional arguments for the model.
-    **kwargs: The keyword arguments for the model.
+    diag_jacobian: The way to compute the diagonal Jacobian. It can be one of the following:
+      - 'exact': the exact diagonal Jacobian
+      - 'vjp': the diagonal Jacobian computed by VJP
+      - 'jvp': the diagonal Jacobian computed by JVP
+    vjp_time: The time for computing the VJP. It can be one of the following:
+      - 't': the current time
+      - 't-1': the last time
 
   Returns:
     The eligibility trace graph.
   """
-  etrace_graph = ETraceGraph(model)
-  etrace_graph.compile_graph(*args, **kwargs)
-  return etrace_graph
+  etrace_graph = ETraceGraphForVJP(model, diag_jacobian=diag_jacobian, vjp_time=vjp_time)
+
+  def _compile_graph(*args, **kwargs) -> ETraceGraph:
+    etrace_graph.compile_graph(*args, **kwargs)
+    return etrace_graph
+
+  return _compile_graph

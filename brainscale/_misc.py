@@ -48,9 +48,11 @@ def state_traceback(states: Sequence[bst.State]):
   """
   state_info = []
   for i, state in enumerate(states):
-    state_info.append(f'State {i}: {state}\n'
-                      f'defined at \n'
-                      f'{state.source_info.traceback}\n')
+    state_info.append(
+      f'State {i}: {state}\n'
+      f'defined at \n'
+      f'{state.source_info.traceback}\n'
+    )
   return '\n'.join(state_info)
 
 
@@ -71,10 +73,10 @@ class BaseEnum(Enum):
     raise ValueError(f'Cannot find the {cls.__name__} type {name}.')
 
   @classmethod
-  def get(cls, type_: str | Enum):
-    if isinstance(type_, cls):
-      return type_
-    elif isinstance(type_, str):
-      return cls.get_by_name(type_)
+  def get(cls, item: str | Enum):
+    if isinstance(item, cls):
+      return item
+    elif isinstance(item, str):
+      return cls.get_by_name(item)
     else:
-      raise ValueError(f'Cannot find the {cls.__name__} type {type_}.')
+      raise ValueError(f'Cannot find the {cls.__name__} type {item}.')

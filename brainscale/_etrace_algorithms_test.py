@@ -18,9 +18,9 @@ import unittest
 from functools import partial, reduce
 from typing import Callable
 
+import brainstate as bst
 import jax
 import jax.numpy as jnp
-import brainstate as bst
 from brainstate import init
 
 import brainscale as nn
@@ -31,8 +31,8 @@ class _IF_Delta_Dense_Layer(bst.Module):
       self,
       n_in,
       n_rec,
-      tau_mem: nn._typing.ArrayLike = 5.,
-      V_th: nn._typing.ArrayLike = 1.,
+      tau_mem: bst.typing.ArrayLike = 5.,
+      V_th: bst.typing.ArrayLike = 1.,
       spk_reset: str = 'soft',
       rec_init=init.KaimingNormal(),
       ff_init=init.KaimingNormal()
@@ -85,7 +85,7 @@ class TestDiagOn2(unittest.TestCase):
 
   def test_batched_On2_algorithm(self):
     bst.environ.set(mode=bst.mixin.JointMode(bst.mixin.Training(),
-                                           bst.mixin.Batching()))
+                                             bst.mixin.Batching()))
 
     n_batch = 16
     n_in, n_rec = 4, 10
@@ -229,5 +229,3 @@ class TestDiagGrad(unittest.TestCase):
 
     self._whether_collective_and_independent_are_same(std_model, inputs)
     self._whether_collective_and_independent_are_same(stp_model, inputs)
-
-
