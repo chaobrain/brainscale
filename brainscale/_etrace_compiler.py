@@ -621,7 +621,8 @@ class JaxprEvaluationForHiddenWeightOpRelation:
       elif eqn.primitive.name == 'while':
         raise NotImplementedError
       elif eqn.primitive.name == 'cond':
-        raise NotImplementedError
+        self._eval_eqn(eqn)
+        # raise NotImplementedError
       else:
         self._eval_eqn(eqn)
 
@@ -978,7 +979,8 @@ class JaxprEvaluationForHiddenRelation:
       elif eqn.primitive.name == 'while':
         raise NotImplementedError
       elif eqn.primitive.name == 'cond':
-        raise NotImplementedError
+        self._eval_eqn(eqn)
+        # raise NotImplementedError
       else:
         self._eval_eqn(eqn)
 
@@ -1817,6 +1819,7 @@ class ETraceGraphForVJP(ETraceGraph):
     # recovering the other non-etrace weights,
     # although the weights are not changed
     assign_state_values(non_etrace_weight_states, non_etrace_weight_vals)
+    assign_state_values(etrace_param_states, etrace_weight_vals)
     return out, hidden_vals, other_vals, temps, Residuals(jaxpr, in_tree(), out_tree, consts)
 
   def solve_h2w_h2h_jacobian_and_l2h_vjp(

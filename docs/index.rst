@@ -49,10 +49,9 @@ See also the BDP ecosystem
 
 - `braintaichi <https://github.com/brainpy/braintaichi>`_: Leveraging Taichi Lang to customize brain dynamics operators.
 
-- `braintools <https://github.com/brainpy/braintools>`_: The toolbox for the brain dynamics simulation, training and analysis.
-
 - `brainscale <https://github.com/brainpy/brainscale>`_: The scalable online learning framework for biological neural networks.
 
+- `braintools <https://github.com/brainpy/braintools>`_: The toolbox for the brain dynamics simulation, training and analysis.
 
 
 .. toctree::

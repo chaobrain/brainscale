@@ -67,10 +67,12 @@ def set_module_as(module: str = 'brainscale'):
 class BaseEnum(Enum):
   @classmethod
   def get_by_name(cls, name: str):
+    all_names = []
     for item in cls:
+      all_names.append(item.name)
       if item.name == name:
         return item
-    raise ValueError(f'Cannot find the {cls.__name__} type {name}.')
+    raise ValueError(f'Cannot find the {cls.__name__} type {name}. Only support {all_names}.')
 
   @classmethod
   def get(cls, item: str | Enum):

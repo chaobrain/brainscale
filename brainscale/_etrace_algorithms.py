@@ -1064,6 +1064,36 @@ def _solve_on_weight_gradients(
         update_dict(dG_weights, weight_id, dg_weight)  # update the weight gradients
 
 
+def zeros_like_batch_or_not(batch_size: Optional[int],
+                            mode: bst.mixin.Mode,
+                            x: jax.Array):
+  """
+  Create a batched zeros array like the input array.
+
+  Args:
+    batch_size: int, the batch size.
+    mode: The computing mode.
+    x: jax.Array, the input array.
+
+  Returns:
+    jax.Array, the batched zeros array.
+  """
+  if mode.has(bst.mixin.Batching):
+    assert batch_size is not None, 'The batch size should be provided. '
+    return jnp.zeros((batch_size,) + x.shape[1:], x.dtype)
+  else:
+    return jnp.zeros_like(x)
+
+
+def reset_state_in_a_dict(
+    state_dict: Dict[Any, bst.State],
+    batch_size: Optional[int],
+    mode: bst.mixin.Mode
+):
+  for k, v in state_dict.items():
+    state_dict[k].value = jax.tree.map(partial(zeros_like_batch_or_not, batch_size, mode), v)
+
+
 class DiagIODimAlgorithm(DiagETraceAlgorithmForVJP):
   r"""
   The online gradient computation algorithm with the diagonal approximation and the input-output dimensional complexity.
@@ -1130,6 +1160,12 @@ class DiagIODimAlgorithm(DiagETraceAlgorithmForVJP):
     self.etrace_chunked_dfs = bst.visible_state_dict()
     for relation in self.graph.hidden_param_op_relations:
       _init_on_state(self, relation)
+
+  def reset_state(self, batch_size: int = None, **kwargs):
+    reset_state_in_a_dict(self.etrace_xs, batch_size, self.mode)
+    reset_state_in_a_dict(self.etrace_dfs, batch_size, self.mode)
+    reset_state_in_a_dict(self.etrace_chunked_xs, batch_size, self.mode)
+    reset_state_in_a_dict(self.etrace_chunked_dfs, batch_size, self.mode)
 
   def _get_etrace_data(self) -> Tuple:
     etrace_xs = {k: v.value for k, v in self.etrace_xs.items()}
@@ -1514,6 +1550,9 @@ class DiagParamDimAlgorithm(DiagETraceAlgorithmForVJP):
     for relation in self.graph.hidden_param_op_relations:
       _init_on2_state(self, relation)
 
+  def reset_state(self, batch_size: int = None, **kwargs):
+    reset_state_in_a_dict(self.etrace_bwg, batch_size, self.mode)
+
   def _get_etrace_data(self) -> Dict:
     return {k: v.value for k, v in self.etrace_bwg.items()}
 
@@ -1713,6 +1752,13 @@ class DiagHybridDimAlgorithm(DiagETraceAlgorithmForVJP):
         # of elements in the weight (W = I * O).
         #
         _init_on_state(self, relation)
+
+  def reset_state(self, batch_size: int = None, **kwargs):
+    reset_state_in_a_dict(self.etrace_xs, batch_size, self.mode)
+    reset_state_in_a_dict(self.etrace_dfs, batch_size, self.mode)
+    reset_state_in_a_dict(self.etrace_chunked_xs, batch_size, self.mode)
+    reset_state_in_a_dict(self.etrace_chunked_dfs, batch_size, self.mode)
+    reset_state_in_a_dict(self.etrace_bwg, batch_size, self.mode)
 
   def _get_etrace_data(self) -> Tuple[Dict, ...]:
     etrace_xs = {x: val.value for x, val in self.etrace_xs.items()}
