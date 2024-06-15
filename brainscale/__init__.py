@@ -34,8 +34,7 @@ from brainscale._rate_rnns import __all__ as rate_rnns
 from brainscale._readout import *
 from brainscale._readout import __all__ as readout_all
 
-__all__ = (['typing'] +
-           concepts_all +
+__all__ = (concepts_all +
            connections_all +
            dynamics_all +
            etrace_algorithms +
