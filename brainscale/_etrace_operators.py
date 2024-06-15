@@ -16,7 +16,7 @@
 from __future__ import annotations
 
 from functools import partial, reduce
-from typing import Tuple, Callable, List, Optional
+from typing import Tuple, Callable, List, Optional, Any
 
 import brainstate as bst
 import jax
@@ -24,39 +24,64 @@ import jax.core
 import jax.numpy as jnp
 
 from ._etrace_concepts import ETraceOp
-from .typing import PyTree
+from ._typing import PyTree
+
+WeightTree = Any
 
 __all__ = [
   'StandardETraceOp',
   'GeneralETraceOp',
   'MatMulETraceOp',
-  'AbsMatMulETraceOp',
 ]
 
 
 class StandardETraceOp(ETraceOp):
   """
-  The standard operator for the eligibility trace.
+  The standard operator for the eligibility trace, which is used
+  for computing the parameter-dimensional eligibility trace updates.
   """
 
   def etrace_update(
       self,
       mode: bst.mixin.Mode,
-      w: PyTree,
-      dh_to_dw: List[PyTree],
+      w: WeightTree,
+      dh_to_dw: List[WeightTree],
       diag_jac: List[jax.Array],
       ph_to_pwx: jax.Array,
       ph_to_pwy: jax.Array
   ):
+    r"""
+    Compute the eligibility trace updates.
+
+    Update: ``eligibility trace`` * ``hidden diagonal Jacobian`` + ``new hidden-weight Jacobian``
+
+    .. math::
+       d\epsilon^t = D_h ⊙ d\epsilon^{t-1} + df^t
+
+    where :math:`D_h` is the hidden-to-hidden Jacobian diagonal matrix，
+    :math:`df^t` is the hidden-to-weight Jacobian matrix.
+
+    """
     raise NotImplementedError
 
   def hidden_to_etrace(
       self,
       mode: bst.mixin.Mode,
-      w: PyTree,
+      w: WeightTree,
       dl_to_dh: jax.Array,
-      dh_to_dw: PyTree
+      dh_to_dw: WeightTree
   ):
+    r"""
+    Compute the hidden-to-etrace updates.
+
+    This function is used to merge the hidden dimensional gradients into the
+    parameter-dimensional gradients. For example:
+
+    .. math::
+
+       dL/dW = (dL/dH) \circ (dH / dW)
+
+    """
     raise NotImplementedError
 
 
@@ -88,35 +113,56 @@ class GeneralETraceOp(StandardETraceOp):
   def etrace_update(
       self,
       mode: bst.mixin.Mode,
-      w: PyTree,
-      dh_to_dw: List[PyTree],
+      w: WeightTree,
+      dh_to_dw: List[WeightTree],
       diag_jac: List[jax.Array],
       ph_to_pwx: jax.Array,
       ph_to_pwy: jax.Array
   ):
+    """
+    See the :meth:`StandardETraceOp.etrace_update` for more details.
+    """
 
-    # compute: diagonal * dh_to_dw
+    assert isinstance(dh_to_dw, (list, tuple)), f'The dh_to_dw must be a list of pytrees. Got {type(dh_to_dw)}'
+    assert isinstance(diag_jac, (list, tuple)), f'The diag_jac must be a list of jax.Array. Got {type(diag_jac)}'
+    assert len(dh_to_dw) == len(diag_jac), (f'The length of dh_to_dw and diag_jac must be the same. '
+                                            f'Got {len(dh_to_dw)} and {len(diag_jac)}')
+    #
+    # Step 1:
+    #
+    # update the eligibility trace * hidden diagonal Jacobian
+    #         dϵ^t = D_h ⊙ dϵ^t-1, where D_h is the hidden-to-hidden Jacobian diagonal matrix.
+    #
     final_dw = None
     for dw, diag in zip(dh_to_dw, diag_jac):
-      dg_weight = self._dy_to_weight(mode,
-                                     w,
-                                     self.op,
-                                     self.xinfo,
-                                     diag)
+      #
+      # convert the diagonal hidden-to-hidden Jacobian to the
+      # dimension of weights
+      dg_weight = self.dy_to_weight(mode,
+                                    w,
+                                    self.op,
+                                    self.xinfo,
+                                    diag)
+      #
+      # compute the element-wise multiplication of:
+      #      diagonal * \epsilon (dh_to_dw)
       diag_mul_dw = jax.tree.map(jnp.multiply, dg_weight, dw)
       if final_dw is None:
         final_dw = diag_mul_dw
       else:
         final_dw = jax.tree.map(jnp.add, final_dw, diag_mul_dw)
 
-    # compute: current_etrace
-    current_etrace = self._dx_dy_to_weight(mode,
-                                           w,
-                                           self.op,
-                                           ph_to_pwx,
-                                           ph_to_pwy)
-
-    # compute: diagonal * dh_to_dw + current_etrace
+    #
+    # Step 2:
+    #
+    # update: eligibility trace * hidden diagonal Jacobian + new hidden df
+    #        dϵ^t = D_h ⊙ dϵ^t-1 + df^t, where D_h is the hidden-to-hidden Jacobian diagonal matrix.
+    #
+    current_etrace = self.dx_dy_to_weight(mode,
+                                          w,
+                                          self.op,
+                                          ph_to_pwx,
+                                          ph_to_pwy)
     new_bwg = jax.tree.map(jnp.add, final_dw, current_etrace)
     return new_bwg
 
@@ -127,64 +173,75 @@ class GeneralETraceOp(StandardETraceOp):
       dl_to_dh: jax.Array,
       dh_to_dw: PyTree
   ):
+    """
+    See the :meth:`StandardETraceOp.hidden_to_etrace` for more details.
+    """
+
     # compute: dL/dW = (dL/dH) \circ (dH / dW)
-    dg_weight = self._dy_to_weight(mode,
-                                   w,
-                                   self.op,
-                                   self.xinfo,
-                                   dl_to_dh)
+    dg_weight = self.dy_to_weight(mode,
+                                  w,
+                                  self.op,
+                                  self.xinfo,
+                                  dl_to_dh)
     return jax.tree.map(jnp.multiply, dg_weight, dh_to_dw)
 
   @staticmethod
-  def _dy_to_weight(
+  def dy_to_weight(
       mode: bst.mixin.Mode,
       weight_vals: PyTree,
       op: Callable,
-      xinfo: jax.ShapeDtypeStruct,
+      x_info: jax.ShapeDtypeStruct,
       dg_hidden: jax.Array
   ) -> PyTree:
+    #
     # [KEY]
     # For the following operation:
     #      dL/dW = (dL/dH) \circ (dH / dW)
     #   or
-    #      \partial H/\partial W = \partial H/\partial H \cdot \partial H/\partial W
+    #      \partial H^t/\partial W = \partial H^t/\partial H^{t-1} \cdot \partial H^{t-1}/\partial W
     #
     # we can compute the gradient of the weight using the following two merging operations:
+    #
 
     # input
-    x_data = jnp.ones(xinfo.shape, xinfo.dtype)
+    x_data = jnp.ones(x_info.shape, x_info.dtype)
 
     # transform
     fun = lambda dh, x: jax.vjp(partial(op, x), weight_vals)[1](dh)[0]
     if mode.has(bst.mixin.Batching):
+      # TODO:
+      #    assuming the batch size is the first dimension
       x_data = jnp.expand_dims(x_data, axis=1)
       dg_hidden = jnp.expand_dims(dg_hidden, axis=1)
-      dG_hidden_like_weight = jax.vmap(fun)(dg_hidden, x_data)
+      dg_weight = jax.vmap(fun)(dg_hidden, x_data)
     else:
-      dG_hidden_like_weight = fun(dg_hidden, x_data)
-
-    return dG_hidden_like_weight
+      dg_weight = fun(dg_hidden, x_data)
+    return dg_weight
 
   @staticmethod
-  def _dx_dy_to_weight(
+  def dx_dy_to_weight(
       mode: bst.mixin.Mode,
       weight_vals: PyTree,
       op: Callable,
       dg_x: jax.Array,
       dg_y: jax.Array
   ) -> PyTree:
+    #
     # [KEY]
     # For the following operation:
     #      dW = dy \otimes dx
     #
     # we can compute the gradient of the weight using the following two merging operations:
-
+    #
     fun = lambda dx, dy: jax.vjp(partial(op, dx), weight_vals)[1](dy)[0]
     if mode.has(bst.mixin.Batching):
-      dG_weight = jax.vmap(fun)(jnp.expand_dims(dg_x, axis=1), jnp.expand_dims(dg_y, axis=1))
+      # TODO:
+      #    assuming the batch size is the first dimension
+      dg_weight = jax.vmap(fun)(jnp.expand_dims(dg_x, axis=1),
+                                jnp.expand_dims(dg_y, axis=1))
     else:
-      dG_weight = fun(dg_x, dg_y)
-    return dG_weight
+      dg_weight = fun(dg_x, dg_y)
+    return dg_weight
 
 
 class MatMulETraceOp(StandardETraceOp):
@@ -233,12 +290,20 @@ class MatMulETraceOp(StandardETraceOp):
       ph_to_pwx: jax.Array,
       ph_to_pwy: jax.Array
   ):
+    """
+    See the :meth:`StandardETraceOp.etrace_update` for more details.
+    """
 
     # 1. w: the wight value, a pytree
     # 2. dh_to_dw: derivative of hidden to weight, the number equals to the number of hidden states
     # 3. diag_jac: the diagonal Jacobian of the hidden states, the number equals to the number of hidden states
     # 4. ph_to_pwx: the partial derivative of the hidden with respect to the weight input
     # 5. ph_to_pwy: the partial derivative of the hidden with respect to the weight output
+
+    assert isinstance(dh_to_dw, (list, tuple)), f'The dh_to_dw must be a list of pytrees. Got {type(dh_to_dw)}'
+    assert isinstance(diag_jac, (list, tuple)), f'The diag_jac must be a list of jax.Array. Got {type(diag_jac)}'
+    assert len(dh_to_dw) == len(diag_jac), (f'The length of dh_to_dw and diag_jac must be the same. '
+                                            f'Got {len(dh_to_dw)} and {len(diag_jac)}')
 
     diag_mul_dhdw = [self.hidden_to_etrace(mode, w, dh, dw)
                      for dh, dw in zip(diag_jac, dh_to_dw)]
@@ -270,6 +335,10 @@ class MatMulETraceOp(StandardETraceOp):
       dl_to_dh: jax.Array,
       dh_to_dw: PyTree
   ):
+    """
+    See the :meth:`StandardETraceOp.hidden_to_etrace` for more details.
+    """
+
     # 1. w: the wight value
     # 2. dl_to_dh: the derivative of the loss with respect to the hidden
     # 3. dh_to_dw: the derivative of the hidden with respect to the weight
@@ -289,47 +358,46 @@ class MatMulETraceOp(StandardETraceOp):
         dh_to_dbias = dh_to_dbias * dl_to_dh
     return unflatten(dh_to_dweight, dh_to_dbias)
 
-
-class AbsMatMulETraceOp(MatMulETraceOp):
-  """
-  The standard matrix multiplication operator for the eligibility trace.
-
-  """
-
-  def __init__(
-      self,
-      weight_mask: Optional[jax.Array] = None,
-      is_diagonal: bool = False
-  ):
-    super().__init__(weight_mask, is_diagonal=is_diagonal)
-
-  def _operation(self, x, w):
-    (weight, bias), _ = self._format_weight(w)
-    weight = jnp.abs(weight)
-    if self.weight_mask is not None:
-      weight = weight * self.weight_mask
-    if bias is None:
-      return jnp.matmul(x, weight)
-    else:
-      return jnp.matmul(x, weight) + bias
-
-
-class Conv2dETraceOp(StandardETraceOp):
-  """
-  The etrace operator for the 2D convolution.
-
-  """
-
-  def __init__(
-      self,
-      weight_mask: Optional[jax.Array] = None,
-      is_diagonal: bool = False
-  ):
-    super().__init__(fun=self._operation, is_diagonal=is_diagonal)
-    self.weight_mask = weight_mask
-
-  def _operation(self, x, w):
-    weight, bias = w
-    if self.weight_mask is not None:
-      weight = weight * self.weight_mask
-    return jax.lax.conv_general_dilated(x, weight, (1, 1), 'SAME') + bias
+# class AbsMatMulETraceOp(MatMulETraceOp):
+#   """
+#   The standard matrix multiplication operator for the eligibility trace.
+#
+#   """
+#
+#   def __init__(
+#       self,
+#       weight_mask: Optional[jax.Array] = None,
+#       is_diagonal: bool = False
+#   ):
+#     super().__init__(weight_mask, is_diagonal=is_diagonal)
+#
+#   def _operation(self, x, w):
+#     (weight, bias), _ = self._format_weight(w)
+#     weight = jnp.abs(weight)
+#     if self.weight_mask is not None:
+#       weight = weight * self.weight_mask
+#     if bias is None:
+#       return jnp.matmul(x, weight)
+#     else:
+#       return jnp.matmul(x, weight) + bias
+#
+#
+# class Conv2dETraceOp(StandardETraceOp):
+#   """
+#   The etrace operator for the 2D convolution.
+#
+#   """
+#
+#   def __init__(
+#       self,
+#       weight_mask: Optional[jax.Array] = None,
+#       is_diagonal: bool = False
+#   ):
+#     super().__init__(fun=self._operation, is_diagonal=is_diagonal)
+#     self.weight_mask = weight_mask
+#
+#   def _operation(self, x, w):
+#     weight, bias = w
+#     if self.weight_mask is not None:
+#       weight = weight * self.weight_mask
+#     return jax.lax.conv_general_dilated(x, weight, (1, 1), 'SAME') + bias

@@ -18,9 +18,9 @@ import unittest
 from functools import partial, reduce
 from typing import Callable
 
+import brainstate as bst
 import jax
 import jax.numpy as jnp
-import brainstate as bst
 from brainstate import init
 
 import brainscale as nn
@@ -31,8 +31,8 @@ class _IF_Delta_Dense_Layer(bst.Module):
       self,
       n_in,
       n_rec,
-      tau_mem: nn.typing.ArrayLike = 5.,
-      V_th: nn.typing.ArrayLike = 1.,
+      tau_mem: bst.typing.ArrayLike = 5.,
+      V_th: bst.typing.ArrayLike = 1.,
       spk_reset: str = 'soft',
       rec_init=init.KaimingNormal(),
       ff_init=init.KaimingNormal()
@@ -60,7 +60,7 @@ class TestDiagOn2(unittest.TestCase):
       n_in, n_rec = 4, 10
       snn = _IF_Delta_Dense_Layer(n_in, n_rec)
       snn = bst.init_states(snn)
-      algorithm = nn.DiagOn2Algorithm(snn)
+      algorithm = nn.DiagParamDimAlgorithm(snn)
 
   def test_non_batched_On2_algorithm(self):
     bst.environ.set(mode=bst.mixin.Training())
@@ -69,7 +69,7 @@ class TestDiagOn2(unittest.TestCase):
     snn = _IF_Delta_Dense_Layer(n_in, n_rec)
     snn = bst.init_states(snn)
 
-    algorithm = nn.DiagOn2Algorithm(snn)
+    algorithm = nn.DiagParamDimAlgorithm(snn)
     algorithm.compile_graph(jax.ShapeDtypeStruct((n_in,), bst.environ.dftype()))
 
     def run_snn(i, inp_spk):
@@ -85,14 +85,14 @@ class TestDiagOn2(unittest.TestCase):
 
   def test_batched_On2_algorithm(self):
     bst.environ.set(mode=bst.mixin.JointMode(bst.mixin.Training(),
-                                           bst.mixin.Batching()))
+                                             bst.mixin.Batching()))
 
     n_batch = 16
     n_in, n_rec = 4, 10
     snn = _IF_Delta_Dense_Layer(n_in, n_rec)
     snn = bst.init_states(snn, n_batch)
 
-    algorithm = nn.DiagOn2Algorithm(snn)
+    algorithm = nn.DiagParamDimAlgorithm(snn)
     algorithm.compile_graph(jax.ShapeDtypeStruct((n_batch, n_in), bst.environ.dftype()))
 
     def run_snn(i, inp_spk):
@@ -229,5 +229,3 @@ class TestDiagGrad(unittest.TestCase):
 
     self._whether_collective_and_independent_are_same(std_model, inputs)
     self._whether_collective_and_independent_are_same(stp_model, inputs)
-
-

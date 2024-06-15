@@ -17,7 +17,6 @@
 
 __version__ = "0.0.1"
 
-from brainscale import typing
 from brainscale._connections import *
 from brainscale._connections import __all__ as connections_all
 from brainscale._dynamics import *

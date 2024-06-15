@@ -84,7 +84,7 @@ def try_alif_etrace_single_step():
 
   out = snn(inp_spk)
 
-  algorithm = nn.DiagExpSmOnAlgorithm(snn, decay=0.99)
+  algorithm = nn.DiagIODimAlgorithm(snn, decay_or_rank=0.99)
   algorithm.compile_graph(inp_spk)
   out = algorithm(inp_spk, 0)
 
@@ -101,7 +101,7 @@ def try_if_delta_etrace_update():
   snn = IF_Delta_Dense_Layer(n_in, n_rec)
   snn = bc.init_states(snn, n_batch)
 
-  algorithm = nn.DiagExpSmOnAlgorithm(snn, decay_or_rank=0.99)
+  algorithm = nn.DiagIODimAlgorithm(snn, decay_or_rank=0.99)
   algorithm.compile_graph(jax.ShapeDtypeStruct((n_batch, n_in), bc.environ.dftype()))
 
   def run_snn(i, inp_spk):
@@ -121,7 +121,7 @@ def try_if_delta_etrace_update_On2():
   snn = IF_Delta_Dense_Layer(n_in, n_rec)
   snn = bc.init_states(snn)
 
-  algorithm = nn.DiagOn2Algorithm(snn)
+  algorithm = nn.DiagParamDimAlgorithm(snn)
   algorithm.compile_graph(jax.ShapeDtypeStruct((n_in,), bc.environ.dftype()))
 
   def run_snn(i, inp_spk):
@@ -141,7 +141,7 @@ def try_if_delta_etrace_update_batched_On2():
   snn = IF_Delta_Dense_Layer(n_in, n_rec)
   snn = bc.init_states(snn, n_batch)
 
-  algorithm = nn.DiagOn2Algorithm(snn)
+  algorithm = nn.DiagParamDimAlgorithm(snn)
   algorithm.compile_graph(jax.ShapeDtypeStruct((n_batch, n_in,), bc.environ.dftype()))
 
   def run_snn(i, inp_spk):
@@ -162,7 +162,7 @@ def try_if_delta_etrace_update_and_grad():
   weights = snn.states().subset(nn.ETraceParam)
   snn = bc.init_states(snn, n_batch)
 
-  algorithm = nn.DiagExpSmOnAlgorithm(snn, decay=0.99)
+  algorithm = nn.DiagIODimAlgorithm(snn, decay=0.99)
   algorithm.compile_graph(jax.ShapeDtypeStruct((n_batch, n_in), bc.environ.dftype()))
 
   def run_snn(last_grads, inputs):
@@ -190,7 +190,7 @@ def try_if_delta_etrace_grad_vs_bptt_grad():
 
   def etrace_grad(x):
     bc.init_states(snn, n_batch)
-    algorithm = nn.DiagExpSmOnAlgorithm(snn, decay_or_rank=0.99)
+    algorithm = nn.DiagIODimAlgorithm(snn, decay_or_rank=0.99)
     algorithm.compile_graph(jax.ShapeDtypeStruct((n_batch, n_in), bc.environ.dftype()))
 
     def run_snn(last_grads, inputs):
@@ -249,7 +249,7 @@ def try_alif_compile_and_show_graph():
       out = snn(inp)
     return out
 
-  algorithm = nn.DiagExpSmOnAlgorithm(run_snn, decay_or_rank=0.99)
+  algorithm = nn.DiagIODimAlgorithm(run_snn, decay_or_rank=0.99)
   algorithm.compile_graph(0, inp_spk)
   algorithm.show_graph()
 

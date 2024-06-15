@@ -16,7 +16,6 @@ Neurons
    :nosignatures:
    :template: classtemplate.rst
 
-    Neuron
     IF
     LIF
     ALIF
@@ -31,7 +30,6 @@ Synapses
    :nosignatures:
    :template: classtemplate.rst
 
-    Synapse
     Expon
     STP
     STD
@@ -49,7 +47,9 @@ RNNs
 
     ValinaRNN
     GRUCell
+    MGUCell
     LSTMCell
+    URLSTMCell
 
 
 
@@ -64,19 +64,4 @@ Readouts
     LeakyRateReadout
     LeakySpikeReadout
 
-
-
-
-Synapse Conductance
--------------------
-
-.. autosummary::
-   :toctree: generated/
-   :nosignatures:
-   :template: classtemplate.rst
-
-    SynOut
-    COBA
-    CUBA
-    MgBlock
 

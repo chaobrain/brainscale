@@ -24,6 +24,14 @@ import brainstate as bst
 git_issue_addr = 'https://github.com/brainpy/brainscale/issues'
 
 
+class NotSupportedError(Exception):
+  __module__ = 'brainscale'
+
+
+class CompilationError(Exception):
+  __module__ = 'brainscale'
+
+
 def state_traceback(states: Sequence[bst.State]):
   """
   Traceback the states of the brain model.
@@ -40,9 +48,11 @@ def state_traceback(states: Sequence[bst.State]):
   """
   state_info = []
   for i, state in enumerate(states):
-    state_info.append(f'State {i}: {state}\n'
-                      f'defined at \n'
-                      f'{state.source_info.traceback}\n')
+    state_info.append(
+      f'State {i}: {state}\n'
+      f'defined at \n'
+      f'{state.source_info.traceback}\n'
+    )
   return '\n'.join(state_info)
 
 
@@ -57,16 +67,18 @@ def set_module_as(module: str = 'brainscale'):
 class BaseEnum(Enum):
   @classmethod
   def get_by_name(cls, name: str):
+    all_names = []
     for item in cls:
+      all_names.append(item.name)
       if item.name == name:
         return item
-    raise ValueError(f'Cannot find the {cls.__name__} type {name}.')
+    raise ValueError(f'Cannot find the {cls.__name__} type {name}. Only support {all_names}.')
 
   @classmethod
-  def get(cls, type_: str | Enum):
-    if isinstance(type_, cls):
-      return type_
-    elif isinstance(type_, str):
-      return cls.get_by_name(type_)
+  def get(cls, item: str | Enum):
+    if isinstance(item, cls):
+      return item
+    elif isinstance(item, str):
+      return cls.get_by_name(item)
     else:
-      raise ValueError(f'Cannot find the {cls.__name__} type {type_}.')
+      raise ValueError(f'Cannot find the {cls.__name__} type {item}.')
