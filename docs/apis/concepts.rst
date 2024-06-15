@@ -19,9 +19,24 @@ Model Definition
 
     ETraceVar
     ETraceParam
-    ETraceOp
     ETraceParamOp
-    NormalParamOp
+    NoTempParamOp
+    NoGradParamOp
+
+
+ETrace Operations
+-----------------
+
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+   :template: classtemplate.rst
+
+    ETraceOp
+    StandardETraceOp
+    GeneralETraceOp
+    MatMulETraceOp
 
 
 Model Compilation
@@ -31,7 +46,6 @@ Model Compilation
    :toctree: generated/
    :nosignatures:
    :template: classtemplate.rst
-
 
     ETraceGraph
     build_etrace_graph

@@ -214,18 +214,12 @@ class HiddenWeightOpTracer(NamedTuple):
               hidden_vars=None,
               invar_needed_in_oth_eqns=None):
     return HiddenWeightOpTracer(
-      weight=(weight if weight is not None
-              else self.weight),
-      op=(op if op is not None
-          else self.op),
-      x=(x if x is not None
-         else self.x),
-      y=(y if y is not None
-         else self.y),
-      trace=(trace if trace is not None
-             else self.trace),
-      hidden_vars=(hidden_vars if hidden_vars is not None
-                   else self.hidden_vars),
+      weight=(weight if weight is not None else self.weight),
+      op=(op if op is not None else self.op),
+      x=(x if x is not None else self.x),
+      y=(y if y is not None else self.y),
+      trace=(trace if trace is not None else self.trace),
+      hidden_vars=(hidden_vars if hidden_vars is not None else self.hidden_vars),
       invar_needed_in_oth_eqns=(invar_needed_in_oth_eqns
                                 if invar_needed_in_oth_eqns is not None
                                 else self.invar_needed_in_oth_eqns)
@@ -1077,10 +1071,12 @@ class JaxprEvaluationForHiddenPerturbation:
       )
 
     # new jaxpr
-    jaxpr = jax.core.Jaxpr(constvars=list(self.closed_jaxpr.jaxpr.constvars),
-                           invars=list(self.closed_jaxpr.jaxpr.invars) + list(self.new_invars.values()),
-                           outvars=list(self.closed_jaxpr.jaxpr.outvars),
-                           eqns=self.revised_eqns)
+    jaxpr = jax.core.Jaxpr(
+      constvars=list(self.closed_jaxpr.jaxpr.constvars),
+      invars=list(self.closed_jaxpr.jaxpr.invars) + list(self.new_invars.values()),
+      outvars=list(self.closed_jaxpr.jaxpr.outvars),
+      eqns=self.revised_eqns
+    )
     revised_closed_jaxpr = jax.core.ClosedJaxpr(jaxpr, self.closed_jaxpr.literals)
 
     # remove the temporal data
@@ -1141,12 +1137,12 @@ class JaxprEvaluationForHiddenPerturbation:
     self.revised_eqns.append(old_eqn)
 
     # Second step, add the perturbation equation
-    new_eqn = jax.core.JaxprEqn([new_outvar, perturb_var],
-                                [hidden_var],
-                                jax.lax.add_p,
-                                {},
-                                set(),
-                                eqn.source_info.replace())
+    new_eqn = jax.core.new_jaxpr_eqn([new_outvar, perturb_var],
+                                     [hidden_var],
+                                     jax.lax.add_p,
+                                     {},
+                                     set(),
+                                     eqn.source_info.replace())
     self.revised_eqns.append(new_eqn)
 
   def _eval_eqn(self, eqn: jax.core.JaxprEqn):
@@ -1223,21 +1219,45 @@ class _DiagJacobian(BaseEnum):
 
 class _VJPTime(BaseEnum):
   t = 't'
-  t_minus_1 = 't-1'
+  t_minus_1 = 't_minus_1'
+
+
+_compiler_docstr = '''
+  diag_jacobian: str
+      The method to compute the hidden Jacobian diagonal matrix. It should be one of
+      the following values:
+
+      - 'exact': the exact Jacobian diagonal matrix
+      - 'vjp': the vector-Jacobian product computed Jacobian diagonal matrix
+      - 'jvp': the Jacobian-vector product computed Jacobian diagonal matrix
+  diag_normalize: bool
+      Whether to normalize the hidden Jacobian diagonal matrix to the range of ``[-1, 1]``.
+      Supported only when the ``diag_jacobian`` is ``'vjp'`` or ``'jvp'``. Default is ``None``.
+  vjp_time: str
+      The time to compute the loss-to-hidden Jacobian. It should be one of the
+      following values:
+
+      - 't': compute the loss-to-hidden Jacobian at the current time step: :math:`\partial L^t / \partial h^t`
+      - 't_minus_1': compute the loss-to-hidden Jacobian at the last time step: :math:`\partial L^t / \partial h^{t-1}`
+'''
 
 
 class ETraceGraph:
-  """
+  r"""
   The eligibility trace graph, tracking the relationship between the etrace weights
   :py:class:`ETraceParam`, the etrace variables :py:class:`ETraceVar`, and the etrace
   operations :py:class:`ETraceOp`.
 
   This class is used for computing the weight spatial gradients and the hidden state residuals.
-  It is the most foundational data structure for the RTRL algorithm.
+  It is the most foundational data structure for the ETrace algorithms.
 
   It is important to note that the graph is built no matter whether the model is
   batched or not. This means that this graph can be applied to any kind of models.
+  However, the compilation is sensitive to the shape of hidden states.
 
+  Parameters
+  ----------
+  {doc}
   """
   __module__ = 'brainscale'
 
@@ -1262,9 +1282,13 @@ class ETraceGraph:
       self,
       model: Callable,
       diag_jacobian: str | Enum = 'exact',
+      vjp_time: str | Enum = 't',
   ):
     # The original model
     self.model = model
+
+    # the time for computing the VJP
+    self.vjp_time = _VJPTime.get(vjp_time)
 
     # the way to compute diagonal Jacobian
     self.diag_jacobian = _DiagJacobian.get(diag_jacobian)
@@ -1278,8 +1302,14 @@ class ETraceGraph:
     # wrap the model so that we can track the iteration number
     self.stateful_model = bst.transform.StatefulFunction(model)
 
+    # --- rewrite jaxpr --
+    #
     # The augmented jaxpr to return all necessary variables
     self.augmented_jaxpr: jax.core.ClosedJaxpr = None
+
+    # The revised jaxpr with hidden state perturbations and return necessary variables
+    # This jaxpr is only needed when the "vjp_time" is "t".
+    self.jaxpr_with_hidden_perturb: jax.core.ClosedJaxpr = None
 
   @property
   def states(self):
@@ -1450,9 +1480,20 @@ class ETraceGraph:
     )
     self.augmented_jaxpr = jax.core.ClosedJaxpr(jaxpr, closed_jaxpr.consts)
 
+    if self.vjp_time == _VJPTime.t:
+      # ---               add perturbations to the hidden states                  --- #
+      # --- new jaxpr with hidden state perturbations for computing the residuals --- #
+      evaluator = JaxprEvaluationForHiddenPerturbation(
+        closed_jaxpr=self.augmented_jaxpr,
+        hidden_outvars=self.out_hidden_jaxvars,
+        outvar_to_state_id=self.outvar_to_state_id,
+        id_to_state=self.id_to_state,
+        hidden_invars=list(self.hidden_id_to_invar.values()),
+      )
+      self.jaxpr_with_hidden_perturb = evaluator.compile()
     return self
 
-  def show_graph(self):
+  def show_graph(self, start_frame=1, n_frame=3):
     """
     Showing the graph about the relationship between weight, operator, and hidden states.
     """
@@ -1463,14 +1504,18 @@ class ETraceGraph:
       msg = '===' * 40 + '\n'
       msg += f'For weight {i}: {hpo_relation.weight}\n\n'
       msg += '1. It is defined at: \n'
-      source = indent_code(_summarize_source_info(hpo_relation.weight.source_info, start_frame=1, num_frames=3),
+      source = indent_code(_summarize_source_info(hpo_relation.weight.source_info,
+                                                  start_frame=start_frame,
+                                                  num_frames=n_frame),
                            indent=3)
       msg += f'{source}\n\n'
       msg += '2. The associated hidden states are:\n'
       for hid_var in hpo_relation.hidden_vars:
         hidden: ETraceVar = self.hidden_outvar_to_hidden[hid_var]
         msg += f'   {hidden},  which is defined in\n'
-        source = indent_code(_summarize_source_info(hidden.source_info, start_frame=1, num_frames=3),
+        source = indent_code(_summarize_source_info(hidden.source_info,
+                                                    start_frame=start_frame,
+                                                    num_frames=n_frame),
                              indent=6)
         msg += f'{source}\n'
       msg += '\n'
@@ -1486,94 +1531,6 @@ class ETraceGraph:
         msg += '\n\n'
       msg += '---' * 40 + '\n\n'
       print(msg)
-
-  def solve_h2w_h2h_jacobian(
-      self,
-      *args,
-  ) -> Tuple[Outputs, HiddenVals, StateVals, Hid2WeightJacobian, Hid2HidJacobian]:
-    r"""
-    Solving the hidden-to-weight and hidden-to-hidden Jacobian according to the given inputs and parameters.
-
-    This function is typically used for computing the forward propagation of hidden-to-weight Jacobian.
-
-    Particularly, this function aims to solve:
-
-    1. The Jacobian matrix of hidden-to-weight. That is,
-       :math:`\partial h / \partial w`, where :math:`h` is the hidden state and :math:`w` is the weight.
-    2. The Jacobian matrix of hidden-to-hidden. That is,
-       :math:`\partial h / \partial h`, where :math:`h` is the hidden state.
-
-    Args:
-      *args: The positional arguments for the model.
-
-    Returns:
-      The outputs, hidden states, other states, and the spatial gradients of the weights.
-    """
-    raise NotImplementedError
-
-  def solve_h2w_h2h_jacobian_and_l2h_vjp(
-      self,
-      *args,
-  ) -> Tuple[Outputs, HiddenVals, StateVals, Hid2WeightJacobian, Hid2HidJacobian, Residuals]:
-    r"""
-    Solving the hidden-to-weight and hidden-to-hidden Jacobian and the VJP transformed loss-to-hidden
-    gradients according to the given inputs.
-
-    This function is typically used for computing both the forward propagation of hidden-to-weight Jacobian
-    and the loss-to-hidden gradients at the current time-step.
-
-    Particularly, this function aims to solve:
-
-    1. The Jacobian matrix of hidden-to-weight. That is,
-       :math:`\partial h / \partial w`, where :math:`h` is the hidden state and :math:`w` is the weight.
-    2. The Jacobian matrix of hidden-to-hidden. That is,
-       :math:`\partial h / \partial h`, where :math:`h` is the hidden state.
-    3. The partial gradients of the loss with respect to the hidden states.
-       That is, :math:`\partial L / \partial h`, where :math:`L` is the loss and :math:`h` is the hidden state.
-
-    Args:
-      *args: The positional arguments for the model.
-
-    Returns:
-      The outputs, hidden states, other states, the spatial gradients of the weights, and the residuals.
-    """
-    raise NotImplementedError
-
-
-class ETraceGraphForVJP(ETraceGraph):
-  def __init__(
-      self,
-      model: Callable,
-      diag_jacobian: str | Enum = 'exact',
-      vjp_time: str | Enum = 't',
-  ):
-    super().__init__(model, diag_jacobian)
-
-    # the revised jaxpr with hidden state perturbations and return necessary variables
-    self.jaxpr_with_hidden_perturb: jax.core.ClosedJaxpr = None
-
-    # the time for computing the VJP
-    self.vjp_time = _VJPTime.get(vjp_time)
-
-  def compile_graph(
-      self,
-      *args,
-      **kwargs,
-  ):
-    super().compile_graph(*args, **kwargs)
-
-    if self.vjp_time == _VJPTime.t:
-      # ---               add perturbations to the hidden states                  --- #
-      # --- new jaxpr with hidden state perturbations for computing the residuals --- #
-      evaluator = JaxprEvaluationForHiddenPerturbation(
-        closed_jaxpr=self.augmented_jaxpr,
-        hidden_outvars=self.out_hidden_jaxvars,
-        outvar_to_state_id=self.outvar_to_state_id,
-        id_to_state=self.id_to_state,
-        hidden_invars=list(self.hidden_id_to_invar.values()),
-      )
-      self.jaxpr_with_hidden_perturb = evaluator.compile()
-    return self
 
   def _jaxpr_compute_model(
       self,
@@ -1864,13 +1821,16 @@ class ETraceGraphForVJP(ETraceGraph):
     return out, hidden_vals, other_vals, hid2weight_jac, hid2hid_data, vjp_residual
 
 
+ETraceGraph.__doc__ = ETraceGraph.__doc__.format(doc=_compiler_docstr)
+
+
 @set_module_as('brainscale')
 def build_etrace_graph(
     model: Callable,
     diag_jacobian: str | Enum = 'exact',
     vjp_time: str | Enum = 't',
 ) -> Callable[..., ETraceGraph]:
-  """
+  r"""
   Build the eligibility trace graph of the given model.
 
   The eligibility trace graph is used to compute the model gradients, including
@@ -1892,24 +1852,21 @@ def build_etrace_graph(
     etrace_graph = brainscale.build_etrace_graph(model, diag_jacobian='exact', vjp_time='t')(x, w)
     ```
 
+  Parameters
+  ----------
+  {doc}
 
-  Args:
-    model: The model function. Can be any Python callable function.
-    diag_jacobian: The way to compute the diagonal Jacobian. It can be one of the following:
-      - 'exact': the exact diagonal Jacobian
-      - 'vjp': the diagonal Jacobian computed by VJP
-      - 'jvp': the diagonal Jacobian computed by JVP
-    vjp_time: The time for computing the VJP. It can be one of the following:
-      - 't': the current time
-      - 't-1': the last time
-
-  Returns:
-    The eligibility trace graph.
+  Returns
+  -------
+    graph: The eligibility trace graph.
   """
-  etrace_graph = ETraceGraphForVJP(model, diag_jacobian=diag_jacobian, vjp_time=vjp_time)
+  etrace_graph = ETraceGraph(model, diag_jacobian=diag_jacobian, vjp_time=vjp_time)
 
   def _compile_graph(*args, **kwargs) -> ETraceGraph:
     etrace_graph.compile_graph(*args, **kwargs)
     return etrace_graph
 
   return _compile_graph
+
+
+build_etrace_graph.__doc__ = build_etrace_graph.__doc__.format(doc=_compiler_docstr)

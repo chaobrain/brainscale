@@ -11,6 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Author: Chaoming Wang <chao.brain@qq.com>
+# Date: 2024-04-03
+# Copyright: 2024, Chaoming Wang
 # ==============================================================================
 
 # -*- coding: utf-8 -*-
@@ -32,7 +36,7 @@ __all__ = [
   'ETraceParam',  # the parameter/weight for the etrace-based learning
   'ETraceOp',  # the operator for the etrace-based learning
   'ETraceParamOp',  # the parameter and operator for the etrace-based learning, combining ETraceParam and ETraceOp
-  'BackpropParamOp',  # the parameter state with an associated operator
+  'NoTempParamOp',  # the parameter state with an associated operator
   'NoGradParamOp',
   'stop_param_gradients',
 ]
@@ -174,9 +178,9 @@ class ETraceParamOp(ETraceParam):
     return self.op(x, self.value)
 
 
-class BackpropParamOp(bst.ParamState):
+class NoTempParamOp(bst.ParamState):
   """
-  The Normal Parameter State with an Associated Operator.
+  The Parameter State with an Associated Operator with no temporal dependent back-propagation.
 
   This class behaves the same as :py:class:`ETraceParamOp`, but will not build the
   eligibility trace graph when using online learning. Therefore, in a sequence
