@@ -65,6 +65,9 @@ class LeakyRateReadout(nn.DnnLayer):
   def init_state(self, batch_size=None, **kwargs):
     self.r = ETraceVar(init.param(init.Constant(0.), self.out_size, batch_size))
 
+  def reset_state(self, batch_size=None, **kwargs):
+    self.r.value = init.param(init.Constant(0.), self.out_size, batch_size)
+
   def update(self, x):
     r = self.decay * self.r.value + self.weight_op.execute(x)
     self.r.value = r
@@ -106,6 +109,9 @@ class LeakySpikeReadout(nn.Neuron):
 
   def init_state(self, batch_size, **kwargs):
     self.V = ETraceVar(init.param(init.Constant(0.), self.varshape, batch_size))
+
+  def reset_state(self, batch_size, **kwargs):
+    self.V.value = init.param(init.Constant(0.), self.varshape, batch_size)
 
   @property
   def spike(self):

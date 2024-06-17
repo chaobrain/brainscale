@@ -80,6 +80,9 @@ class ValinaRNNCell(nn.RNNCell):
   def init_state(self, batch_size: int = None, **kwargs):
     self.h = ETraceVar(init.param(self._state_initializer, self.num_out, batch_size))
 
+  def reset_state(self, batch_size: int = None, **kwargs):
+    self.h.value = init.param(self._state_initializer, self.num_out, batch_size)
+
   def update(self, x):
     xh = jnp.concatenate([x, self.h.value], axis=-1)
     self.h.value = self.activation(self.W(xh))
@@ -136,6 +139,9 @@ class GRUCell(nn.RNNCell):
 
   def init_state(self, batch_size: int = None, **kwargs):
     self.h = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size))
+
+  def reset_state(self, batch_size: int = None, **kwargs):
+    self.h.value = init.param(self._state_initializer, [self.num_out], batch_size)
 
   def update(self, x):
     old_h = self.h.value
@@ -214,6 +220,9 @@ class MGUCell(nn.RNNCell):
 
   def init_state(self, batch_size: int = None, **kwargs):
     self.h = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size))
+
+  def reset_state(self, batch_size: int = None, **kwargs):
+    self.h.value = init.param(self._state_initializer, [self.num_out], batch_size)
 
   def update(self, x):
     old_h = self.h.value
@@ -321,6 +330,10 @@ class LSTMCell(nn.RNNCell):
     self.c = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size))
     self.h = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size))
 
+  def reset_state(self, batch_size: int = None, **kwargs):
+    self.c.value = init.param(self._state_initializer, [self.num_out], batch_size)
+    self.h.value = init.param(self._state_initializer, [self.num_out], batch_size)
+
   def update(self, x):
     h, c = self.h.value, self.c.value
     xh = jnp.concat([x, h], axis=-1)
@@ -378,6 +391,10 @@ class URLSTMCell(nn.RNNCell):
   def init_state(self, batch_size: int = None, **kwargs):
     self.c = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size))
     self.h = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size))
+
+  def reset_state(self, batch_size: int = None, **kwargs):
+    self.c.value = init.param(self._state_initializer, [self.num_out], batch_size)
+    self.h.value = init.param(self._state_initializer, [self.num_out], batch_size)
 
   def update(self, x: ArrayLike) -> ArrayLike:
     h, c = self.h.value, self.c.value
