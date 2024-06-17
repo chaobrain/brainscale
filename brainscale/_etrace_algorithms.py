@@ -883,6 +883,8 @@ def _update_IO_dim_etrace_with_exact_jac(
     num_snap: int,
     snap_freq: int
 ):
+  hidden_invar_to_outvar = {v: k for k, v in hidden_outvar_to_invar.items()}
+
   # --- the data --- #
 
   #
@@ -938,12 +940,16 @@ def _update_IO_dim_etrace_with_exact_jac(
                   for var in hh_relation.input_vars]
     #
     # "primals" is the hidden state values at the previous time step
-    primals = [data_for_hid2hid_jac[hidden_outvar_to_invar[hid_var]]
-               for hid_var in hwo_relation.hidden_vars]
+    primals = [data_for_hid2hid_jac[hid_var]
+               for hid_var in hh_relation.hidden_invars]
+    # primals = [data_for_hid2hid_jac[hidden_outvar_to_invar[hid_var]]
+               # for hid_var in hwo_relation.hidden_vars]
     #
     # "tangents" is the hidden-to-hidden Jacobian at the previous time step
-    tangents = [hist_dfs[(hwo_relation.y, hid_var)]
-                for hid_var in hwo_relation.hidden_vars]
+    tangents = [hist_dfs[(hwo_relation.y, hidden_invar_to_outvar[hid_var])]
+                for hid_var in hh_relation.hidden_invars]
+    # tangents = [hist_dfs[(hwo_relation.y, hid_var)]
+                # for hid_var in hwo_relation.hidden_vars]
     #
     # JVP equation for the following Jacobian computation:
     #
@@ -1493,6 +1499,8 @@ def _update_param_dim_etrace_with_exact_jac(
   new_etrace_bwg = dict()
 
   for relation in hidden_param_op_relations:
+    relation: HiddenWeightOpRelation
+
     #
     # ParamDim algorithm relies on the "ETraceOp" to compute the etrace updates
     # Therefore, the weight should be defined as an "ETraceParamOp", so that
@@ -1519,8 +1527,10 @@ def _update_param_dim_etrace_with_exact_jac(
                     for var in hh_relation.input_vars]
       #
       # "primals" is the hidden state values at the previous time step
-      primals = [data_for_hid2hid_jac[hidden_outvar_to_invar[hid_var]]
-                 for hid_var in relation.hidden_vars]
+      primals = [data_for_hid2hid_jac[hid_var]
+                 for hid_var in hh_relation.hidden_invars]
+      # primals = [data_for_hid2hid_jac[hidden_outvar_to_invar[hid_var]]
+      #            for hid_var in relation.hidden_vars]
 
       for i, hid_var in enumerate(relation.hidden_vars):
         #

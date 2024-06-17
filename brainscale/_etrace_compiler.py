@@ -295,7 +295,7 @@ class HiddenGroupRelation(NamedTuple):
   def state_transition(
       self,
       old_hidden_vals: HiddenVals,
-      input_vals: WeightVals,
+      input_vals: PyTree,
       return_index: Optional[int] = None
   ) -> HiddenVals | jax.Array:
     """
@@ -795,8 +795,10 @@ class JaxprEvaluationForHiddenWeightOpRelation:
     return weight_id, xs[0]
 
 
-def _hpo_tracer_to_relation(hid_relation: HiddenGroupRelation,
-                            hpo_tracer: HiddenWeightOpTracer) -> HiddenWeightOpRelation:
+def _hpo_tracer_to_relation(
+    hid_relation: HiddenGroupRelation,
+    hpo_tracer: HiddenWeightOpTracer
+) -> HiddenWeightOpRelation:
   hpo_tracer = hpo_tracer.replace(hidden_vars=list(hid_relation.hidden_outvars))
   return _trace_simplify(hpo_tracer)
 
@@ -833,11 +835,13 @@ def _simplify_hidden_eqns(hidden_invars: List[HiddenInVar],
   return true_hidden_invars, list(true_hidden_outvars), const_vars, true_eqns
 
 
-def _format_and_optimize_jaxpr(hidden_invars: List[HiddenInVar],
-                               hidden_outvars: List[HiddenOutVar],
-                               hidden_outvar_to_invar: Dict,
-                               hidden_invar_to_outvar: Dict,
-                               eqns: List[jax.core.JaxprEqn]) -> Optional[jax.core.Jaxpr]:
+def _format_and_optimize_jaxpr(
+    hidden_invars: List[HiddenInVar],
+    hidden_outvars: List[HiddenOutVar],
+    hidden_outvar_to_invar: Dict,
+    hidden_invar_to_outvar: Dict,
+    eqns: List[jax.core.JaxprEqn]
+) -> Optional[jax.core.Jaxpr]:
   #
   # Several additional things need to pay attention to:
   #
@@ -925,6 +929,7 @@ class JaxprEvaluationForHiddenRelation:
     final_hpo_relations = []
 
     for hpo_tracer in hidden_param_op_tracers:
+      hpo_tracer: HiddenWeightOpTracer
       group = frozenset(hpo_tracer.hidden_vars)
       if group in hidden_relations:
         final_hpo_relations.append(_hpo_tracer_to_relation(hidden_relations[group], hpo_tracer))
@@ -939,11 +944,13 @@ class JaxprEvaluationForHiddenRelation:
         self._eval_jaxpr(self.jaxpr)
 
         # post-processing
-        jaxpr = _format_and_optimize_jaxpr(hid_invars,
-                                           list(hpo_tracer.hidden_vars),
-                                           self.hidden_outvar_to_invar,
-                                           self.hidden_invar_to_outvar,
-                                           list(reversed(self.active_tracer.eqns)), )
+        jaxpr = _format_and_optimize_jaxpr(
+          hid_invars,
+          list(hpo_tracer.hidden_vars),
+          self.hidden_outvar_to_invar,
+          self.hidden_invar_to_outvar,
+          list(reversed(self.active_tracer.eqns)),
+        )
         self.active_tracer = None
 
         if jaxpr is None:
@@ -951,10 +958,12 @@ class JaxprEvaluationForHiddenRelation:
 
         else:
           group = frozenset(jaxpr.outvars)
-          hid_relation = HiddenGroupRelation(hidden_invars=list(jaxpr.invars),
-                                             hidden_outvars=list(jaxpr.outvars),
-                                             input_vars=list(jaxpr.constvars),
-                                             jaxpr=jaxpr)
+          hid_relation = HiddenGroupRelation(
+            hidden_invars=list(jaxpr.invars),
+            hidden_outvars=list(jaxpr.outvars),
+            input_vars=list(jaxpr.constvars),
+            jaxpr=jaxpr
+          )
           hidden_relations[group] = hid_relation
           final_hpo_relations.append(_hpo_tracer_to_relation(hid_relation, hpo_tracer))
     return hidden_relations, final_hpo_relations
