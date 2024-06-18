@@ -66,6 +66,9 @@ class IF(bst.nn.Neuron):
   def init_state(self, batch_size: int = None, **kwargs):
     self.V = ETraceVar(init.param(jnp.zeros, self.varshape, batch_size))
 
+  def reset_state(self, batch_size: int = None, **kwargs):
+    self.V.value = init.param(jnp.zeros, self.varshape, batch_size)
+
   def get_spike(self, V=None):
     V = self.V.value if V is None else V
     v_scaled = (V - self.V_th) / self.V_th
@@ -116,6 +119,9 @@ class LIF(bst.nn.Neuron):
 
   def init_state(self, batch_size: int = None, **kwargs):
     self.V = ETraceVar(init.param(init.Constant(self.V_reset), self.varshape, batch_size))
+
+  def reset_state(self, batch_size: int = None, **kwargs):
+    self.V.value = init.param(init.Constant(self.V_reset), self.varshape, batch_size)
 
   def get_spike(self, V=None):
     V = self.V.value if V is None else V
@@ -171,6 +177,10 @@ class ALIF(bst.nn.Neuron):
     self.V = ETraceVar(init.param(init.Constant(0.), self.varshape, batch_size))
     self.a = ETraceVar(init.param(init.Constant(0.), self.varshape, batch_size))
 
+  def reset_state(self, batch_size: int = None, **kwargs):
+    self.V.value = init.param(init.Constant(0.), self.varshape, batch_size)
+    self.a.value = init.param(init.Constant(0.), self.varshape, batch_size)
+
   def get_spike(self, V=None, a=None):
     V = self.V.value if V is None else V
     a = self.a.value if a is None else a
@@ -223,6 +233,9 @@ class Expon(bst.nn.Synapse):
   def init_state(self, batch_size: int = None, **kwargs):
     self.g = ETraceVar(init.param(init.Constant(0.), self.varshape, batch_size))
 
+  def reset_state(self, batch_size: int = None, **kwargs):
+    self.g.value = init.param(init.Constant(0.), self.varshape, batch_size)
+
   def update(self, x: Spike = None):
     self.g.value = nn.exp_euler_step(self.dg, self.g.value, bst.environ.get('t'))
     if x is not None:
@@ -272,6 +285,10 @@ class STP(bst.nn.Synapse):
   def init_state(self, batch_size: int = None, **kwargs):
     self.x = ETraceVar(init.param(init.Constant(1.), self.varshape, batch_size))
     self.u = ETraceVar(init.param(init.Constant(self.U), self.varshape, batch_size))
+
+  def reset_state(self, batch_size: int = None, **kwargs):
+    self.x.value = init.param(init.Constant(1.), self.varshape, batch_size)
+    self.u.value = init.param(init.Constant(self.U), self.varshape, batch_size)
 
   def du(self, u, t):
     return self.U - u / self.tau_f
@@ -337,6 +354,9 @@ class STD(bst.nn.Synapse):
 
   def init_state(self, batch_size: int = None, **kwargs):
     self.x = ETraceVar(init.param(init.Constant(1.), self.varshape, batch_size))
+
+  def reset_state(self, batch_size: int = None, **kwargs):
+    self.x.value = init.param(init.Constant(1.), self.varshape, batch_size)
 
   def update(self, pre_spike: Spike):
     t = bst.environ.get('t')
