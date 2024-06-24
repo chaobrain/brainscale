@@ -611,12 +611,26 @@ class JaxprEvaluationForHiddenWeightOpRelation:
       if eqn.primitive.name == 'pjit':
         self._eval_pjit(eqn)
       elif eqn.primitive.name == 'scan':
-        raise NotImplementedError
-      elif eqn.primitive.name == 'while':
-        raise NotImplementedError
-      elif eqn.primitive.name == 'cond':
+        if _check_some_element_exist_in_the_set(eqn.invars, self.hidden_invars):
+          raise NotImplementedError(
+            f'Currently, brainscale does not support the "scan" operator with hidden states. '
+            f'Please raise an issue or feature request to the developers at {git_issue_addr}.'
+          )
         self._eval_eqn(eqn)
-        # raise NotImplementedError
+      elif eqn.primitive.name == 'while':
+        if _check_some_element_exist_in_the_set(eqn.invars, self.hidden_invars):
+          raise NotImplementedError(
+            f'Currently, brainscale does not support the "while" operator with hidden states. '
+            f'Please raise an issue or feature request to the developers at {git_issue_addr}.'
+          )
+        self._eval_eqn(eqn)
+      elif eqn.primitive.name == 'cond':
+        if _check_some_element_exist_in_the_set(eqn.invars, self.hidden_invars):
+          raise NotImplementedError(
+            f'Currently, brainscale does not support the "cond" operator with hidden states. '
+            f'Please raise an issue or feature request to the developers at {git_issue_addr}.'
+          )
+        self._eval_eqn(eqn)
       else:
         self._eval_eqn(eqn)
 
@@ -915,6 +929,7 @@ class JaxprEvaluationForHiddenRelation:
     self.hidden_outvars = hidden_outvars
     self.hidden_outvar_to_invar = hidden_outvar_to_invar
     self.hidden_invar_to_outvar = {invar: outvar for outvar, invar in hidden_outvar_to_invar.items()}
+    self.hidden_invars = set(hidden_outvar_to_invar.values())
 
     # the data structures for the tracing hidden-hidden relationships
     self.active_tracer: Optional[HiddenGroupTracer] = None
@@ -978,12 +993,26 @@ class JaxprEvaluationForHiddenRelation:
       if eqn.primitive.name == 'pjit':
         self._eval_pjit(eqn)
       elif eqn.primitive.name == 'scan':
-        raise NotImplementedError
-      elif eqn.primitive.name == 'while':
-        raise NotImplementedError
-      elif eqn.primitive.name == 'cond':
+        if _check_some_element_exist_in_the_set(eqn.invars, self.hidden_invars):
+          raise NotImplementedError(
+            f'Currently, brainscale does not support the "scan" operator with hidden states. '
+            f'Please raise an issue or feature request to the developers at {git_issue_addr}.'
+          )
         self._eval_eqn(eqn)
-        # raise NotImplementedError
+      elif eqn.primitive.name == 'while':
+        if _check_some_element_exist_in_the_set(eqn.invars, self.hidden_invars):
+          raise NotImplementedError(
+            f'Currently, brainscale does not support the "while" operator with hidden states. '
+            f'Please raise an issue or feature request to the developers at {git_issue_addr}.'
+          )
+        self._eval_eqn(eqn)
+      elif eqn.primitive.name == 'cond':
+        if _check_some_element_exist_in_the_set(eqn.invars, self.hidden_invars):
+          raise NotImplementedError(
+            f'Currently, brainscale does not support the "cond" operator with hidden states. '
+            f'Please raise an issue or feature request to the developers at {git_issue_addr}.'
+          )
+        self._eval_eqn(eqn)
       else:
         self._eval_eqn(eqn)
 
@@ -1107,20 +1136,29 @@ class JaxprEvaluationForHiddenPerturbation:
         self._eval_eqn(eqn)
 
       elif eqn.primitive.name == 'scan':
-        if _check_some_element_exist_in_the_set(eqn.outvars, self.hidden_invars):
-          raise NotImplementedError
+        if _check_some_element_exist_in_the_set(eqn.invars, self.hidden_invars):
+          raise NotImplementedError(
+            f'Currently, brainscale does not support the "scan" operator with hidden states. '
+            f'Please raise an issue or feature request to the developers at {git_issue_addr}.'
+          )
         else:
           self.revised_eqns.append(eqn.replace())
 
       elif eqn.primitive.name == 'while':
-        if _check_some_element_exist_in_the_set(eqn.outvars, self.hidden_invars):
-          raise NotImplementedError
+        if _check_some_element_exist_in_the_set(eqn.invars, self.hidden_invars):
+          raise NotImplementedError(
+            f'Currently, brainscale does not support the "while" operator with hidden states. '
+            f'Please raise an issue or feature request to the developers at {git_issue_addr}.'
+          )
         else:
           self.revised_eqns.append(eqn.replace())
 
       elif eqn.primitive.name == 'cond':
-        if _check_some_element_exist_in_the_set(eqn.outvars, self.hidden_invars):
-          raise NotImplementedError
+        if _check_some_element_exist_in_the_set(eqn.invars, self.hidden_invars):
+          raise NotImplementedError(
+            f'Currently, brainscale does not support the "cond" operator with hidden states. '
+            f'Please raise an issue or feature request to the developers at {git_issue_addr}.'
+          )
         else:
           self.revised_eqns.append(eqn.replace())
 
@@ -1129,6 +1167,7 @@ class JaxprEvaluationForHiddenPerturbation:
 
   def _add_perturb_eqn(self, eqn: jax.core.JaxprEqn, perturb_var: jax.core.Var):
     # ------------------------------------------------
+    #
     # For the hidden var eqn, we want to add a perturbation:
     #    y = f(x)  =>  y = f(x) + perturb_var
     #
@@ -1136,6 +1175,7 @@ class JaxprEvaluationForHiddenPerturbation:
     #    new_outvar = f(x)
     # Then, we add a new equation for the perturbation
     #    y = new_outvar + perturb_var
+    #
     # ------------------------------------------------
 
     hidden_var = eqn.outvars[0]
