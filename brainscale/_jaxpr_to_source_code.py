@@ -475,13 +475,13 @@ def partial_eval_jaxpr(jaxpr, env):
   # sub in any constants for outvars
   outvars = tuple(read_or_self(var) for var in jaxpr.outvars)
 
-  return jaxpr.replace(eqns=out_eqns, outvars=outvars, invars=invars)
+  return jaxpr.replace(eqns=out_eqns, outvars=outvars, invars=invars, debug_info=None)
 
 
 def _eval_eqn(eqn, vals) -> Union[Jaxpr, tuple, list, jnp.ndarray]:
   if eqn.primitive.name == "closed_call":
-    assert eqn.primitive.call_primitive == True
-    assert eqn.primitive.map_primitive == False
+    assert eqn.primitive.call_primitive
+    assert not eqn.primitive.map_primitive
 
     out = partial_eval_jaxpr(eqn.params['call_jaxpr'].jaxpr,
                              {var: val for var, val in zip(eqn.params['call_jaxpr'].jaxpr.invars, vals)})
