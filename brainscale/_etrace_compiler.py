@@ -647,7 +647,10 @@ class JaxprEvaluationForHiddenWeightOpRelation:
           raise NotSupportedError(
             f'Currently, the etrace operator only supports single input and single output. \n'
             f'But we got {len(eqn.outvars)} outputs in the following operator: \n\n'
+            f'The Jaxpr for the operator: \n\n'
             f'{eqn} \n\n'
+            f'The corresponding Python code for the operator: \n\n'
+            f'{jaxpr_to_python_code(_jax_eqn_to_jaxpr(eqn))} \n\n'
             f'You may need to define the operator as multiple operators, or raise an issue '
             f'to the developers at {git_issue_addr}. \n'
             f'Moreover, see the above traceback information for where the operation is defined in your code.'
@@ -767,7 +770,10 @@ class JaxprEvaluationForHiddenWeightOpRelation:
       with source_info_util.user_context(eqn.source_info.traceback, name_stack=name_stack):
         raise CompilationError(
           f'Error: no ETraceParam are found in this operation: \n\n'
-          f'{eqn}\n\n'
+          f'The Jaxpr for the operator: \n\n'
+          f'{eqn} \n\n'
+          f'The corresponding Python code for the operator: \n\n'
+          f'{jaxpr_to_python_code(_jax_eqn_to_jaxpr(eqn))} \n\n'
           f'See the above traceback information for where the operation is defined in your code.'
         )
 
@@ -777,7 +783,10 @@ class JaxprEvaluationForHiddenWeightOpRelation:
         raise CompilationError(
           f'Error: multiple ETraceParam ({weight_ids}) are found in this operation. '
           f'This is not allowed for automatic online learning: \n\n'
-          f'{eqn}\n\n'
+          f'The Jaxpr for the operator: \n\n'
+          f'{eqn} \n\n'
+          f'The corresponding Python code for the operator: \n\n'
+          f'{jaxpr_to_python_code(_jax_eqn_to_jaxpr(eqn))} \n\n'
           f'See the above traceback information for where the operation is defined in your code.'
         )
 
@@ -790,7 +799,10 @@ class JaxprEvaluationForHiddenWeightOpRelation:
           f'but the ETraceParam contains vars {self.weight_id_to_vars[weight_id]}. \n'
           f'This means that the operator has used multiple ETraceParam. '
           f'Please define the trainable weights in a single ETraceParam. \n\n'
-          f'{eqn}\n\n'
+          f'The Jaxpr for the operator: \n\n'
+          f'{eqn} \n\n'
+          f'The corresponding Python code for the operator: \n\n'
+          f'{jaxpr_to_python_code(_jax_eqn_to_jaxpr(eqn))} \n\n'
           f'See the above traceback information for where the operation is defined in your code.'
         )
 
@@ -801,7 +813,10 @@ class JaxprEvaluationForHiddenWeightOpRelation:
           'Currently, the etrace operator only supports single input. \n'
           'You may need to define the model as multiple operators, or raise an issue '
           f'to the developers at {git_issue_addr}.\n\n'
-          f'{eqn}\n\n'
+          f'The Jaxpr for the operator: \n\n'
+          f'{eqn} \n\n'
+          f'The corresponding Python code for the operator: \n\n'
+          f'{jaxpr_to_python_code(_jax_eqn_to_jaxpr(eqn))} \n\n'
           f'See the above traceback information for where the operation is defined in your code.'
         )
 
@@ -1569,13 +1584,15 @@ class ETraceGraph:
         msg += f'{source}\n'
       msg += '\n'
       msg += '3. The associated operator is:\n\n'
-      msg += indent_code(jaxpr_to_python_code(hpo_relation.op_jaxpr, fn_name='weight_to_hidden_operation'),
+      msg += indent_code(jaxpr_to_python_code(hpo_relation.op_jaxpr,
+                                              fn_name='weight_to_hidden_operation'),
                          indent=3)
       msg += '\n\n'
       if len(self.hidden_group_relations) > 0:
         msg += '4. The associated hidden states have the following relationships:\n\n'
         hid_relation = self.hidden_group_relations[frozenset(hpo_relation.hidden_vars)]
-        msg += indent_code(jaxpr_to_python_code(hid_relation.jaxpr, fn_name='hidden_to_hidden_transition'),
+        msg += indent_code(jaxpr_to_python_code(hid_relation.jaxpr,
+                                                fn_name='hidden_to_hidden_transition'),
                            indent=3)
         msg += '\n\n'
       msg += '---' * 40 + '\n\n'
