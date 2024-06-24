@@ -39,7 +39,7 @@ from ._etrace_concepts import (is_etrace_op,
                                is_etrace_op_enable_gradient,
                                ETraceParam,
                                ETraceVar)
-from ._jaxpr_to_source_code import (jaxpr_to_python_code, )
+from ._jaxpr_to_source_code import jaxpr_to_python_code
 from ._misc import (git_issue_addr,
                     state_traceback,
                     set_module_as,
@@ -61,8 +61,9 @@ from ._typing import (PyTree,
                       Hid2WeightJacobian,
                       Hid2HidJacobian)
 
+
 # TODO
-# - [ ] The visualization of the etrace graph.
+# - [x] The visualization of the etrace graph.
 # - [ ] Judge whether the `df` is the same for different weight y.
 #       For example,
 #
