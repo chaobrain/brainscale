@@ -271,7 +271,9 @@ def assign_state_values(states, state_values):
     st.value = val
 
 
-def split_states(states: Sequence[bst.State]) -> Tuple[List[bst.ParamState], List[ETraceVar], List[bst.State]]:
+def split_states(
+    states: Sequence[bst.State]
+) -> Tuple[List[bst.ParamState], List[ETraceVar], List[bst.State]]:
   """
   Split the states into weight states, hidden states, and other states.
 

@@ -24,7 +24,7 @@ from __future__ import annotations
 import itertools
 from enum import Enum
 from functools import partial
-from typing import Callable, NamedTuple, List, Dict, Sequence, Tuple, Set, FrozenSet, Optional
+from typing import (Callable, NamedTuple, List, Dict, Sequence, Tuple, Set, Optional, Any)
 
 import brainstate as bst
 import jax.core
@@ -61,8 +61,8 @@ from ._typing import (PyTree,
                       Hid2WeightJacobian,
                       Hid2HidJacobian)
 
-
 # TODO
+#
 # - [x] The visualization of the etrace graph.
 # - [ ] Judge whether the `df` is the same for different weight y.
 #       For example,
@@ -75,28 +75,6 @@ from ._typing import (PyTree,
 __all__ = [
   'ETraceGraph', 'build_etrace_graph',
 ]
-
-shape_inverse_rule = {
-  jax.lax.concatenate_p: jax.lax.slice_p,
-  jax.lax.slice_p: jax.lax.dynamic_slice_p,
-  jax.lax.reshape_p: jax.lax.reshape_p,
-  jax.lax.dynamic_slice_p: jax.lax.slice_p,
-  jax.lax.dynamic_update_slice_p: jax.lax.slice_p,
-  jax.lax.transpose_p: jax.lax.transpose_p,
-  jax.lax.broadcast_in_dim_p: jax.lax.squeeze_p,
-  jax.lax.squeeze_p: jax.lax.broadcast_in_dim_p,
-  jax.lax.rev_p: jax.lax.rev_p,
-  jax.lax.scatter_p: jax.lax.gather_p,
-  jax.lax.scatter_add_p: jax.lax.gather_p,
-  jax.lax.scatter_max_p: jax.lax.gather_p,
-  jax.lax.scatter_min_p: jax.lax.gather_p,
-  jax.lax.scatter_mul_p: jax.lax.gather_p,
-}
-
-shape_changing_rule = {
-  jax.lax.slice_p: jax.lax.slice,
-  jax.lax.dynamic_slice_p: jax.lax.dynamic_slice,
-}
 
 
 def indent_code(code: str, indent: int = 2) -> str:
@@ -118,25 +96,6 @@ def _identity(x):
   Identity function. Return x
   """
   return x
-
-
-def fun_compose(*funs: Callable) -> Callable:
-  """
-  Composing the functions.
-
-  Args:
-    *funs: The functions to be composed.
-
-  Returns:
-    The composed function.
-  """
-
-  def composed(x):
-    for fun in funs:
-      x = fun(x)
-    return x
-
-  return composed
 
 
 def split_state_values(
@@ -194,29 +153,42 @@ def split_state_values(
     return hidden_vals, other_vals
 
 
+class HiddenToHiddensTracer(NamedTuple):
+  """
+  The data structure for the tracing of the hidden-to-hidden states.
+  """
+  hidden_invar: jax.core.Var
+  connected_hidden_outvars: set[jax.core.Var]
+  other_invars: set[jax.core.Var]
+  invar_needed_in_oth_eqns: set[jax.core.Var]
+  trace: List[jax.core.JaxprEqn]
+
+
 class HiddenWeightOpTracer(NamedTuple):
   """
   The data structure for the tracing of the ETraceParam operation.
   """
-  weight: ETraceParam
-  op: jax.core.JaxprEqn
-  x: jax.core.Var
-  y: jax.core.Var
+  op: jax.core.JaxprEqn  # f: how x is transformed into y, i.e., y = f(x, w)
+  weight: ETraceParam  # w
+  x: jax.core.Var  # y
+  y: jax.core.Var  # x
   trace: List[jax.core.JaxprEqn]
   hidden_vars: set[jax.core.Var]
   invar_needed_in_oth_eqns: set[jax.core.Var]
 
-  def replace(self,
-              weight=None,
-              op=None,
-              x=None,
-              y=None,
-              trace=None,
-              hidden_vars=None,
-              invar_needed_in_oth_eqns=None):
+  def replace(
+      self,
+      weight=None,
+      op=None,
+      x=None,
+      y=None,
+      trace=None,
+      hidden_vars=None,
+      invar_needed_in_oth_eqns=None
+  ):
     return HiddenWeightOpTracer(
-      weight=(weight if weight is not None else self.weight),
       op=(op if op is not None else self.op),
+      weight=(weight if weight is not None else self.weight),
       x=(x if x is not None else self.x),
       y=(y if y is not None else self.y),
       trace=(trace if trace is not None else self.trace),
@@ -225,95 +197,6 @@ class HiddenWeightOpTracer(NamedTuple):
                                 if invar_needed_in_oth_eqns is not None
                                 else self.invar_needed_in_oth_eqns)
     )
-
-
-class HiddenGroupTracer(NamedTuple):
-  """
-  The data structure for the tracing of the hidden states.
-
-  The following fields are included:
-
-  - needed_vars: The variables needed in the equations.
-  - eqns: the equations for the hidden state transitions
-  """
-  needed_vars: Set[jax.core.Var]
-  eqns: List[jax.core.JaxprEqn]
-
-
-class HiddenWeightOpRelation(NamedTuple):
-  """
-  The data structure for recording the weight, operator, and hidden relationship.
-
-  The following fields are included:
-
-  - weight: the instance of ``ETraceParam``
-  - op_jaxpr: the jaxpr for the weight operation, instance of ``jax.core.Jaxpr``
-  - x: the jax Var for the weight input
-  - y: the jax Var for the wight output
-  - jaxpr_y2hid: the jaxpr to evaluate y -->  eligibility trace variables
-  - hidden_vars: the hidden states connected to the weight
-  - hidden2df: the function to convert each hidden stat to the size of weight output
-  """
-  weight: ETraceParam
-  op_jaxpr: jax.core.Jaxpr
-  x: WeightXVar
-  y: WeightYVar
-  jaxpr_y2hid: jax.core.Jaxpr
-  hidden_vars: List[jax.core.Var]
-  hidden2df: List[Callable]
-
-
-class HiddenGroupRelation(NamedTuple):
-  r"""
-  The data structure for recording the hidden-to-hidden relation.
-
-  The following fields are included:x
-
-  - hidden_vars: the hidden states for one neuron population
-  - input_vars: the input variables for the computing hidden state transitions
-  - jaxpr: the jaxpr for the hidden state transitions
-
-  This relation is used for computing the hidden-to-hidden state transitions::
-
-      h_{t+1} = f(h_t, x_t)
-
-  where ``h_t`` is the hidden state defined in ``hidden_vars``, ``x_t`` is the input at time ``t``
-  defined in ``input_vars``, and ``f`` is the hidden state transition function which is defined
-  in ``jaxpr``.
-
-  """
-  hidden_invars: List[HiddenOutVar]  # the input hidden states for one neuron population
-  hidden_outvars: List[HiddenOutVar]  # the output hidden states for one neuron population
-  input_vars: List[WeightXVar]  # the input variables for the computing hidden state transitions
-  jaxpr: jax.core.Jaxpr  # the jaxpr for the hidden state transitions
-
-  def is_this_relation(
-      self,
-      hiddens: Sequence[HiddenOutVar]
-  ) -> bool:
-    return set(self.hidden_outvars) == set(hiddens)
-
-  def state_transition(
-      self,
-      old_hidden_vals: HiddenVals,
-      input_vals: PyTree,
-      return_index: Optional[int] = None
-  ) -> HiddenVals | jax.Array:
-    """
-    Computing the hidden state transitions.
-
-    Args:
-      old_hidden_vals: The old hidden state values.
-      input_vals: The input values.
-      return_index: index of the hidden state to return.
-
-    Returns:
-      The new hidden state values.
-    """
-    new_hidden_vals = jax.core.eval_jaxpr(self.jaxpr, input_vals, *old_hidden_vals)
-    if return_index is not None:
-      return new_hidden_vals[return_index]
-    return new_hidden_vals
 
 
 def _check_some_element_exist_in_the_set(
@@ -359,11 +242,13 @@ def _post_check(trace):
     source_info = trace.weight.source_info
     name_stack = source_info_util.current_name_stack() + source_info.name_stack
     with source_info_util.user_context(source_info.traceback, name_stack=name_stack):
+      # TODO:
+      #    raise error or change it as non-etrace-weight
       raise CompilationError(
         f'Error: The ETraceParam {trace.weight} does not found the associated hidden states: \n'
         f'There are maybe two kinds of reasons: '
         f'1. The weight is not associated with any hidden states. Therefore it should not be defined \n'
-        f'   as a {ETraceParam.__name__}. You can turon of ETrace learning for this weight by setting \n'
+        f'   as a {ETraceParam.__name__}. You can turn off ETrace learning for this weight by setting \n'
         f'   "as_etrace_weight=False". For example, \n'
         f'       \n'
         f'        lin = brainscale.Linear(..., as_etrace_weight=False)". \n'
@@ -374,28 +259,116 @@ def _post_check(trace):
   return trace
 
 
-def _trace_simplify(trace: HiddenWeightOpTracer) -> HiddenWeightOpRelation:
+def _simplify_hid2hid_tracer(
+    tracer: HiddenToHiddensTracer,
+    hidden_invar_to_hidden,
+    hidden_outvar_to_hidden,
+) -> HiddenToHiddensTransition:
+  # [first step]
+  # Remove the unnecessary equations in the trace.
+  # The unnecessary equations are the equations
+  # that do not contain the hidden states.
+  tracer.invar_needed_in_oth_eqns.clear()
+  new_trace = []
+  whole_trace_needed_vars = set(tracer.connected_hidden_outvars)
+  visited_needed_vars = set()  # needed_vars has been satisfied
+  for eqn in reversed(tracer.trace):
+    need_outvars = []
+    for outvar in eqn.outvars:
+      if outvar in whole_trace_needed_vars:
+        need_outvars.append(outvar)
+    if len(need_outvars):
+      visited_needed_vars.update(need_outvars)
+      new_trace.append(eqn)
+      whole_trace_needed_vars.update([invar for invar in eqn.invars if isinstance(invar, jax.core.Var)])
+
+  # [second step]
+  # Checking whether the shape of each hidden state is consistent.
+  # Currently, we only support the element-wise state transition.
+  hidden_outvars = tuple(tracer.connected_hidden_outvars)
+  for hidden_var in hidden_outvars:
+    # The most direct way when the shapes of "y" and "hidden var" are the same is using "identity()" function.
+    # However, there may be bugs, for examples, the output is reshaped to the same shape as the hidden state,
+    # or, the split and concatenate operators are used while the shapes are the same between the outputs and
+    # hidden states.
+    # The most safe way is using automatic shape inverse transformation.
+    #
+    # However, the automatic inverse transformation may also cause errors, for example, if the following
+    # operators are used:
+    #     def f(a):
+    #         s = jnp.sum(a, axis=[1,2], keepdims=True)
+    #         return a / s
+    #
+    # this will result in the following jaxpr:
+    #     { lambda ; a:f32[10,20,5]. let
+    #         b:f32[10] = reduce_sum[axes=(1, 2)] a
+    #         c:f32[10,1,1] = broadcast_in_dim[broadcast_dimensions=(0,) shape=(10, 1, 1)] b
+    #         d:f32[10,20,5] = div a c
+    #       in (d,) }
+    #
+    # It seems that the automatic shape inverse transformation is complex for handling such cases.\
+    # Therefore, currently, we only consider the simple cases, and raise an error for the complex cases.
+
+    if tracer.hidden_invar.aval.shape != hidden_var.aval.shape:
+      raise NotSupportedError(
+        f'Currently, we only support the state group that hase the same shape. \n'
+        f'However, we got {[var.aval for var in hidden_outvars + (tracer.hidden_invar,)]}'
+      )
+
+  # [third step]
+  # Simplify the trace
+  visited_needed_vars.add(tracer.hidden_invar)
+  constvars = list(whole_trace_needed_vars.difference(visited_needed_vars))
+  jaxpr_opt = jax.core.Jaxpr(
+    # the const vars are not the hidden states, they are
+    # intermediate data that are not used in the hidden states
+    constvars=constvars,
+    # the invars are always the weight output
+    invars=[tracer.hidden_invar],
+    # the outvars are always the connected hidden states of this weight
+    outvars=list(hidden_outvars),
+    # the new equations which are simplified
+    eqns=list(reversed(new_trace)),
+  )
+
+  # [final step]
+  # Change the "HiddenWeightOpTracer" to "HiddenWeightOpRelation"
+  return HiddenToHiddensTransition(
+    hidden_invar=tracer.hidden_invar,
+    hidden=hidden_invar_to_hidden[tracer.hidden_invar],
+    connected_hidden_outvars=list(hidden_outvars),
+    connected_hiddens=[hidden_outvar_to_hidden[var] for var in hidden_outvars],
+    jaxpr=jaxpr_opt,
+    other_invars=constvars,
+  )
+
+
+def _trace_simplify(
+    tracer: HiddenWeightOpTracer,
+    hidden_outvar_to_group: Dict[HiddenOutVar, 'HiddenGroupRelation'],
+    hidden_outvar_to_transition: Dict[HiddenOutVar, 'HiddenToHiddensTransition'],
+) -> HiddenWeightOpRelation:
   """
   Simplifying the trace from the weight output to the hidden state.
 
   Args:
-    trace: The traced weight operation.
+    tracer: The traced weight operation.
 
   Returns:
     The simplified traced weight operation.
   """
   # [first step]
-  _post_check(trace)
+  _post_check(tracer)
 
   # [second step]
   # Remove the unnecessary equations in the trace.
   # The unnecessary equations are the equations
   # that do not contain the hidden states.
-  trace.invar_needed_in_oth_eqns.clear()
+  tracer.invar_needed_in_oth_eqns.clear()
   new_trace = []
-  whole_trace_needed_vars = set(trace.hidden_vars)
+  whole_trace_needed_vars = set(tracer.hidden_vars)
   visited_needed_vars = set()
-  for eqn in reversed(trace.trace):
+  for eqn in reversed(tracer.trace):
     need_outvars = []
     for outvar in eqn.outvars:
       if outvar in whole_trace_needed_vars:
@@ -408,9 +381,8 @@ def _trace_simplify(trace: HiddenWeightOpTracer) -> HiddenWeightOpRelation:
 
   # [third step]
   # Finding out how the shape of each hidden state is converted to the size of df.
-  hidden_vars = list(trace.hidden_vars)
-  shape_mapping = []
-  y = trace.y
+  hidden_vars = list(tracer.hidden_vars)
+  y = tracer.y
   for hidden_var in hidden_vars:
     # The most direct way when the shapes of "y" and "hidden var" are the same is using "identity()" function.
     # However, there may be bugs, for examples, the output is reshaped to the same shape as the hidden state,
@@ -435,45 +407,21 @@ def _trace_simplify(trace: HiddenWeightOpTracer) -> HiddenWeightOpRelation:
     # Therefore, currently, we only consider the simple cases, and raise an error for the complex cases.
 
     if y.aval.shape == hidden_var.aval.shape:
-      shape_mapping.append(_identity)
       continue
-
-    # automatic shape inverse transformation
-    trace_need_vars = {hidden_var: [[]]}
-    for eqn in new_trace:  # traveling the trace using the reversed order
-      if len(eqn.outvars) == 1:
-        outvar = eqn.outvars[0]
-        if outvar in trace_need_vars:
-          shaping = trace_need_vars.pop(outvar)
-          rule = shape_changing_rule.get(eqn.primitive, None)
-          if rule is None:
-            for invar in eqn.invars:
-              trace_need_vars[invar] = tuple(list(s) for s in shaping)
-          else:
-            for invar in eqn.invars:
-              olds = tuple(list(s + [partial(rule, **eqn.params)]) for s in shaping)
-              news = ([partial(rule, **eqn.params)],) if invar in trace_need_vars else tuple()
-              trace_need_vars[invar] = olds + news
-    print(trace_need_vars[y])
-    if all(len(s) == 0 for s in trace_need_vars[y]):
-      raise CompilationError(
-        f'Error: The shape of the hidden state {hidden_var} is not converted to the size of the weight output {y}. \n'
-        f'This may be caused by the complex shape conversion in the model. \n'
-        f'Please report an issue to the developers at {git_issue_addr}. \n'
-        f'Moreover, see the above traceback information for where the hidden state is defined in your code.'
+    else:
+      raise NotSupportedError(
+        f'Currently, the automatic shape inverse transformation is not supported. \n'
       )
-    shape_mapping.append(trace_need_vars[y])
-    raise NotSupportedError
 
   # [fourth step]
   # Simplify the trace
-  visited_needed_vars.add(trace.y)
+  visited_needed_vars.add(tracer.y)
   jaxpr_opt = jax.core.Jaxpr(
     # the const vars are not the hidden states, they are
     # intermediate data that are not used in the hidden states
     constvars=[nvar for nvar in whole_trace_needed_vars.difference(visited_needed_vars)],
     # the invars are always the weight output
-    invars=[trace.y],
+    invars=[tracer.y],
     # the outvars are always the connected hidden states of this weight
     outvars=hidden_vars,
     # the new equations which are simplified
@@ -482,13 +430,29 @@ def _trace_simplify(trace: HiddenWeightOpTracer) -> HiddenWeightOpRelation:
 
   # [final step]
   # Change the "HiddenWeightOpTracer" to "HiddenWeightOpRelation"
-  return HiddenWeightOpRelation(weight=trace.weight,
-                                op_jaxpr=_jax_eqn_to_jaxpr(trace.op),
-                                x=trace.x,
-                                y=trace.y,
-                                jaxpr_y2hid=jaxpr_opt,
-                                hidden_vars=hidden_vars,
-                                hidden2df=shape_mapping)
+  hidden_var_to_group = {
+    hidden_var: hidden_outvar_to_group[hidden_var]
+    for hidden_var in hidden_vars
+  }
+  hidden_var_to_transition = {
+    hidden_var: hidden_outvar_to_transition[hidden_var]
+    for hidden_var in hidden_vars
+  }
+  unique_hidden_groups = dict()
+  for group in hidden_var_to_group.values():
+    unique_hidden_groups[id(group)] = group
+
+  return HiddenWeightOpRelation(
+    weight=tracer.weight,
+    op_jaxpr=_jax_eqn_to_jaxpr(tracer.op),
+    x=tracer.x,
+    y=tracer.y,
+    jaxpr_y2hid=jaxpr_opt,
+    hidden_vars=hidden_vars,
+    hidden_groups=list(unique_hidden_groups.values()),
+    hidden_var_to_group=hidden_var_to_group,
+    hidden_var_to_transition=hidden_var_to_transition
+  )
 
 
 def _jax_eqn_to_jaxpr(eqn: jax.core.JaxprEqn) -> jax.core.Jaxpr:
@@ -531,6 +495,8 @@ class JaxprEvaluationForHiddenWeightOpRelation:
       id_to_state: Dict[StateID, ETraceParam],
       hidden_invars: List[jax.core.Var],
       hidden_outvars: List[jax.core.Var],
+      hidden_outvar_to_group: Dict[HiddenOutVar, 'HiddenGroupRelation'],
+      hidden_outvar_to_transition: Dict[HiddenOutVar, 'HiddenToHiddensTransition'],
   ):
     # the jaxpr of the original model, assuming that the model is well-defined,
     # see the doc for the model which can be online learning compiled.
@@ -554,7 +520,10 @@ class JaxprEvaluationForHiddenWeightOpRelation:
     # jax vars of hidden states
     self.hidden_invars = set(hidden_invars)
 
-  def compile(self) -> List[HiddenWeightOpTracer]:
+    self.hidden_outvar_to_group = hidden_outvar_to_group
+    self.hidden_outvar_to_transition = hidden_outvar_to_transition
+
+  def compile(self) -> Tuple[HiddenWeightOpRelation, ...]:
     """
     Compiling the jaxpr for the etrace relationships.
     """
@@ -575,13 +544,21 @@ class JaxprEvaluationForHiddenWeightOpRelation:
     self._eval_jaxpr(self.jaxpr)
 
     # finalizing the traces
-    final_traces = [_post_check(trace) for trace in self.active_tracings]
+    final_traces = [
+      _trace_simplify(_post_check(trace), self.hidden_outvar_to_group, self.hidden_outvar_to_transition)
+      for trace in self.active_tracings
+    ]
 
     # reset the temporal data structures
     self.active_tracings = []
-    return final_traces
+    return tuple(final_traces)
 
-  def _eval_jaxpr(self, jaxpr, invars_to_replace=None, outvars_to_replace=None) -> None:
+  def _eval_jaxpr(
+      self,
+      jaxpr,
+      invars_to_replace=None,
+      outvars_to_replace=None
+  ) -> None:
     """
     Evaluating the jaxpr for extracting the etrace relationships.
 
@@ -595,6 +572,7 @@ class JaxprEvaluationForHiddenWeightOpRelation:
       outvars_to_replace: The means that the outvar used in the equation should be directly
                           replaced by the given mapped var.
     """
+
     for eqn in jaxpr.eqns:
       # TODO: add the support for the scan, while, cond, pjit, and other operators
       # Currently, scan, while, and cond are usually not the common operators used in
@@ -640,7 +618,7 @@ class JaxprEvaluationForHiddenWeightOpRelation:
     Evaluating the pjit primitive.
     """
     closed_jaxpr = eqn.params['jaxpr']
-    if is_etrace_op(eqn.params['name']):
+    if is_etrace_op(eqn.params['name']):  # is etrace operator
       # checking outvars
       if len(eqn.outvars) != 1:
         name_stack = source_info_util.current_name_stack() + eqn.source_info.name_stack
@@ -684,7 +662,7 @@ class JaxprEvaluationForHiddenWeightOpRelation:
           invar_needed_in_oth_eqns=set(eqn.outvars)  # temporary data for tracing eqn to hidden states
         )
       )
-    else:
+    else:  # not etrace operator
       if (
           # checking whether the weight variables are used in the pjit
           _check_some_element_exist_in_the_set(eqn.invars, self.weight_invars)
@@ -692,8 +670,8 @@ class JaxprEvaluationForHiddenWeightOpRelation:
           # checking whether the hidden variables are computed in the pjit
           _check_some_element_exist_in_the_set(eqn.outvars, self.hidden_outvars)
       ):
-        jaxpr = closed_jaxpr.jaxpr
         # TODO: checking whether there are bugs in the following mapping
+        jaxpr = closed_jaxpr.jaxpr
         invar_to_replace = {var2: var1 for var1, var2 in zip(eqn.invars, jaxpr.invars) if var1 != var2}
         outvar_to_replace = {var2: var1 for var1, var2 in zip(eqn.outvars, jaxpr.outvars) if var1 != var2}
         self._eval_jaxpr(jaxpr, invar_to_replace, outvar_to_replace)
@@ -705,6 +683,8 @@ class JaxprEvaluationForHiddenWeightOpRelation:
     """
     Evaluating the normal jaxpr equation.
     """
+    if eqn.primitive.name == 'stop_gradient':
+      return
     for trace in tuple(self.active_tracings):
       matched = _check_matched(eqn.invars, trace.invar_needed_in_oth_eqns)
       # if matched, add the eqn to the trace
@@ -916,14 +896,16 @@ def _format_and_optimize_jaxpr(
   return jaxpr
 
 
-class JaxprEvaluationForHiddenRelation:
+class JaxprEvaluationForHiddenGroup:
   """
-  Evaluating the jaxpr for extracting the etrace (weight, hidden, operator) relationships.
+  Evaluating the jaxpr for extracting the hidden state ``hidden-to-hidden`` relationships.
 
   Args:
     jaxpr: The jaxpr for the model.
-    weight_invars: The weight input variables.
     hidden_outvars: The hidden output variables.
+    hidden_outvar_to_invar: The mapping from the hidden output variable to the hidden input variable.
+    hidden_invar_to_hidden: The mapping from the hidden input variable to the hidden state.
+    hidden_outvar_to_hidden: The mapping from the hidden output variable to the hidden state.
 
   Returns:
     The list of the traced weight operations.
@@ -932,77 +914,80 @@ class JaxprEvaluationForHiddenRelation:
   def __init__(
       self,
       jaxpr: jax.core.Jaxpr,
-      weight_invars: Set[jax.core.Var],
       hidden_outvars: Set[HiddenInVar],
-      hidden_outvar_to_invar: Dict[HiddenOutVar, HiddenInVar]
+      hidden_outvar_to_invar: Dict[HiddenOutVar, HiddenInVar],
+      hidden_invar_to_hidden: Dict,
+      hidden_outvar_to_hidden: Dict,
+      weight_invars,
   ):
     # the jaxpr of the original model, assuming that the model is well-defined,
     # see the doc for the model which can be online learning compiled.
     self.jaxpr = jaxpr
 
     # the hidden state groups
-    self.weight_invars = weight_invars
-    self.hidden_outvars = hidden_outvars
     self.hidden_outvar_to_invar = hidden_outvar_to_invar
     self.hidden_invar_to_outvar = {invar: outvar for outvar, invar in hidden_outvar_to_invar.items()}
     self.hidden_invars = set(hidden_outvar_to_invar.values())
+    self.hidden_outvars = hidden_outvars
 
     # the data structures for the tracing hidden-hidden relationships
-    self.active_tracer: Optional[HiddenGroupTracer] = None
+    self.active_tracings = dict()
 
-  def compile(
-      self, hidden_param_op_tracers: List[HiddenWeightOpTracer]
-  ) -> Tuple[Dict[FrozenSet[HiddenOutVar], HiddenGroupRelation], List[HiddenWeightOpRelation]]:
+    # hidden invar/outvar to hidden itself
+    self.hidden_invar_to_hidden = hidden_invar_to_hidden
+    self.hidden_outvar_to_hidden = hidden_outvar_to_hidden
+
+    self.weight_invars = weight_invars
+
+  def compile(self) -> Tuple[Dict, Dict]:
     """
     Compiling the jaxpr for the etrace relationships.
     """
-    hidden_relations = dict()
-    final_hpo_relations = []
 
-    for hpo_tracer in hidden_param_op_tracers:
-      hpo_tracer: HiddenWeightOpTracer
-      group = frozenset(hpo_tracer.hidden_vars)
-      if group in hidden_relations:
-        final_hpo_relations.append(_hpo_tracer_to_relation(hidden_relations[group], hpo_tracer))
+    # the data structures for the tracing hidden-hidden relationships
+    self.active_tracings: Dict[jax.core.Var, HiddenToHiddensTracer] = dict()
 
-      else:
-        hid_invars = [self.hidden_outvar_to_invar[v] for v in hpo_tracer.hidden_vars]
+    # evaluating the jaxpr
+    self._eval_jaxpr(self.jaxpr)
 
-        # initialize the tracer
-        self.active_tracer = HiddenGroupTracer(needed_vars=set(group), eqns=[])
+    # post checking
+    final_traces = self._post_check()
 
-        # tracing
-        self._eval_jaxpr(self.jaxpr)
+    # reset the temporal data structures
+    self.active_tracings = dict()
+    return final_traces
 
-        # post-processing
-        jaxpr = _format_and_optimize_jaxpr(
-          hid_invars,
-          list(hpo_tracer.hidden_vars),
-          self.hidden_outvar_to_invar,
-          self.hidden_invar_to_outvar,
-          list(reversed(self.active_tracer.eqns)),
-        )
-        self.active_tracer = None
+  def _eval_jaxpr(
+      self,
+      jaxpr,
+      invars_to_replace=None,
+      outvars_to_replace=None
+  ) -> None:
+    """
+    Evaluating the jaxpr for extracting the etrace relationships.
 
-        if jaxpr is None:
-          hpo_tracer.weight.is_not_etrace = True
+    ``invars_to_replace`` and ``outvars_to_replace`` are not changing the semantics of the model,
+    but are used for the replacement of the jax vars.
 
-        else:
-          group = frozenset(jaxpr.outvars)
-          hid_relation = HiddenGroupRelation(
-            hidden_invars=list(jaxpr.invars),
-            hidden_outvars=list(jaxpr.outvars),
-            input_vars=list(jaxpr.constvars),
-            jaxpr=jaxpr
-          )
-          hidden_relations[group] = hid_relation
-          final_hpo_relations.append(_hpo_tracer_to_relation(hid_relation, hpo_tracer))
-    return hidden_relations, final_hpo_relations
+    Args:
+      jaxpr: The jaxpr for the model.
+      invars_to_replace: This means that the invar used in the equation should be directly
+                         replaced by the given mapped var.
+      outvars_to_replace: The means that the outvar used in the equation should be directly
+                          replaced by the given mapped var.
+    """
 
-  def _eval_jaxpr(self, jaxpr, invars_to_replace=None, outvars_to_replace=None) -> None:
-    for eqn in reversed(jaxpr.eqns):
+    for eqn in jaxpr.eqns:
+      # TODO: add the support for the scan, while, cond, pjit, and other operators
+      # Currently, scan, while, and cond are usually not the common operators used in
+      # the definition of a brain dynamics model. So we may not need to consider them
+      # during the current phase.
+      # However, for the long-term maintenance and development, we need to consider them,
+      # since users usually create crazy models.
+
       if invars_to_replace is not None:
         eqn = eqn.replace(invars=[invars_to_replace.get(invar, invar) for invar in eqn.invars])
+
       if outvars_to_replace is not None:
         eqn = eqn.replace(outvars=[outvars_to_replace.get(outvar, outvar) for outvar in eqn.outvars])
 
@@ -1060,13 +1045,116 @@ class JaxprEvaluationForHiddenRelation:
     """
     Evaluating the normal jaxpr equation.
     """
-    needed_outvars = []
+    if eqn.primitive.name == 'stop_gradient':
+      return
+
+    # check whether the invars have one of the hidden states.
+    # If it is true, add a new tracer.
+    other_invars = []
+    hidden_invars = []
+    for invar in eqn.invars:
+      if isinstance(invar, jax.core.Literal):
+        continue
+      elif invar in self.hidden_invars:
+        hidden_invars.append(invar)
+      else:
+        other_invars.append(invar)
+    if len(hidden_invars) > 0:
+      # A hidden invar may be used in multiple places.
+      # All places share a common tracer.
+      assert len(hidden_invars) == 1
+      hidden_var = hidden_invars[0]
+      hidden_outvars = set([outvar for outvar in eqn.outvars if outvar in self.hidden_outvars])
+      needed_invars = set([outvar for outvar in eqn.outvars if outvar not in self.hidden_outvars])
+      if hidden_var in self.active_tracings:
+        self.active_tracings[hidden_var].trace.append(eqn.replace())
+        self.active_tracings[hidden_var].other_invars.update(other_invars)
+        self.active_tracings[hidden_var].invar_needed_in_oth_eqns.update(needed_invars)
+        self.active_tracings[hidden_var].connected_hidden_outvars.update(hidden_outvars)
+      else:
+        tracer = HiddenToHiddensTracer(
+          hidden_invar=hidden_var,
+          connected_hidden_outvars=hidden_outvars,
+          other_invars=set(other_invars),
+          invar_needed_in_oth_eqns=needed_invars,
+          trace=[eqn.replace()]
+        )
+        self.active_tracings[hidden_var] = tracer
+
+    # check whether this equation is used in other tracers
+    for tracer in tuple(self.active_tracings.values()):
+      tracer: HiddenToHiddensTracer
+      matched = _check_matched(eqn.invars, tracer.invar_needed_in_oth_eqns)
+      # if matched, add the eqn to the trace
+      # if not matched, skip
+      if len(matched):
+        self._add_eqn_in_a_trace(eqn, tracer)
+
+  def _add_eqn_in_a_trace(
+      self,
+      eqn: jax.core.JaxprEqn,
+      tracer: HiddenToHiddensTracer
+  ) -> None:
+    tracer.trace.append(eqn.replace())
+    tracer.invar_needed_in_oth_eqns.update(eqn.outvars)
+    # check whether the hidden states are needed in the other equations
     for outvar in eqn.outvars:
-      if outvar in self.active_tracer.needed_vars:
-        needed_outvars.append(outvar)
-    if len(needed_outvars):
-      self.active_tracer.eqns.append(eqn.replace())
-      self.active_tracer.needed_vars.update([invar for invar in eqn.invars if isinstance(invar, jax.core.Var)])
+      if outvar in self.hidden_outvars:
+        tracer.connected_hidden_outvars.add(outvar)
+
+  def _post_check(self) -> Tuple[Dict, Dict]:
+    # [First step]
+    # check the following items:
+    #
+    # 1. the shape of connected hidden states should be the same
+    # 2. simplify the trace
+    # 3. remove the unnecessary hidden states
+
+    hidden_to_group = [
+      _simplify_hid2hid_tracer(
+        tracer,
+        self.hidden_invar_to_hidden,
+        self.hidden_outvar_to_hidden
+      )
+      for tracer in self.active_tracings.values()
+    ]
+
+    # [second step]
+    # Find out the hidden group,
+    # i.e., the hidden states that are connected to each other, the union of all hidden2group
+    hidden_to_group_mapping = dict()  # hidden-to-hidden group
+    hidden_outvar_to_transition = dict()  # hidden_outvar-to-transition
+    for transition in hidden_to_group:
+      transition: HiddenToHiddensTransition
+      gather = set([self.hidden_invar_to_outvar[transition.hidden_invar]] +
+                   list(transition.connected_hidden_outvars))
+      for hidden in gather:
+        if hidden not in hidden_to_group_mapping:
+          hidden_to_group_mapping[hidden] = gather
+        else:
+          hidden_to_group_mapping[hidden].update(gather)
+      hidden_outvar = self.hidden_invar_to_outvar[transition.hidden_invar]
+      hidden_outvar_to_transition[hidden_outvar] = transition
+
+    # [third step]
+    # return the final hidden state relationships
+    relations: Dict[Any, HiddenGroupRelation] = dict()
+    for hidden_outvar, gather in hidden_to_group_mapping.items():
+      key = frozenset(gather)
+      if key not in relations:
+        hidden_outvars = list(gather)
+        hidden_invars = [self.hidden_outvar_to_invar[outvar] for outvar in hidden_outvars]
+        hidden_states = [self.hidden_outvar_to_hidden[outvar] for outvar in hidden_outvars]
+        relations[key] = HiddenGroupRelation(hidden_invars=hidden_invars,
+                                             hidden_outvars=hidden_outvars,
+                                             hidden_states=hidden_states)
+
+    # [final step]
+    hidden_outvar_to_relation = dict()
+    for hidden_outvar, gather in hidden_to_group_mapping.items():
+      key = frozenset(gather)
+      hidden_outvar_to_relation[hidden_outvar] = relations[key]
+    return hidden_outvar_to_relation, hidden_outvar_to_transition
 
 
 class JaxprEvaluationForHiddenPerturbation:
@@ -1082,6 +1170,7 @@ class JaxprEvaluationForHiddenPerturbation:
 
   Returns:
     The revised closed jaxpr with the perturbations.
+
   """
 
   def __init__(
@@ -1103,7 +1192,10 @@ class JaxprEvaluationForHiddenPerturbation:
 
   def compile(self) -> jax.core.ClosedJaxpr:
     # new invars, the var order is the same as the hidden_outvars
-    self.new_invars = {v: self._new_var_like(v) for v in self.hidden_outvars}
+    self.new_invars = {
+      v: self._new_var_like(v)
+      for v in self.hidden_outvars
+    }
 
     # the hidden states that are not found in the code
     self.hidden_jaxvars_to_remove = set(self.hidden_outvars)
@@ -1118,7 +1210,8 @@ class JaxprEvaluationForHiddenPerturbation:
     # If there are hidden states that are not found in the code, we raise an error.
     if len(self.hidden_jaxvars_to_remove) > 0:
       raise ValueError(
-        f'Error: we did not found your defined hidden state (see the following information) in the code. \n'
+        f'Error: we did not found your defined hidden state '
+        f'(see the following information) in the code. \n'
         f'Please report an issue to the developers at {git_issue_addr}. \n'
         f'The missed hidden states are: \n'
         f'{state_traceback([self.id_to_state[self.outvar_to_state_id[v]] for v in self.hidden_jaxvars_to_remove])}'
@@ -1267,19 +1360,17 @@ def _summarize_source_info(
     num_frames: int = 1
 ) -> str:
   from jax._src.source_info_util import user_frames
-  frames = itertools.islice(user_frames(source_info),
-                            start_frame,
-                            start_frame + num_frames)
-  frame_strs = [_summarize_frame(frame)
-                if frame else "unknown"
-                for frame in frames]
+  frames = itertools.islice(
+    user_frames(source_info),
+    start_frame,
+    start_frame + num_frames
+  )
+  frame_strs = [
+    _summarize_frame(frame)
+    if frame else "unknown"
+    for frame in frames
+  ]
   return '\n'.join(reversed(frame_strs))
-
-
-class _DiagJacobian(BaseEnum):
-  exact = 'exact'
-  vjp = 'vjp'
-  jvp = 'jvp'
 
 
 class _VJPTime(BaseEnum):
@@ -1287,17 +1378,127 @@ class _VJPTime(BaseEnum):
   t_minus_1 = 't_minus_1'
 
 
-_compiler_docstr = '''
-  diag_jacobian: str
-      The method to compute the hidden Jacobian diagonal matrix. It should be one of
-      the following values:
+class HiddenToHiddensTransition(NamedTuple):
+  hidden_invar: jax.core.Var
+  hidden: ETraceVar
+  connected_hidden_outvars: List[jax.core.Var]
+  connected_hiddens: List[ETraceVar]
+  jaxpr: jax.core.Jaxpr
+  other_invars: List[jax.core.Var]
 
-      - 'exact': the exact Jacobian diagonal matrix
-      - 'vjp': the vector-Jacobian product computed Jacobian diagonal matrix
-      - 'jvp': the Jacobian-vector product computed Jacobian diagonal matrix
+  def state_transition(
+      self,
+      old_hidden_val: jax.Array,
+      other_input_vals: PyTree,
+      return_index: Optional[int] = None
+  ) -> HiddenVals | jax.Array:
+    """
+    Computing the hidden state transitions :math:`h^t = f(h_i^t, x)`.
+
+    Args:
+      old_hidden_val: The old hidden state value.
+      other_input_vals: The input values.
+      return_index: index of the hidden state to return.
+
+    Returns:
+      The new hidden state values.
+    """
+    new_hidden_vals = jax.core.eval_jaxpr(self.jaxpr, other_input_vals, old_hidden_val)
+    if return_index is not None:
+      return new_hidden_vals[return_index]
+    return new_hidden_vals
+
+
+class HiddenGroupRelation(NamedTuple):
+  r"""
+  The data structure for recording the hidden-to-hidden relation.
+
+  The following fields are included:x
+
+  - hidden_vars: the hidden states for one neuron population
+  - input_vars: the input variables for the computing hidden state transitions
+  - jaxpr: the jaxpr for the hidden state transitions
+
+  This relation is used for computing the hidden-to-hidden state transitions::
+
+      h_{t+1} = f(h_t, x_t)
+
+  where ``h_t`` is the hidden state defined in ``hidden_vars``, ``x_t`` is the input at time ``t``
+  defined in ``input_vars``, and ``f`` is the hidden state transition function which is defined
+  in ``jaxpr``.
+
+  """
+
+  # "hidden_invars", "hidden_outvars", and "hidden_states"
+  # sequentially correspond to the order in each other.
+  hidden_invars: List[HiddenInVar]  # the input hidden states
+  hidden_outvars: List[HiddenOutVar]  # the output hidden states
+  hidden_states: List[ETraceVar]  # the hidden states
+
+  def hidden_invar_in_this_group(self, invar: jax.core.Var) -> bool:
+    """
+    Checking whether the input variable is in the hidden states of this group.
+
+    Args:
+      invar: The input variable.
+
+    Returns:
+      Whether the input variable is in the hidden states of this group.
+    """
+    return invar in self.hidden_invars
+
+  def hidden_outvar_in_this_group(self, outvar: jax.core.Var) -> bool:
+    """
+    Checking whether the output variable is in the hidden states of this group.
+
+    Args:
+      outvar: The output variable.
+
+    Returns:
+      Whether the output variable is in the hidden states of this group.
+    """
+    return outvar in self.hidden_outvars
+
+  def hidden_state_in_this_group(self, state: ETraceVar) -> bool:
+    """
+    Checking whether the state is in the hidden states of this group.
+
+    Args:
+      state: The state.
+
+    Returns:
+      Whether the state is in the hidden states of this group.
+    """
+    return state in self.hidden_states
+
+
+class HiddenWeightOpRelation(NamedTuple):
+  """
+  The data structure for recording the weight, operator, and hidden relationship.
+
+  The following fields are included:
+
+  - weight: the instance of ``ETraceParam``
+  - op_jaxpr: the jaxpr for the weight operation, instance of ``jax.core.Jaxpr``
+  - x: the jax Var for the weight input
+  - y: the jax Var for the wight output
+  - jaxpr_y2hid: the jaxpr to evaluate y -->  eligibility trace variables
+  - hidden_vars: the hidden states connected to the weight
+  """
+  weight: ETraceParam
+  op_jaxpr: jax.core.Jaxpr
+  x: WeightXVar
+  y: WeightYVar
+  jaxpr_y2hid: jax.core.Jaxpr
+  hidden_vars: List[HiddenOutVar]
+  hidden_groups: List[HiddenGroupRelation]
+  hidden_var_to_group: Dict[HiddenOutVar, HiddenGroupRelation]
+  hidden_var_to_transition: Dict[HiddenOutVar, HiddenToHiddensTransition]
+
+
+_compiler_docstr = '''
   diag_normalize: bool
-      Whether to normalize the hidden Jacobian diagonal matrix to the range of ``[-1, 1]``.
-      Supported only when the ``diag_jacobian`` is ``'vjp'`` or ``'jvp'``. Default is ``None``.
+      Whether to normalize the hidden Jacobian diagonal matrix to the range of ``[-1, 1]``. Default is ``None``.
   vjp_time: str
       The time to compute the loss-to-hidden Jacobian. It should be one of the
       following values:
@@ -1332,21 +1533,26 @@ class ETraceGraph:
   out_wx_jaxvars: List[jax.core.Var]  # the weight x
   hid2hid_jaxvars: List[jax.core.Var]  # the hidden to hidden vars
   num_out: int  # the number of function returns
-  hidden_id_to_outvar: Dict[StateID, jax.core.Var]  # the hidden state's jax outvar
-  hidden_outvar_to_invar: Dict[HiddenOutVar, HiddenInVar]  # the hidden state's jax outvar to invar
+
+  # hidden invar/outvar to hidden itself
+  hidden_invar_to_hidden: Dict[jax.core.Var, ETraceVar]
+  hidden_outvar_to_hidden: Dict[jax.core.Var, ETraceVar]
+  # hidden outvar-to-invar, and invar-to-outvar
+  hidden_outvar_to_invar: Dict[jax.core.Var, jax.core.Var]
+  hidden_invar_to_outvar: Dict[jax.core.Var, jax.core.Var]
 
   # [ KEY ]
   # 1. The most important data structure for the graph, which implementing
   #    the relationship between the etrace weights and the etrace variables.
-  hidden_param_op_relations: List[HiddenWeightOpRelation]
+  hidden_param_op_relations: Tuple[HiddenWeightOpRelation, ...]
 
   # 2. The relationship between the hidden states.
-  hidden_group_relations: Dict[FrozenSet[HiddenInVar], HiddenGroupRelation]
+  hidden_outvar_to_group: Dict[HiddenOutVar, HiddenGroupRelation]
+  hidden_outvar_to_transition: Dict[HiddenOutVar, HiddenToHiddensTransition]
 
   def __init__(
       self,
       model: Callable,
-      diag_jacobian: str | Enum = 'exact',
       vjp_time: str | Enum = 't',
   ):
     # The original model
@@ -1354,9 +1560,6 @@ class ETraceGraph:
 
     # the time for computing the VJP
     self.vjp_time = _VJPTime.get(vjp_time)
-
-    # the way to compute diagonal Jacobian
-    self.diag_jacobian = _DiagJacobian.get(diag_jacobian)
 
     # --- stateful model, for extracting states, weights, and variables --- #
     #
@@ -1392,6 +1595,7 @@ class ETraceGraph:
     the hidden state Jacobian.
 
     """
+
     # -- compile the model -- #
     #
     # NOTE:
@@ -1403,7 +1607,6 @@ class ETraceGraph:
     # -- states -- #
     states = self.stateful_model.get_states()
     id_to_state = {id(st): st for st in states}
-    self.id_to_state = id_to_state
 
     # -- jaxpr -- #
     closed_jaxpr = self.stateful_model.get_jaxpr()
@@ -1426,33 +1629,61 @@ class ETraceGraph:
     # -- checking weights as invar -- #
     weight_id_to_invar = {
       id(st): jax.tree.leaves(invar)
-      for invar, st in zip(invars_with_state_tree, states) if isinstance(st, ETraceParam)
+      for invar, st in zip(invars_with_state_tree, states)
+      if isinstance(st, ETraceParam)
     }
     hidden_id_to_invar = {
       id(st): invar  # ETraceVar only contains one Array, "invar" is the jaxpr var
-      for invar, st in zip(invars_with_state_tree, states) if isinstance(st, ETraceVar)
+      for invar, st in zip(invars_with_state_tree, states)
+      if isinstance(st, ETraceVar)
     }
     invar_to_weight_id = {
-      v: k for k, vs in weight_id_to_invar.items() for v in vs
+      v: k
+      for k, vs in weight_id_to_invar.items()
+      for v in vs
     }
-    self.hidden_id_to_invar = hidden_id_to_invar
 
     # -- checking states as outvar -- #
     hidden_id_to_outvar = {
       id(st): outvar  # ETraceVar only contains one Array, "outvar" is the jaxpr var
-      for outvar, st in zip(outvars_with_state_tree, states) if isinstance(st, ETraceVar)
+      for outvar, st in zip(outvars_with_state_tree, states)
+      if isinstance(st, ETraceVar)
     }
-    self.outvar_to_state_id = {v: state_id for state_id, v in hidden_id_to_outvar.items()}
-    self.hidden_id_to_outvar = hidden_id_to_outvar
+    outvar_to_state_id = {
+      v: state_id
+      for state_id, v in hidden_id_to_outvar.items()
+    }
     self.hidden_outvar_to_invar = {
       outvar: hidden_id_to_invar[hid]
       for hid, outvar in hidden_id_to_outvar.items()
+    }
+    self.hidden_invar_to_outvar = {
+      invar: outvar
+      for outvar, invar in self.hidden_outvar_to_invar.items()
     }
     self.hidden_outvar_to_hidden = {
       outvar: st
       for outvar, st in zip(outvars_with_state_tree, states)
       if isinstance(st, ETraceVar)
     }
+    self.hidden_invar_to_hidden = {
+      invar: st
+      for invar, st in zip(invars_with_state_tree, states)
+      if isinstance(st, ETraceVar)
+    }
+
+    # -- evaluating the relationship for hidden-to-hidden -- #
+    evaluator = JaxprEvaluationForHiddenGroup(
+      jaxpr=jaxpr,
+      hidden_outvars=set(hidden_id_to_outvar.values()),
+      hidden_outvar_to_invar=self.hidden_outvar_to_invar,
+      hidden_invar_to_hidden=self.hidden_invar_to_hidden,
+      hidden_outvar_to_hidden=self.hidden_outvar_to_hidden,
+      weight_invars=set([v for vs in weight_id_to_invar.values() for v in vs])
+    )
+    hidden_outvar_to_relation, hidden_outvar_to_transition = evaluator.compile()
+    self.hidden_outvar_to_group = hidden_outvar_to_relation
+    self.hidden_outvar_to_transition = hidden_outvar_to_transition
 
     # -- evaluating the jaxpr for (hidden, weight, op) relationships -- #
     evaluator = JaxprEvaluationForHiddenWeightOpRelation(
@@ -1462,48 +1693,27 @@ class ETraceGraph:
       id_to_state=id_to_state,
       hidden_invars=list(hidden_id_to_invar.values()),
       hidden_outvars=list(hidden_id_to_outvar.values()),
+      hidden_outvar_to_group=hidden_outvar_to_relation,
+      hidden_outvar_to_transition=hidden_outvar_to_transition
     )
-    hid_param_op_tracers = evaluator.compile()
-
-    # -- evaluating the jaxpr for (hidden, hidden) relationships -- #
-    if self.diag_jacobian == _DiagJacobian.exact:
-      evaluator = JaxprEvaluationForHiddenRelation(
-        jaxpr=jaxpr,
-        hidden_outvars=set(hidden_id_to_outvar.values()),
-        weight_invars=set(invar_to_weight_id.keys()),
-        hidden_outvar_to_invar=self.hidden_outvar_to_invar
-      )
-      hidden_group_relations, hidden_param_op_relations = evaluator.compile(hid_param_op_tracers)
-      self.hidden_group_relations = hidden_group_relations
-
-    else:
-      hidden_param_op_relations = [_trace_simplify(tracer) for tracer in hid_param_op_tracers]
-      # empty dict if we use the VJP or JVP method to compute the hidden-hidden Jacobian
-      self.hidden_group_relations = dict()
-
-    self.hidden_param_op_relations = hidden_param_op_relations
+    self.hidden_param_op_relations = evaluator.compile()
 
     # --- Collect the Var needed to compute the weight spatial gradients --- #
     # ---      Rewrite the jaxpr for computing the needed variables      --- #
 
-    # -- new outvars -- #
-
     # all states jaxpr var
     self.out_state_jaxvars = list(jaxpr.outvars[num_out:])
-    weight_jaxvar_tree, hidden_jaxvar, other_state_jaxvar_tree = split_state_values(states, outvars_with_state_tree)
+    weight_jaxvar_tree, hidden_jaxvar, other_state_jaxvar_tree = (
+      split_state_values(states, outvars_with_state_tree)
+    )
 
-    # all weight jaxpr var
-    self.out_weight_jaxvars = jax.tree.leaves(weight_jaxvar_tree)
-
-    # all hidden jaxpr var, one etrace to one Array
+    # all jaxpr var of ETraceVar, one etrace to one Array
+    # All ETrace Hidden state
     self.out_hidden_jaxvars = list(hidden_jaxvar)
-
-    # all other states jaxpr var
-    self.out_othstate_jaxvars = jax.tree.leaves(other_state_jaxvar_tree)
 
     # all weight x
     self.out_wx_jaxvars = list(
-      set([relation.x for relation in hidden_param_op_relations])
+      set([relation.x for relation in self.hidden_param_op_relations])
     )
 
     # all y-to-hidden vars
@@ -1515,28 +1725,31 @@ class ETraceGraph:
     )
 
     # hidden-hidden transition vars
-    self.hid2hid_jaxvars = list(
-      set(
-        [v for group in self.hidden_group_relations.values() for v in group.input_vars] +
-        [v for group in self.hidden_group_relations.values() for v in group.hidden_invars]
-      )
-    )
+    hid2hid_jaxvars = set()
+    for group in self.hidden_outvar_to_group.values():
+      hid2hid_jaxvars.update([v for v in group.hidden_invars])
+    for transition in self.hidden_outvar_to_transition.values():
+      hid2hid_jaxvars.update([v for v in transition.other_invars])
+
+    # all outvars
     all_outvars = list(
       set(
         self.out_state_jaxvars +  # all state variables
         self.out_wx_jaxvars +  # all weight x
         out_wy2hid_jaxvars +  # all y-to-hidden invars
-        self.hid2hid_jaxvars  # all hidden-hidden transition vars
+        list(hid2hid_jaxvars)  # all hidden-hidden transition vars
       )
     )
     self.out_all_jaxvars = jaxpr.outvars[:num_out] + all_outvars
 
     # Rewrite jaxpr to return all necessary variables, including
+    #
     #   1. the original function outputs
     #   2. the hidden states
     #   3. the weight x   ===>  for computing the weight spatial gradients
     #   4. the y-to-hidden variables   ===>  for computing the weight spatial gradients
     #   5. the hidden-hidden transition variables   ===>  for computing the hidden-hidden jacobian
+    #
     jaxpr = jax.core.Jaxpr(
       constvars=list(jaxpr.constvars),
       invars=list(jaxpr.invars),
@@ -1551,9 +1764,9 @@ class ETraceGraph:
       evaluator = JaxprEvaluationForHiddenPerturbation(
         closed_jaxpr=self.augmented_jaxpr,
         hidden_outvars=self.out_hidden_jaxvars,
-        outvar_to_state_id=self.outvar_to_state_id,
-        id_to_state=self.id_to_state,
-        hidden_invars=list(self.hidden_id_to_invar.values()),
+        outvar_to_state_id=outvar_to_state_id,
+        id_to_state=id_to_state,
+        hidden_invars=list(hidden_id_to_invar.values()),
       )
       self.jaxpr_with_hidden_perturb = evaluator.compile()
     return self
@@ -1569,40 +1782,40 @@ class ETraceGraph:
       msg = '===' * 40 + '\n'
       msg += f'For weight {i}: {hpo_relation.weight}\n\n'
       msg += '1. It is defined at: \n'
-      source = indent_code(_summarize_source_info(hpo_relation.weight.source_info,
-                                                  start_frame=start_frame,
-                                                  num_frames=n_frame),
-                           indent=3)
+      source = indent_code(
+        _summarize_source_info(hpo_relation.weight.source_info,
+                               start_frame=start_frame,
+                               num_frames=n_frame),
+        indent=3
+      )
       msg += f'{source}\n\n'
       msg += '2. The associated hidden states are:\n'
       for hid_var in hpo_relation.hidden_vars:
         hidden: ETraceVar = self.hidden_outvar_to_hidden[hid_var]
         msg += f'   {hidden},  which is defined in\n'
-        source = indent_code(_summarize_source_info(hidden.source_info,
-                                                    start_frame=start_frame,
-                                                    num_frames=n_frame),
-                             indent=6)
+        source = indent_code(
+          _summarize_source_info(hidden.source_info,
+                                 start_frame=start_frame,
+                                 num_frames=n_frame),
+          indent=6
+        )
         msg += f'{source}\n'
       msg += '\n'
-      msg += '3. The associated operator is:\n\n'
-      msg += indent_code(jaxpr_to_python_code(hpo_relation.op_jaxpr,
-                                              fn_name='weight_to_hidden_operation'),
-                         indent=3)
+      msg += '3. The associated etrace operator [ h^t = f(x^t, w) ] is:\n\n'
+      msg += indent_code(
+        jaxpr_to_python_code(hpo_relation.op_jaxpr, fn_name='weight_to_hidden_operation'),
+        indent=3
+      )
       msg += '\n\n'
-      if len(self.hidden_group_relations) > 0:
-        msg += '4. The associated hidden states have the following relationships:\n\n'
-        hid_relation = self.hidden_group_relations[frozenset(hpo_relation.hidden_vars)]
-        msg += indent_code(jaxpr_to_python_code(hid_relation.jaxpr,
-                                                fn_name='hidden_to_hidden_transition'),
-                           indent=3)
-        msg += '\n\n'
+      msg += '4. The associated hidden states [ h^t = g(h^t-1) ] have the following relationships:\n\n'
+      for group in hpo_relation.hidden_groups:
+        msg += f'   The hidden states are: {group.hidden_states}\n'
+      msg += '\n\n'
       msg += '---' * 40 + '\n\n'
       print(msg)
 
   def _jaxpr_compute_model(
-      self,
-      *args,
-      **kwargs,
+      self, *args, **kwargs,
   ) -> Tuple[PyTree, HiddenVals, StateVals, TempData]:
     """
     Computing the model according to the given inputs and parameters by using the compiled jaxpr.
@@ -1685,8 +1898,38 @@ class ETraceGraph:
     # all x and df values
     return xs, dfs
 
-  def _compute_hid2hid_needed_data(self, temps):
-    return {v: temps[v] for v in self.hid2hid_jaxvars}
+  def _compute_hidden2hidden_jacobian(
+      self, intermediate_values: dict
+  ) -> Dict[Tuple[HiddenOutVar, HiddenOutVar], jax.Array]:
+    hid2hid_jacobian = dict()
+
+    for transition in self.hidden_outvar_to_transition.values():
+      transition: HiddenToHiddensTransition
+
+      #
+      # "primals" is the hidden state values at the previous time step
+      primals = intermediate_values[transition.hidden_invar]
+
+      #
+      # "tangents" is the hidden-to-hidden Jacobian at the previous time step
+      tangents = jnp.ones(primals.aval.shape, primals.aval.dtype)
+
+      # JVP gradients, computing:
+      #
+      # [∂a^t/∂a^t-1, ∂b^t/∂a^t-1, ∂c^t/∂a^t-1, ...]
+      #
+      other_input_vals = [intermediate_values[v] for v in transition.other_invars]
+      fun = partial(transition.state_transition, other_input_vals=other_input_vals)
+      _, jvp_grads = jax.jvp(fun, (primals,), (tangents,))  # produce the new hidden, and the JVP gradients
+
+      # store the gradients
+      outvar_t_minus_1 = self.hidden_invar_to_outvar[transition.hidden_invar]
+      for outvar_t, grad_data in zip(transition.connected_hidden_outvars, jvp_grads):
+        key = (outvar_t_minus_1, outvar_t)
+        assert key not in hid2hid_jacobian, 'The key should not exist.'
+        hid2hid_jacobian[key] = grad_data
+
+    return hid2hid_jacobian
 
   def solve_h2w_h2h_jacobian(
       self, *args,
@@ -1718,8 +1961,8 @@ class ETraceGraph:
     hid2weight_jac = self._compute_hid2weight_jacobian(temps)
 
     # --- other returns --- #
-    hid2hid_data = self._compute_hid2hid_needed_data(temps)
-    return out, hiddens, others, hid2weight_jac, hid2hid_data
+    hid2hid_jac = self._compute_hidden2hidden_jacobian(temps)
+    return out, hiddens, others, hid2weight_jac, hid2hid_jac
 
   def _jaxpr_compute_vjp_model_at_current(
       self, *args
@@ -1884,8 +2127,8 @@ class ETraceGraph:
     hid2weight_jac = self._compute_hid2weight_jacobian(temps)
 
     # --- other returns --- #
-    hid2hid_data = self._compute_hid2hid_needed_data(temps)
-    return out, hidden_vals, other_vals, hid2weight_jac, hid2hid_data, vjp_residual
+    hid2hid_jac = self._compute_hidden2hidden_jacobian(temps)
+    return out, hidden_vals, other_vals, hid2weight_jac, hid2hid_jac, vjp_residual
 
 
 ETraceGraph.__doc__ = ETraceGraph.__doc__.format(doc=_compiler_docstr)
@@ -1894,7 +2137,6 @@ ETraceGraph.__doc__ = ETraceGraph.__doc__.format(doc=_compiler_docstr)
 @set_module_as('brainscale')
 def build_etrace_graph(
     model: Callable,
-    diag_jacobian: str | Enum = 'exact',
     vjp_time: str | Enum = 't',
 ) -> Callable[..., ETraceGraph]:
   r"""
@@ -1916,7 +2158,7 @@ def build_etrace_graph(
       return jax.nn.relu(jnp.dot(x, w))
 
     # define and compile the etrace graph
-    etrace_graph = brainscale.build_etrace_graph(model, diag_jacobian='exact', vjp_time='t')(x, w)
+    etrace_graph = brainscale.build_etrace_graph(model, vjp_time='t')(x, w)
     ```
 
   Parameters
@@ -1927,7 +2169,7 @@ def build_etrace_graph(
   -------
     graph: The eligibility trace graph.
   """
-  etrace_graph = ETraceGraph(model, diag_jacobian=diag_jacobian, vjp_time=vjp_time)
+  etrace_graph = ETraceGraph(model, vjp_time=vjp_time)
 
   def _compile_graph(*args, **kwargs) -> ETraceGraph:
     etrace_graph.compile_graph(*args, **kwargs)
