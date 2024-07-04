@@ -124,6 +124,8 @@ def _expon_smooth(old, new, decay):
   :param decay: the decay factor
   :return: the smoothed value
   """
+  if new is None:
+    return decay * old
   return decay * old + (1 - decay) * new
 
 
@@ -798,7 +800,7 @@ def _init_IO_dim_state(
   if relation.x not in self.etrace_xs:
     shape = relation.x.aval.shape
     dtype = relation.x.aval.dtype
-    # wx may be duplicate used in the graph
+    # wx may be repeatedly used in the graph
     self.etrace_xs[relation.x] = bst.ShortTermState(jnp.zeros(shape, dtype))
 
   for group in relation.hidden_groups:
@@ -903,6 +905,7 @@ def _update_IO_dim_etrace_with_exact_jac(
             # diagonal Jacobian * hidden df
             data = hist_dfs[(hwo_relation.y, hidden_outvar_at_t_minus_1)] * hid2hid_jac_at_t[diag_jac_key]
             new_etrace = data if new_etrace is None else new_etrace + data
+        assert new_etrace is not None, f'The new etrace should not be None. '
 
         #
         # Step 3:
@@ -910,9 +913,8 @@ def _update_IO_dim_etrace_with_exact_jac(
         # update: eligibility trace * hidden diagonal Jacobian + new hidden df
         #        dϵ^t = D_h ⊙ dϵ^t-1 + df^t, where D_h is the hidden-to-hidden Jacobian diagonal matrix.
         #
-        assert new_etrace is not None, f'The new etrace should not be None. '
         new_df_key = (hwo_relation.y, hidden_outvar_at_t)
-        new_etrace_dfs[new_df_key] = _low_pass_filter(new_etrace, dfs.get(new_df_key, None), decay)
+        new_etrace_dfs[new_df_key] = _expon_smooth(new_etrace, dfs.get(new_df_key, None), decay)
 
   return new_etrace_xs, new_etrace_dfs
 
@@ -940,6 +942,7 @@ def _solve_IO_dim_weight_gradients(
     #
     # Function to compute the weight gradients
     # according to the inputs and df gradients
+    #
     fun_dxy2dw = lambda dx, dy: _weight_op_gradient(relation.op_jaxpr, dx, weight_id_to_its_val[weight_id], dy)
 
     #
@@ -954,6 +957,7 @@ def _solve_IO_dim_weight_gradients(
       # Compute the weight gradients according to the x and y
       #
       #    dw = df(dx, dy)
+      #
       dg_weight = fun_dxy2dw(x, df_hid)
       _update_dict(dG_weights, weight_id, dg_weight)  # update the weight gradients
 
@@ -1102,6 +1106,7 @@ class DiagIODimAlgorithm(DiagETraceAlgorithmForVJP):
     return etrace_xs, etrace_dfs
 
   def _assign_etrace_data(self, hist_etrace_vals):
+    #
     # For any operation:
     #
     #           h^t = f(x^t \theta)
@@ -1128,6 +1133,7 @@ class DiagIODimAlgorithm(DiagETraceAlgorithmForVJP):
       hid2hid_jac_at_t: Dict[(HiddenOutVar, HiddenOutVar), jax.Array],
       weight_id_to_its_val: Dict[WeightID, PyTree],
   ) -> ETraceVals:
+    #
     # "running_index":
     #            the running index
     #
@@ -1145,7 +1151,6 @@ class DiagIODimAlgorithm(DiagETraceAlgorithmForVJP):
     # "weight_id_to_its_val":
     #           the weight values.
     #
-
     return _update_IO_dim_etrace_with_exact_jac(
       hist_etrace_vals,
       hid2weight_jac_at_t,
@@ -1312,6 +1317,7 @@ def _update_param_dim_etrace_with_exact_jac(
             diag_jac.append(hid2hid_jac_at_t[diag_jac_key])
             dh_to_dw.append(hist_etrace_vals[(weight_id, relation.x, hidden_outvar_at_t_minus_1)])
 
+        assert len(diag_jac) > 0, f'The diagonal Jacobian should not be empty. '
         new_bwg = etrace_op.etrace_update(
           mode,
           weight_val,  # pytree
@@ -1669,7 +1675,7 @@ class DiagHybridDimAlgorithm(DiagETraceAlgorithmForVJP):
     _reset_state_in_a_dict(self.etrace_dfs, batch_size, self.mode)
     _reset_state_in_a_dict(self.etrace_bwg, batch_size, self.mode)
 
-  def get_etrace_of(self, weight: bst.ParamState | WeightID) -> Tuple[List, List, Dict]:
+  def get_etrace_of(self, weight: bst.ParamState | WeightID) -> Tuple[Dict, Dict, Dict]:
     """
     Get the eligibility trace of the given weight.
 
@@ -1684,8 +1690,8 @@ class DiagHybridDimAlgorithm(DiagETraceAlgorithmForVJP):
     if not isinstance(weight_id, int):
       raise TypeError
 
-    etrace_xs = []
-    etrace_dfs = []
+    etrace_xs = dict()
+    etrace_dfs = dict()
     etrace_bws = dict()
     find_this_weight = False
     for relation in self.graph.hidden_param_op_relations:
@@ -1697,19 +1703,20 @@ class DiagHybridDimAlgorithm(DiagETraceAlgorithmForVJP):
       wx_var = relation.x
       if wx_var in self.etrace_xs:
         # get the weight_op input
-        etrace_xs.append(self.etrace_xs[wx_var].value)
+        etrace_xs[wx_var] = self.etrace_xs[wx_var].value
 
         # get the weight_op df
         wy_var = relation.y
-        dfs = {
-          (wy_var, hidden_var): self.etrace_dfs[(wy_var, hidden_var)].value
-          for hidden_var in relation.hidden_vars
-        }
-        etrace_dfs.append(dfs)
+        for group in relation.hidden_groups:
+          group: HiddenGroupRelation
+          for hidden_var in group.hidden_outvars:
+            etrace_dfs[(wy_var, hidden_var)] = self.etrace_dfs[(wy_var, hidden_var)].value
 
-      for hidden_var in relation.hidden_vars:
-        key = (weight_id, wx_var, hidden_var)
-        if key in self.etrace_bwg:
+      # get the batched weight gradients
+      for group in relation.hidden_groups:
+        group: HiddenGroupRelation
+        for hidden_outvar in group.hidden_outvars:
+          key = (weight_id, wx_var, hidden_outvar)
           etrace_bws[key] = self.etrace_bwg[key].value
 
     if not find_this_weight:
