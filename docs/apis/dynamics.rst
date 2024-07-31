@@ -50,6 +50,8 @@ RNNs
     MGUCell
     LSTMCell
     URLSTMCell
+    RHNCell
+    MinimalRNNCell
 
 
 
