@@ -63,7 +63,8 @@ extensions = [
   'myst_nb',
   'matplotlib.sphinxext.plot_directive',
   'sphinx_thebe',
-  'sphinx_design'
+  'sphinx_design',
+  'sphinx_math_dollar',
 ]
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
@@ -71,6 +72,20 @@ extensions = [
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
 source_suffix = ['.rst', '.ipynb', '.md']
+
+mathjax_config = {
+    'tex2jax': {
+        'inlineMath': [ ["\\(","\\)"] ],
+        'displayMath': [["\\[","\\]"] ],
+    },
+}
+
+mathjax3_config = {
+  "tex": {
+    "inlineMath": [['\\(', '\\)']],
+    "displayMath": [["\\[", "\\]"]],
+  }
+}
 
 
 # source_suffix = '.rst'
