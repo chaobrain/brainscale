@@ -310,8 +310,8 @@ class STP(bst.nn.Synapse):
 
   def update(self, pre_spike):
     t = bst.environ.get('t')
-    u = nn.exp_euler_step(self.du, self.u.value, t)
-    x = nn.exp_euler_step(self.dx, self.x.value, t)
+    u_ = nn.exp_euler_step(self.du, self.u.value, t)
+    x_ = nn.exp_euler_step(self.dx, self.x.value, t)
 
     # --- original code:
     #   if pre_spike.dtype == jax.numpy.bool_:
@@ -322,12 +322,12 @@ class STP(bst.nn.Synapse):
     #     x = pre_spike * (x - u * self.x) + (1 - pre_spike) * x
 
     # --- simplified code:
-    u = u + pre_spike * self.U * (1 - self.u.value)
-    x = x - pre_spike * u * self.x.value
+    u_ = u_ + pre_spike * self.U * (1 - self.u.value)
+    x_ = x_ - pre_spike * u_ * self.x.value
 
-    self.u.value = u.math.minimum(u, 1.)
-    self.x.value = u.math.maximum(x, 0.)
-    return u * x
+    self.u.value = u.math.minimum(u_, 1.)
+    self.x.value = u.math.maximum(x_, 0.)
+    return u_ * x_
 
 
 class STD(bst.nn.Synapse):
