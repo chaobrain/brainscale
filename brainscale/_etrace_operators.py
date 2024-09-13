@@ -18,10 +18,10 @@ from __future__ import annotations
 from functools import partial, reduce
 from typing import Tuple, Callable, List, Optional, Any
 
+import brainunit as u
 import brainstate as bst
 import jax
 import jax.core
-import jax.numpy as jnp
 
 from ._etrace_concepts import ETraceOp
 from ._typing import PyTree
@@ -150,8 +150,8 @@ class GeneralETraceOp(StandardETraceOp):
       #
       # compute the element-wise multiplication of:
       #      diagonal * \epsilon (dh_to_dw)
-      diag_mul_dw = jax.tree.map(jnp.multiply, dg_weight, dw)
-      final_dw = diag_mul_dw if final_dw is None else jax.tree.map(jnp.add, final_dw, diag_mul_dw)
+      diag_mul_dw = jax.tree.map(u.math.multiply, dg_weight, dw)
+      final_dw = diag_mul_dw if final_dw is None else jax.tree.map(u.math.add, final_dw, diag_mul_dw)
 
     #
     # Step 2:
@@ -165,7 +165,7 @@ class GeneralETraceOp(StandardETraceOp):
                                             self.op,
                                             ph_to_pwx,
                                             ph_to_pwy)
-      final_dw = jax.tree.map(jnp.add, final_dw, current_etrace)
+      final_dw = jax.tree.map(u.math.add, final_dw, current_etrace)
     return final_dw
 
   def hidden_to_etrace(
@@ -185,7 +185,7 @@ class GeneralETraceOp(StandardETraceOp):
                                   self.op,
                                   self.xinfo,
                                   dl_to_dh)
-    return jax.tree.map(jnp.multiply, dg_weight, dh_to_dw)
+    return jax.tree.map(u.math.multiply, dg_weight, dh_to_dw)
 
   @staticmethod
   def dy_to_weight(
@@ -206,15 +206,15 @@ class GeneralETraceOp(StandardETraceOp):
     #
 
     # input
-    x_data = jnp.ones(x_info.shape, x_info.dtype)
+    x_data = u.math.ones(x_info.shape, x_info.dtype)
 
     # transform
     fun = lambda dh, x: jax.vjp(partial(op, x), weight_vals)[1](dh)[0]
     if mode.has(bst.mixin.Batching):
       # TODO:
       #    assuming the batch size is the first dimension
-      x_data = jnp.expand_dims(x_data, axis=1)
-      dg_hidden = jnp.expand_dims(dg_hidden, axis=1)
+      x_data = u.math.expand_dims(x_data, axis=1)
+      dg_hidden = u.math.expand_dims(dg_hidden, axis=1)
       dg_weight = jax.vmap(fun)(dg_hidden, x_data)
     else:
       dg_weight = fun(dg_hidden, x_data)
@@ -239,8 +239,8 @@ class GeneralETraceOp(StandardETraceOp):
     if mode.has(bst.mixin.Batching):
       # TODO:
       #    assuming the batch size is the first dimension
-      dg_weight = jax.vmap(fun)(jnp.expand_dims(dg_x, axis=1),
-                                jnp.expand_dims(dg_y, axis=1))
+      dg_weight = jax.vmap(fun)(u.math.expand_dims(dg_x, axis=1),
+                                u.math.expand_dims(dg_y, axis=1))
     else:
       dg_weight = fun(dg_x, dg_y)
     return dg_weight
@@ -279,9 +279,9 @@ class MatMulETraceOp(StandardETraceOp):
     if self.weight_mask is not None:
       weight = weight * self.weight_mask
     if bias is None:
-      return jnp.matmul(x, weight)
+      return u.math.matmul(x, weight)
     else:
-      return jnp.matmul(x, weight) + bias
+      return u.math.matmul(x, weight) + bias
 
   def etrace_update(
       self,
@@ -309,7 +309,7 @@ class MatMulETraceOp(StandardETraceOp):
 
     diag_mul_dhdw = [self.hidden_to_etrace(mode, w, dh, dw)
                      for dh, dw in zip(diag_jac, dh_to_dw)]
-    diag_mul_dhdw = jax.tree.map(lambda *xs: reduce(jnp.add, xs), *diag_mul_dhdw)
+    diag_mul_dhdw = jax.tree.map(lambda *xs: reduce(u.math.add, xs), *diag_mul_dhdw)
 
     (dh_to_dweight, dh_to_dbias), unflatten = self._format_weight(diag_mul_dhdw)
     if ph_to_pwy is not None:
@@ -318,7 +318,7 @@ class MatMulETraceOp(StandardETraceOp):
         # dh_to_dbias: (batch_size, hidden_size,)
         # ph_to_pwx: (batch_size, input_size,)
         # ph_to_pwy: (batch_size, hidden_size,)
-        dh_to_dweight = dh_to_dweight + jnp.einsum('bi,bh->bih', ph_to_pwx, ph_to_pwy)
+        dh_to_dweight = dh_to_dweight + u.math.einsum('bi,bh->bih', ph_to_pwx, ph_to_pwy)
         if dh_to_dbias is not None:
           dh_to_dbias = dh_to_dbias + ph_to_pwy
       else:
@@ -326,7 +326,7 @@ class MatMulETraceOp(StandardETraceOp):
         # dh_to_dbias: (hidden_size,)
         # ph_to_pwx: (input_size,)
         # ph_to_pwy: (hidden_size,)
-        dh_to_dweight = (dh_to_dweight + jnp.outer(ph_to_pwx, ph_to_pwy))
+        dh_to_dweight = (dh_to_dweight + u.math.outer(ph_to_pwx, ph_to_pwy))
         if dh_to_dbias is not None:
           dh_to_dbias = dh_to_dbias + ph_to_pwy
     return unflatten(dh_to_dweight, dh_to_dbias)
@@ -350,13 +350,13 @@ class MatMulETraceOp(StandardETraceOp):
     if mode.has(bst.mixin.Batching):
       # dl_to_dh: (batch_size, hidden_size,)
       # dh_to_dw: (batch_size, input_size, hidden_size,)
-      dh_to_dweight = jnp.expand_dims(dl_to_dh, axis=1) * dh_to_dweight
+      dh_to_dweight = u.math.expand_dims(dl_to_dh, axis=1) * dh_to_dweight
       if dh_to_dbias is not None:
         dh_to_dbias = dh_to_dbias * dl_to_dh
     else:
       # dl_to_dh: (hidden_size,)
       # dh_to_dw: (input_size, hidden_size,)
-      dh_to_dweight = dh_to_dweight * jnp.expand_dims(dl_to_dh, axis=0)
+      dh_to_dweight = dh_to_dweight * u.math.expand_dims(dl_to_dh, axis=0)
       if dh_to_dbias is not None:
         dh_to_dbias = dh_to_dbias * dl_to_dh
     return unflatten(dh_to_dweight, dh_to_dbias)

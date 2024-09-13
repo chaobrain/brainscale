@@ -63,7 +63,7 @@ class LeakyRateReadout(nn.DnnLayer):
     self.weight_op = ETraceParamOp(weight, MatMulETraceOp())
 
   def init_state(self, batch_size=None, **kwargs):
-    self.r = ETraceVar(init.param(init.Constant(0.), self.out_size, batch_size))
+    self.r = ETraceVar(init.param(init.Constant(0.), self.out_size, batch_size), name=f'{self.name}.r')
 
   def reset_state(self, batch_size=None, **kwargs):
     self.r.value = init.param(init.Constant(0.), self.out_size, batch_size)
@@ -108,7 +108,7 @@ class LeakySpikeReadout(nn.Neuron):
     return (-v + x) / self.tau
 
   def init_state(self, batch_size, **kwargs):
-    self.V = ETraceVar(init.param(init.Constant(0.), self.varshape, batch_size))
+    self.V = ETraceVar(init.param(init.Constant(0.), self.varshape, batch_size), name=f'{self.name}.V')
 
   def reset_state(self, batch_size, **kwargs):
     self.V.value = init.param(init.Constant(0.), self.varshape, batch_size)

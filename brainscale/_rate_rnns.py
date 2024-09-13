@@ -19,7 +19,7 @@ from __future__ import annotations
 from typing import Callable, Union, Optional
 
 import brainstate as bst
-import brainunit as bu
+import brainunit as u
 import jax.numpy as jnp
 from brainstate import init, functional, nn
 
@@ -80,7 +80,7 @@ class ValinaRNNCell(nn.RNNCell):
     self.W = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_W')
 
   def init_state(self, batch_size: int = None, **kwargs):
-    self.h = ETraceVar(init.param(self._state_initializer, self.num_out, batch_size))
+    self.h = ETraceVar(init.param(self._state_initializer, self.num_out, batch_size), name=f'{self.name}.h')
 
   def reset_state(self, batch_size: int = None, **kwargs):
     self.h.value = init.param(self._state_initializer, self.num_out, batch_size)
@@ -140,7 +140,7 @@ class GRUCell(nn.RNNCell):
     self.Wh = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_Wh')
 
   def init_state(self, batch_size: int = None, **kwargs):
-    self.h = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size))
+    self.h = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size), name=f'{self.name}.h')
 
   def reset_state(self, batch_size: int = None, **kwargs):
     self.h.value = init.param(self._state_initializer, [self.num_out], batch_size)
@@ -221,7 +221,7 @@ class MGUCell(nn.RNNCell):
     self.Wh = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_Wh')
 
   def init_state(self, batch_size: int = None, **kwargs):
-    self.h = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size))
+    self.h = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size), name=f'{self.name}.h')
 
   def reset_state(self, batch_size: int = None, **kwargs):
     self.h.value = init.param(self._state_initializer, [self.num_out], batch_size)
@@ -329,8 +329,8 @@ class LSTMCell(nn.RNNCell):
     self.Wo = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_Wo')
 
   def init_state(self, batch_size: int = None, **kwargs):
-    self.c = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size))
-    self.h = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size))
+    self.c = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size), name=f'{self.name}.c')
+    self.h = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size), name=f'{self.name}.h')
 
   def reset_state(self, batch_size: int = None, **kwargs):
     self.c.value = init.param(self._state_initializer, [self.num_out], batch_size)
@@ -393,8 +393,8 @@ class URLSTMCell(nn.RNNCell):
     return -jnp.log(1 / u - 1)
 
   def init_state(self, batch_size: int = None, **kwargs):
-    self.c = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size))
-    self.h = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size))
+    self.c = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size), name=f'{self.name}.c')
+    self.h = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size), name=f'{self.name}.h')
 
   def reset_state(self, batch_size: int = None, **kwargs):
     self.c.value = init.param(self._state_initializer, [self.num_out], batch_size)
@@ -449,10 +449,10 @@ class _RHNBlock(nn.DnnLayer):
 
   def update(self, x, hidden):
     if self.first_layer:
-      x = bu.math.concatenate([x, hidden], axis=-1)
+      x = u.math.concatenate([x, hidden], axis=-1)
     else:
       x = hidden  # ignore input
-    h = bu.math.tanh(self.W_H(x))
+    h = u.math.tanh(self.W_H(x))
     t = bst.functional.sigmoid(self.W_T(x))
     if self.couple:
       c = 1 - t
@@ -600,7 +600,7 @@ class RHNCell(nn.RNNCell):
     )
 
   def init_state(self, batch_size: int = None, **kwargs):
-    self.h = ETraceVar(init.param(self._state_init, [self.num_out], batch_size))
+    self.h = ETraceVar(init.param(self._state_init, [self.num_out], batch_size), name=f'{self.name}.h')
 
   def reset_state(self, batch_size: int = None, **kwargs):
     self.h.value = init.param(self._state_init, [self.num_out], batch_size)
@@ -688,7 +688,7 @@ class MinimalRNNCell(nn.RNNCell):
     self.W_u = Linear(num_out * 2, num_out, w_init=w_init, b_init=b_init, name=self.name + '_W_u')
 
   def init_state(self, batch_size: int = None, **kwargs):
-    self.h = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size))
+    self.h = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size), name=f'{self.name}.h')
 
   def reset_state(self, batch_size: int = None, **kwargs):
     self.h.value = init.param(self._state_initializer, [self.num_out], batch_size)
@@ -698,5 +698,3 @@ class MinimalRNNCell(nn.RNNCell):
     u = functional.sigmoid(self.W_u(jnp.concatenate([z, self.h.value], axis=-1)))
     self.h.value = u * self.h.value + (1 - u) * z
     return self.h.value
-
-

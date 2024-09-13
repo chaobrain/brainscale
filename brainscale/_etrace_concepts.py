@@ -24,8 +24,8 @@ from __future__ import annotations
 import contextlib
 from typing import Callable, Sequence, Tuple, List, Optional
 
-import jax.lax
 import brainstate as bst
+import jax.lax
 
 from ._misc import BaseEnum
 from ._typing import PyTree
@@ -73,8 +73,8 @@ class ETraceVar(bst.ShortTermState):
   """
   __module__ = 'brainscale'
 
-  def __init__(self, value: jax.Array):
-    super().__init__(value)
+  def __init__(self, value: jax.Array, name: Optional[str] = None):
+    super().__init__(value, name=name)
     assert isinstance(self.value, jax.Array), f'Currently, {ETraceVar.__name__} only supports jax.Array.'
     self._check_tree = False
 
@@ -90,8 +90,8 @@ class ETraceParam(bst.ParamState):
 
   is_not_etrace: bool
 
-  def __init__(self, value: PyTree):
-    super().__init__(value)
+  def __init__(self, value: PyTree, name: Optional[str] = None):
+    super().__init__(value, name=name)
 
     self.is_not_etrace = False
 
@@ -155,10 +155,11 @@ class ETraceParamOp(ETraceParam):
       weight: PyTree,
       op: Callable,
       grad: Optional[str] = None,
-      is_diagonal: bool = None
+      is_diagonal: bool = None,
+      name: Optional[str] = None
   ):
     # weight value
-    super().__init__(weight)
+    super().__init__(weight, name=name)
 
     # gradient
     if grad is None:
@@ -197,8 +198,9 @@ class NoTempParamOp(bst.ParamState):
       self,
       value: PyTree,
       op: Callable,
+      name: Optional[str] = None
   ):
-    super().__init__(value)
+    super().__init__(value, name=name)
 
     # operation
     if isinstance(op, ETraceOp):

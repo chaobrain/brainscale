@@ -21,7 +21,7 @@ from typing import Sequence
 
 import brainstate as bst
 
-git_issue_addr = 'https://github.com/brainpy/brainscale/issues'
+git_issue_addr = 'https://github.com/chaoming0625/brainscale/issues'
 
 
 class NotSupportedError(Exception):

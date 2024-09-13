@@ -1508,6 +1508,7 @@ class HiddenWeightOpRelation(NamedTuple):
   - jaxpr_y2hid: the jaxpr to evaluate y -->  eligibility trace variables
   - hidden_vars: the hidden states connected to the weight
   """
+
   weight: ETraceParam
   op_jaxpr: jax.core.Jaxpr
   x: WeightXVar
@@ -1559,15 +1560,17 @@ class ETraceGraph:
   # hidden invar/outvar to hidden itself
   hidden_invar_to_hidden: Dict[jax.core.Var, ETraceVar]
   hidden_outvar_to_hidden: Dict[jax.core.Var, ETraceVar]
+
   # hidden outvar-to-invar, and invar-to-outvar
   hidden_outvar_to_invar: Dict[jax.core.Var, jax.core.Var]
   hidden_invar_to_outvar: Dict[jax.core.Var, jax.core.Var]
 
   # [ KEY ]
+  #
   # 1. The most important data structure for the graph, which implementing
   #    the relationship between the etrace weights and the etrace variables.
   hidden_param_op_relations: Tuple[HiddenWeightOpRelation, ...]
-
+  #
   # 2. The relationship between the hidden states.
   hidden_groups: Sequence[HiddenGroup]
   hidden_outvar_to_group: Dict[HiddenOutVar, HiddenGroup]
@@ -2047,7 +2050,7 @@ class ETraceGraph:
     # VJP calling
     (out, hidden_vals, other_vals), f_vjp, temps = jax.vjp(
       fun_for_vjp,  # the function
-      args, # the inputs
+      args,  # the inputs
       hidden_vals,
       non_etrace_weight_vals,
       other_vals,
