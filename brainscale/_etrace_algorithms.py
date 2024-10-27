@@ -1320,6 +1320,7 @@ class DiagIODimAlgorithm(DiagETraceAlgorithmForVJP):
       self,
       model: Callable,
       decay_or_rank: float | int,
+      mode: Optional[bst.mixin.Mode] = None,
       diag_normalize: Optional[bool] = None,
       vjp_time: str = 't',
       name: Optional[str] = None,
@@ -1330,6 +1331,9 @@ class DiagIODimAlgorithm(DiagETraceAlgorithmForVJP):
       vjp_time=vjp_time,
       name=name,
     )
+
+    # computing mode
+    self.mode = bst.mixin.Mode() if mode is None else mode
 
     # the learning parameters
     self.decay, num_rank = _format_decay_and_rank(decay_or_rank)
@@ -1715,10 +1719,10 @@ class DiagParamDimAlgorithm(DiagETraceAlgorithmForVJP):
   def __init__(
       self,
       model: Callable,
+      mode: Optional[bst.mixin.Mode],
       diag_normalize: Optional[bool] = None,
       vjp_time: str = 't',
       name: Optional[str] = None,
-      mode: Optional[bst.mixin.Mode] = None
   ):
     super().__init__(
       model,
@@ -1889,10 +1893,10 @@ class DiagHybridDimAlgorithm(DiagETraceAlgorithmForVJP):
       self,
       model: Callable,
       decay_or_rank: float | int,
+      mode: Optional[bst.mixin.Mode],
       vjp_time: str = 't',
       diag_normalize: Optional[bool] = None,
       name: Optional[str] = None,
-      mode: Optional[bst.mixin.Mode] = None
   ):
     super().__init__(model, diag_normalize=diag_normalize, vjp_time=vjp_time, name=name)
 
