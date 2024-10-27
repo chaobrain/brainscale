@@ -25,8 +25,8 @@ import jax
 import jax.numpy as jnp
 from brainstate import init, nn
 
-from ._etrace_concepts import ETraceParamOp, NoTempParamOp
-from ._typing import DTypeLike, ArrayLike, Size, Axes
+from brainscale._etrace_concepts import ETraceParamOp, NoTempParamOp
+from brainscale._typing import DTypeLike, ArrayLike, Size, Axes
 
 __all__ = [
   'BatchNorm1d', 'BatchNorm2d', 'BatchNorm3d',
@@ -159,7 +159,7 @@ def _normalize(
   return jnp.asarray(y, dtype)
 
 
-class _BatchNorm(nn.DnnLayer):
+class _BatchNorm(nn.Module):
   __module__ = 'brainscale'
   num_spatial_dims: int = None
 
@@ -177,14 +177,10 @@ class _BatchNorm(nn.DnnLayer):
       axis_index_groups: Optional[Sequence[Sequence[int]]] = None,
       as_etrace_weight: bool = False,
       full_etrace: bool = False,
-      mode: Optional[bst.mixin.Mode] = None,
       name: Optional[str] = None,
       dtype: Any = None,
   ):
-    super().__init__(name=name, mode=mode)
-
-    if not self.mode.has(bst.mixin.Batching):
-      raise ValueError('BatchNorm layers require the Batching mode.')
+    super().__init__(name=name)
 
     # parameters
     self.in_size = tuple(in_size)

@@ -25,8 +25,8 @@ from functools import partial
 from typing import Dict, Tuple, Any, Callable, List, Protocol, Optional, Sequence
 
 import brainstate as bst
+import brainunit as u
 import jax.core
-import jax.numpy as jnp
 
 from ._etrace_compiler import (ETraceGraph,
                                HiddenWeightOpRelation,
@@ -167,7 +167,7 @@ def _update_dict(
       raise ValueError(f'The key {key} does not exist in the dictionary. ')
     the_dict[key] = value
   else:
-    the_dict[key] = jax.tree.map(jnp.add, old_value, value)
+    the_dict[key] = jax.tree.map(u.math.add, old_value, value, is_leaf=lambda x: isinstance(x, u.Quantity))
 
 
 def _batched_zeros_like(batch_size: Optional[int],
@@ -183,9 +183,9 @@ def _batched_zeros_like(batch_size: Optional[int],
     jax.Array, the batched zeros array.
   """
   if batch_size is None:
-    return jnp.zeros_like(x)
+    return u.math.zeros_like(x)
   else:
-    return jnp.zeros((batch_size,) + x.shape, x.dtype)
+    return u.math.zeros((batch_size,) + x.shape, x.dtype)
 
 
 def _normalize_group(vals):
@@ -200,10 +200,10 @@ def _normalize_group(vals):
   """
 
   def _get_max(x):
-    return jnp.max(jnp.abs(x))
+    return u.math.max(u.math.abs(x))
 
-  max_val = _get_max(jnp.asarray(jax.tree.leaves(jax.tree.map(_get_max, vals))))
-  return jax.tree.map(lambda x: jnp.where(max_val <= 1., x, x / max_val), vals)
+  max_val = _get_max(u.math.asarray(jax.tree.leaves(jax.tree.map(_get_max, vals))))
+  return jax.tree.map(lambda x: u.math.where(max_val <= 1., x, x / max_val), vals)
 
 
 def _normalize_individual(vals):
@@ -218,8 +218,8 @@ def _normalize_individual(vals):
   """
 
   def _normalize(x):
-    max_val = jnp.max(jnp.abs(x))
-    return jnp.where(max_val <= 1., x, x / max_val)
+    max_val = u.math.max(u.math.abs(x))
+    return u.math.where(max_val <= 1., x, x / max_val)
 
   return jax.tree.map(_normalize, vals)
 
@@ -803,7 +803,7 @@ def _init_IO_dim_state(
     shape = relation.x.aval.shape
     dtype = relation.x.aval.dtype
     # wx may be repeatedly used in the graph
-    self.etrace_xs[relation.x] = bst.ShortTermState(jnp.zeros(shape, dtype))
+    self.etrace_xs[relation.x] = bst.ShortTermState(u.math.zeros(shape, dtype))
 
   for group in relation.hidden_groups:
     group: HiddenGroup
@@ -822,7 +822,7 @@ def _init_IO_dim_state(
         raise ValueError(f'The relation {key} has been added. ')
       shape = relation.y.aval.shape
       dtype = relation.y.aval.dtype
-      self.etrace_dfs[key] = bst.ShortTermState(jnp.zeros(shape, dtype))
+      self.etrace_dfs[key] = bst.ShortTermState(u.math.zeros(shape, dtype))
 
 
 def _update_IO_dim_etrace_with_exact_jac(
@@ -933,7 +933,7 @@ def _solve_IO_dim_weight_gradients(
   #
   # Avoid the exponential smoothing bias at the beginning.
   # This is the correction factor for the exponential smoothing.
-  correction_factor = 1. - jnp.power(1. - decay, running_index + 1)
+  correction_factor = 1. - u.math.power(1. - decay, running_index + 1)
 
   xs, dfs = hist_etrace_data
 
@@ -984,9 +984,9 @@ def _zeros_like_batch_or_not(
     # TODO:
     #      Assuming the first axis is the batch dimension.
     assert batch_size is not None, 'The batch size should be provided. '
-    return jnp.zeros((batch_size,) + x.shape[1:], x.dtype)
+    return u.math.zeros((batch_size,) + x.shape[1:], x.dtype)
   else:
-    return jnp.zeros_like(x)
+    return u.math.zeros_like(x)
 
 
 def _reset_state_in_a_dict(
@@ -1065,7 +1065,7 @@ class DiagTruncatedAlgorithm(DiagETraceAlgorithmForVJP):
         shape = (self.n_truncation,) + relation.x.aval.shape
         dtype = relation.x.aval.dtype
         # wx may be repeatedly used in the graph
-        self.etrace_xs[relation.x] = bst.ShortTermState(jnp.zeros(shape, dtype))
+        self.etrace_xs[relation.x] = bst.ShortTermState(u.math.zeros(shape, dtype))
 
       for group in relation.hidden_groups:
         group: HiddenGroup
@@ -1084,7 +1084,7 @@ class DiagTruncatedAlgorithm(DiagETraceAlgorithmForVJP):
             raise ValueError(f'The relation {key} has been added. ')
           shape = (self.n_truncation,) + relation.y.aval.shape
           dtype = relation.y.aval.dtype
-          self.etrace_dfs[key] = bst.ShortTermState(jnp.zeros(shape, dtype))
+          self.etrace_dfs[key] = bst.ShortTermState(u.math.zeros(shape, dtype))
 
   def reset_state(self, batch_size: int = None, **kwargs):
     """
@@ -1097,7 +1097,7 @@ class DiagTruncatedAlgorithm(DiagETraceAlgorithmForVJP):
         shape = (self.n_truncation, batch_size) + x.shape[1:]
       else:
         shape = (self.n_truncation,) + x.shape
-      return jnp.zeros(shape, x.dtype)
+      return u.math.zeros(shape, x.dtype)
 
     for k, v in self.etrace_xs.items():
       self.etrace_xs[k].value = jax.tree.map(_zeros_like_batch_, v)
@@ -1190,7 +1190,7 @@ class DiagTruncatedAlgorithm(DiagETraceAlgorithmForVJP):
     #           x^t = α * x^t-1 + x^t, where α is the decay factor.
     #
     for xkey in hist_xs.keys():
-      new_etrace_xs[xkey] = jnp.concat((hist_xs[xkey][1:], jnp.expand_dims(xs[xkey], 0)), axis=0)
+      new_etrace_xs[xkey] = u.math.concatenate((hist_xs[xkey][1:], u.math.expand_dims(xs[xkey], 0)), axis=0)
 
     for hwo_relation in self.graph.hidden_param_op_relations:
       hwo_relation: HiddenWeightOpRelation
@@ -1228,7 +1228,7 @@ class DiagTruncatedAlgorithm(DiagETraceAlgorithmForVJP):
             if diag_jac_key in hid2hid_jac_at_t:
               # diagonal Jacobian * hidden df
               data = (hist_dfs[(hwo_relation.y, hidden_outvar_at_t_minus_1)] *
-                      jnp.expand_dims(hid2hid_jac_at_t[diag_jac_key], axis=0))
+                      u.math.expand_dims(hid2hid_jac_at_t[diag_jac_key], axis=0))
               new_etrace = data if new_etrace is None else new_etrace + data
           assert new_etrace is not None, f'The new etrace should not be None. '
 
@@ -1239,8 +1239,8 @@ class DiagTruncatedAlgorithm(DiagETraceAlgorithmForVJP):
           #        dϵ^t = D_h ⊙ dϵ^t-1 + df^t, where D_h is the hidden-to-hidden Jacobian diagonal matrix.
           #
           new_df_key = (hwo_relation.y, hidden_outvar_at_t)
-          new_etrace_dfs[new_df_key] = jnp.concat(
-            [new_etrace[1:], jnp.expand_dims(dfs.get(new_df_key, jnp.zeros_like(new_etrace[0])), axis=0)],
+          new_etrace_dfs[new_df_key] = u.math.concatenate(
+            [new_etrace[1:], u.math.expand_dims(dfs.get(new_df_key, u.math.zeros_like(new_etrace[0])), axis=0)],
             axis=0
           )
     return new_etrace_xs, new_etrace_dfs
@@ -1279,7 +1279,7 @@ class DiagTruncatedAlgorithm(DiagETraceAlgorithmForVJP):
       #
       for i, hid_var in enumerate(relation.hidden_vars):
         df = dfs[(relation.y, hid_var)]  # the hidden gradients
-        df_hid = df * jnp.expand_dims(dl_to_dh_at_t[hid_var], axis=0)  # the hidden gradients
+        df_hid = df * u.math.expand_dims(dl_to_dh_at_t[hid_var], axis=0)  # the hidden gradients
         #
         # Compute the weight gradients according to the x and y
         #
@@ -1695,7 +1695,7 @@ def _solve_param_dim_weight_gradients(
   # sum up the batched weight gradients
   if mode.has(bst.mixin.Batching):
     for key, val in temp_data.items():
-      temp_data[key] = jax.tree_map(lambda x: jnp.sum(x, axis=0), val)
+      temp_data[key] = jax.tree_map(lambda x: u.math.sum(x, axis=0), val)
 
   # update the weight gradients
   for key, val in temp_data.items():
@@ -1855,7 +1855,7 @@ class DiagParamDimAlgorithm(DiagETraceAlgorithmForVJP):
 
 
 def _numel(pytree: PyTree):
-  return sum(jnp.size(x) for x in jax.tree_leaves(pytree))
+  return sum(u.math.size(x) for x in jax.tree_leaves(pytree))
 
 
 def _is_weight_need_full_grad(

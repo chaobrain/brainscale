@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools", 'braincore', 'braintools', 'brainpy']
+requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 
@@ -17,11 +17,11 @@ universal = true
 
 [project]
 name = "brainscale"
-description = "The Scalable Online Learning Algorithm and Framework for Biological Spiking Neural Networks."
+description = "Scalable Online Learning in Biological Neural Networks."
 readme = 'README.md'
 license = { text = 'Apache-2.0 license' }
 requires-python = '>=3.9'
-authors = [{ name = 'BrainPy Team', email = 'chao.brain@qq.com' }]
+authors = [{ name = 'BrainScale Developers', email = 'chao.brain@qq.com' }]
 classifiers = [
     'Natural Language :: English',
     'Operating System :: OS Independent',
@@ -42,10 +42,11 @@ classifiers = [
 ]
 
 
-keywords = ["brainpy", "brain simulation", "brain-inspired computing"]
+keywords = ["brain simulation", "brain-inspired computing"]
 
 dependencies = [
-    'brainstate',
+    'brainstate>=0.1.0',
+    'brainunit',
 ]
 
 dynamic = ['version']
@@ -54,8 +55,8 @@ dynamic = ['version']
 name = "brainscale"
 
 [project.urls]
-homepage = 'http://github.com/brainpy'
-repository = 'http://github.com/brainpy/brainscale'
+homepage = 'http://github.com/chaobrain/brainscale'
+repository = 'http://github.com/chaobrain/brainscale'
 
 [project.optional-dependencies]
 testing = [

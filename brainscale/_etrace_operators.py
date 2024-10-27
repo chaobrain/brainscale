@@ -18,8 +18,8 @@ from __future__ import annotations
 from functools import partial, reduce
 from typing import Tuple, Callable, List, Optional, Any
 
-import brainunit as u
 import brainstate as bst
+import brainunit as u
 import jax
 import jax.core
 

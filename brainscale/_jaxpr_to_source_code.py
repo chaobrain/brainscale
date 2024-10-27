@@ -478,7 +478,7 @@ def partial_eval_jaxpr(jaxpr, env):
   return jaxpr.replace(eqns=out_eqns, outvars=outvars, invars=invars, debug_info=None)
 
 
-def _eval_eqn(eqn, vals) -> Union[Jaxpr, tuple, list, jnp.ndarray]:
+def _eval_eqn(eqn, vals) -> Union[Jaxpr, tuple, list, jax.Array]:
   if eqn.primitive.name == "closed_call":
     assert eqn.primitive.call_primitive
     assert not eqn.primitive.map_primitive
@@ -616,7 +616,7 @@ def _astify_convert_element_type(state, eqn):
 
 
 def is_array(arr):
-  return isinstance(arr, (np.ndarray, np.generic, jnp.ndarray))
+  return isinstance(arr, (np.ndarray, np.generic, jax.Array))
 
 
 def _astify_array(value):

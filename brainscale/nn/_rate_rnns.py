@@ -16,16 +16,15 @@
 
 from __future__ import annotations
 
-from typing import Callable, Union, Optional
+from typing import Callable, Union
 
 import brainstate as bst
 import brainunit as u
-import jax.numpy as jnp
 from brainstate import init, functional, nn
 
+from brainscale._etrace_concepts import ETraceVar, ETraceParamOp
+from brainscale._typing import ArrayLike
 from ._connections import Linear
-from ._etrace_concepts import ETraceVar, ETraceParamOp
-from ._typing import ArrayLike
 
 __all__ = [
   'ValinaRNNCell', 'GRUCell', 'MGUCell', 'LSTMCell', 'URLSTMCell',
@@ -44,7 +43,6 @@ class ValinaRNNCell(nn.RNNCell):
     w_init: callable, ArrayLike. The input weight initializer.
     b_init: optional, callable, ArrayLike. The bias weight initializer.
     activation: str, callable. The activation function. It can be a string or a callable function.
-    mode: optional, bst.mixin.Mode. The mode of the module.
     name: optional, str. The name of the module.
   """
   __module__ = 'brainscale'
@@ -57,10 +55,9 @@ class ValinaRNNCell(nn.RNNCell):
       w_init: Union[ArrayLike, Callable] = init.XavierNormal(),
       b_init: Union[ArrayLike, Callable] = init.ZeroInit(),
       activation: str | Callable = 'relu',
-      mode: bst.mixin.Mode = None,
       name: str = None,
   ):
-    super().__init__(mode=mode, name=name)
+    super().__init__(name=name)
 
     # parameters
     self._state_initializer = state_init
@@ -86,7 +83,7 @@ class ValinaRNNCell(nn.RNNCell):
     self.h.value = init.param(self._state_initializer, self.num_out, batch_size)
 
   def update(self, x):
-    xh = jnp.concatenate([x, self.h.value], axis=-1)
+    xh = u.math.concatenate([x, self.h.value], axis=-1)
     self.h.value = self.activation(self.W(xh))
     return self.h.value
 
@@ -102,7 +99,6 @@ class GRUCell(nn.RNNCell):
     w_init: callable, ArrayLike. The input weight initializer.
     b_init: optional, callable, ArrayLike. The bias weight initializer.
     activation: str, callable. The activation function. It can be a string or a callable function.
-    mode: optional, bst.mixin.Mode. The mode of the module.
     name: optional, str. The name of the module.
   """
   __module__ = 'brainscale'
@@ -115,10 +111,9 @@ class GRUCell(nn.RNNCell):
       b_init: Union[ArrayLike, Callable] = init.ZeroInit(),
       state_init: Union[ArrayLike, Callable] = init.ZeroInit(),
       activation: str | Callable = 'tanh',
-      mode: bst.mixin.Mode = None,
       name: str = None,
   ):
-    super().__init__(mode=mode, name=name)
+    super().__init__(name=name)
 
     # parameters
     self._state_initializer = state_init
@@ -147,11 +142,11 @@ class GRUCell(nn.RNNCell):
 
   def update(self, x):
     old_h = self.h.value
-    xh = jnp.concatenate([x, old_h], axis=-1)
+    xh = u.math.concatenate([x, old_h], axis=-1)
     z = functional.sigmoid(self.Wz(xh))
     r = functional.sigmoid(self.Wr(xh))
     rh = r * old_h
-    h = self.activation(self.Wh(jnp.concatenate([x, rh], axis=-1)))
+    h = self.activation(self.Wh(u.math.concatenate([x, rh], axis=-1)))
     h = (1 - z) * old_h + z * h
     self.h.value = h
     return h
@@ -184,7 +179,6 @@ class MGUCell(nn.RNNCell):
     w_init: callable, ArrayLike. The input weight initializer.
     b_init: optional, callable, ArrayLike. The bias weight initializer.
     activation: str, callable. The activation function. It can be a string or a callable function.
-    mode: optional, bst.mixin.Mode. The mode of the module.
     name: optional, str. The name of the module.
   """
   __module__ = 'brainscale'
@@ -197,10 +191,9 @@ class MGUCell(nn.RNNCell):
       b_init: Union[ArrayLike, Callable] = init.ZeroInit(),
       state_init: Union[ArrayLike, Callable] = init.ZeroInit(),
       activation: str | Callable = 'tanh',
-      mode: Optional[bst.mixin.Mode] = None,
       name: str = None,
   ):
-    super().__init__(mode=mode, name=name)
+    super().__init__(name=name)
 
     # parameters
     self._state_initializer = state_init
@@ -228,10 +221,10 @@ class MGUCell(nn.RNNCell):
 
   def update(self, x):
     old_h = self.h.value
-    xh = jnp.concatenate([x, old_h], axis=-1)
+    xh = u.math.concatenate([x, old_h], axis=-1)
     f = functional.sigmoid(self.Wf(xh))
     fh = f * old_h
-    h = self.activation(self.Wh(jnp.concatenate([x, fh], axis=-1)))
+    h = self.activation(self.Wh(u.math.concatenate([x, fh], axis=-1)))
     self.h.value = (1 - f) * self.h.value + f * h
     return self.h.value
 
@@ -301,10 +294,9 @@ class LSTMCell(nn.RNNCell):
       b_init: Union[ArrayLike, Callable] = init.ZeroInit(),
       state_init: Union[ArrayLike, Callable] = init.ZeroInit(),
       activation: str | Callable = 'tanh',
-      mode: bst.mixin.Mode = None,
       name: str = None,
   ):
-    super().__init__(mode=mode, name=name)
+    super().__init__(name=name)
 
     # parameters
     self.num_out = num_out
@@ -338,7 +330,7 @@ class LSTMCell(nn.RNNCell):
 
   def update(self, x):
     h, c = self.h.value, self.c.value
-    xh = jnp.concat([x, h], axis=-1)
+    xh = u.math.concatenate([x, h], axis=-1)
     i = self.Wi(xh)
     g = self.Wg(xh)
     f = self.Wf(xh)
@@ -360,10 +352,9 @@ class URLSTMCell(nn.RNNCell):
       w_init: Union[ArrayLike, Callable] = init.XavierNormal(),
       state_init: Union[ArrayLike, Callable] = init.ZeroInit(),
       activation: str | Callable = 'tanh',
-      mode: bst.mixin.Mode = None,
       name: str = None,
   ):
-    super().__init__(mode=mode, name=name)
+    super().__init__(name=name)
 
     # parameters
     self.num_out = num_out
@@ -386,11 +377,11 @@ class URLSTMCell(nn.RNNCell):
     self.Wf = Linear(num_in + num_out, num_out, w_init=w_init, b_init=None, name=self.name + '_Wf')
     self.Wr = Linear(num_in + num_out, num_out, w_init=w_init, b_init=None, name=self.name + '_Wi')
     self.Wo = Linear(num_in + num_out, num_out, w_init=w_init, b_init=None, name=self.name + '_Wo')
-    self.bias = ETraceParamOp(self._forget_bias(), op=jnp.add, grad='full')
+    self.bias = ETraceParamOp(self._forget_bias(), op=u.math.add, grad='full')
 
   def _forget_bias(self):
     u = bst.random.uniform(1 / self.num_out, 1 - 1 / self.num_out, (self.num_out,))
-    return -jnp.log(1 / u - 1)
+    return -u.math.log(1 / u - 1)
 
   def init_state(self, batch_size: int = None, **kwargs):
     self.c = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size), name=f'{self.name}.c')
@@ -402,35 +393,34 @@ class URLSTMCell(nn.RNNCell):
 
   def update(self, x: ArrayLike) -> ArrayLike:
     h, c = self.h.value, self.c.value
-    xh = jnp.concat([x, h], axis=-1)
+    xh = u.math.concatenate([x, h], axis=-1)
     f = self.Wf(xh)
     r = self.Wr(xh)
-    u = self.Wu(xh)
+    u_ = self.Wu(xh)
     o = self.Wo(xh)
     f_ = functional.sigmoid(self.bias.execute(f))
     r_ = functional.sigmoid(-self.bias.execute(-r))
     g = 2 * r_ * f_ + (1 - 2 * r_) * f_ ** 2
-    next_cell = g * c + (1 - g) * self.activation(u)
+    next_cell = g * c + (1 - g) * self.activation(u_)
     next_hidden = functional.sigmoid(o) * self.activation(next_cell)
     self.h.value = next_hidden
     self.c.value = next_cell
     return next_hidden
 
 
-class _RHNBlock(nn.DnnLayer):
+class _RHNBlock(bst.nn.Module):
   def __init__(
       self,
       num_in: int,
       num_out: int,
       w_init: Union[ArrayLike, Callable] = init.Orthogonal(),
       b_init: Union[ArrayLike, Callable] = None,
-      mode: bst.mixin.Mode = None,
       name: str = None,
       first_layer: bool = False,
       couple: bool = False,
       dropout_prob: float = 1.0,
   ):
-    super().__init__(mode=mode, name=name)
+    super().__init__(name=name)
     self.num_in = num_in
     self.num_out = num_out
     self.first_layer = first_layer
@@ -558,8 +548,6 @@ class RHNCell(nn.RNNCell):
     The bias weight initializer.
   state_init: callable, ArrayLike
     The state initializer.
-  mode: optional, bst.mixin.Mode
-    The mode of the module.
   name: optional, str
     The name of the module.
   couple: bool
@@ -578,13 +566,12 @@ class RHNCell(nn.RNNCell):
       w_init: Union[ArrayLike, Callable] = init.Orthogonal(),
       b_init: Union[ArrayLike, Callable] = None,
       state_init: Union[ArrayLike, Callable] = init.ZeroInit(),
-      mode: bst.mixin.Mode = None,
       name: str = None,
       couple: bool = False,
       dropout_prob: float = 1.0,
       depth: int = 3,
   ):
-    super().__init__(mode=mode, name=name)
+    super().__init__(name=name)
     self.num_in = num_in
     self.num_out = num_out
     self.depth = depth
@@ -594,7 +581,7 @@ class RHNCell(nn.RNNCell):
     self.highways = bst.visible_module_list(
       [
         _RHNBlock(num_in, num_out, first_layer=l == 0, couple=couple, dropout_prob=dropout_prob,
-                  w_init=w_init, b_init=b_init, mode=mode, name=f'highway_{l}')
+                  w_init=w_init, b_init=b_init, name=f'highway_{l}')
         for l in range(depth)
       ]
     )
@@ -650,8 +637,6 @@ class MinimalRNNCell(nn.RNNCell):
     The state initializer.
   phi: callable
     The input activation function.
-  mode: optional, bst.mixin.Mode
-    The mode of the module.
   name: optional, str
     The name of the module.
 
@@ -666,10 +651,9 @@ class MinimalRNNCell(nn.RNNCell):
       b_init: Union[ArrayLike, Callable] = init.ZeroInit(),
       state_init: Union[ArrayLike, Callable] = init.ZeroInit(),
       phi: Callable = None,
-      mode: Optional[bst.mixin.Mode] = None,
       name: str = None,
   ):
-    super().__init__(mode=mode, name=name)
+    super().__init__(name=name)
 
     # parameters
     self._state_initializer = state_init

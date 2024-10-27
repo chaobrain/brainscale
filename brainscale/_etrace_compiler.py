@@ -27,8 +27,8 @@ from functools import partial
 from typing import (Callable, NamedTuple, List, Dict, Sequence, Tuple, Set, Optional)
 
 import brainstate as bst
+import brainunit as u
 import jax.core
-import jax.numpy as jnp
 from jax.extend import linear_util as lu
 from jax.extend import source_info_util
 from jax.interpreters import partial_eval as pe
@@ -1594,7 +1594,7 @@ class ETraceGraph:
     # Please always use ``functools.partial`` to fix the static arguments.
     #
     # wrap the model so that we can track the iteration number
-    self.stateful_model = bst.transform.StatefulFunction(model)
+    self.stateful_model = bst.compile.StatefulFunction(model)
 
     # --- rewrite jaxpr --
     #
@@ -1923,7 +1923,7 @@ class ETraceGraph:
       primals, tangents = jax.jvp(
         lambda x: jax.core.eval_jaxpr(relation.jaxpr_y2hid, consts, x),
         invars,
-        [jnp.ones(invars[0].shape, invars[0].dtype)]
+        [u.math.ones(invars[0].shape, invars[0].dtype)]
       )
 
       # get the df we want
@@ -1947,7 +1947,7 @@ class ETraceGraph:
 
       #
       # "tangents" is the hidden-to-hidden Jacobian at the previous time step
-      tangents = jnp.ones(primals.aval.shape, primals.aval.dtype)
+      tangents = u.math.ones(primals.aval.shape, primals.aval.dtype)
 
       # JVP gradients, computing:
       #
@@ -2042,7 +2042,7 @@ class ETraceGraph:
     #  The most important assumption here is
     #  that the weight values (including etrace weights and normal param weights) are not changed
 
-    hidden_perturbs = [jnp.zeros(v.aval.shape, v.aval.dtype) for v in self.out_hidden_jaxvars]
+    hidden_perturbs = [u.math.zeros(v.aval.shape, v.aval.dtype) for v in self.out_hidden_jaxvars]
     hidden_vals = [st.value for st in hidden_states]
     non_etrace_weight_vals = [st.value for st in non_etrace_weight_states]
     other_vals = [st.value for st in other_states]

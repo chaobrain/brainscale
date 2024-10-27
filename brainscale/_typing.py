@@ -76,4 +76,3 @@ Spike = ArrayLike  # the spike signal
 Hid2HidDiagJacobian = Dict[FrozenSet[HiddenOutVar], Dict[HiddenOutVar, List[jax.Array]]]
 Hid2WeightJacobian = Any
 Hid2HidJacobian = Any
-

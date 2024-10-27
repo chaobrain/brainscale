@@ -25,9 +25,9 @@ import jax
 import jax.numpy as jnp
 from brainstate import init, surrogate, nn
 
-from ._etrace_concepts import ETraceParamOp, ETraceVar
-from ._etrace_operators import MatMulETraceOp
-from ._typing import Size, ArrayLike, DTypeLike, Spike
+from brainscale._etrace_concepts import ETraceParamOp, ETraceVar
+from brainscale._etrace_operators import MatMulETraceOp
+from brainscale._typing import Size, ArrayLike, DTypeLike, Spike
 
 __all__ = [
   'LeakyRateReadout',
@@ -35,11 +35,12 @@ __all__ = [
 ]
 
 
-class LeakyRateReadout(nn.DnnLayer):
+class LeakyRateReadout(nn.LeakyRateReadout):
   """
   Leaky dynamics for the read-out module used in the Real-Time Recurrent Learning.
   """
   __module__ = 'brainscale'
+  __doc__ = nn.LeakyRateReadout.__doc__
 
   def __init__(
       self,
@@ -47,10 +48,9 @@ class LeakyRateReadout(nn.DnnLayer):
       out_size: Size,
       tau: ArrayLike = 5.,
       w_init: Callable = init.KaimingNormal(),
-      mode: Optional[bst.mixin.Mode] = None,
       name: Optional[str] = None,
   ):
-    super().__init__(mode=mode, name=name)
+    super().__init__(name=name)
 
     # parameters
     self.in_size = (in_size,) if isinstance(in_size, numbers.Integral) else tuple(in_size)
@@ -74,7 +74,7 @@ class LeakyRateReadout(nn.DnnLayer):
     return r
 
 
-class LeakySpikeReadout(nn.Neuron):
+class LeakySpikeReadout(nn.LeakySpikeReadout):
   """Integrate-and-fire neuron model."""
 
   __module__ = 'brainscale'
