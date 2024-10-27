@@ -14,6 +14,7 @@ Online Learning Algorithms
    :template: classtemplate.rst
 
     ETraceAlgorithm
-    DiagExpSmOnAlgorithm
-    DiagOn2Algorithm
-    DiagHybridAlgorithm
+    FakedETraceAlgorithm
+    DiagIODimAlgorithm
+    DiagParamDimAlgorithm
+    DiagHybridDimAlgorithm

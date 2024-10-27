@@ -18,10 +18,25 @@ from __future__ import annotations
 
 from enum import Enum
 from typing import Sequence
+import warnings
 
 import brainstate as bst
 
 git_issue_addr = 'https://github.com/chaoming0625/brainscale/issues'
+
+
+def deprecation_getattr(module, deprecations):
+  def getattr(name):
+    if name in deprecations:
+      message, fn = deprecations[name]
+      if fn is None:  # Is the deprecation accelerated?
+        raise AttributeError(message)
+      warnings.warn(message, DeprecationWarning, stacklevel=2)
+      return fn
+    raise AttributeError(f"module {module!r} has no attribute {name!r}")
+
+  return getattr
+
 
 
 class NotSupportedError(Exception):

@@ -37,6 +37,7 @@ ETrace Operations
     StandardETraceOp
     GeneralETraceOp
     MatMulETraceOp
+    stop_param_gradients
 
 
 Model Compilation

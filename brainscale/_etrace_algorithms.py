@@ -224,7 +224,7 @@ def _normalize_individual(vals):
   return jax.tree.map(_normalize, vals)
 
 
-class ETraceAlgorithm(bst.Module):
+class ETraceAlgorithm(bst.nn.Module):
   r"""
   The base class for the eligibility trace algorithm.
 

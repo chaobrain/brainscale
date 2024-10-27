@@ -41,8 +41,8 @@ import brainscale
 # -- Project information -----------------------------------------------------
 
 project = 'BrainScale'
-copyright = '2024 - , BrainScale'
-author = 'Chaoming Wang'
+copyright = '2024, BrainScale'
+author = 'BrainScale Developer'
 
 # The full version, including alpha/beta/rc tags
 release = brainscale.__version__

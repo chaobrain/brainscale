@@ -37,3 +37,10 @@ del (
   etrace_algorithms,
   etrace_compiler_all,
 )
+
+# Added 2024-10-27
+from ._misc import deprecation_getattr
+
+_deprecations = {k: (f"'brainscale.{k}' has been moved into brainscale.nn.{k}", getattr(nn, k)) for k in nn.__all__}
+__getattr__ = deprecation_getattr(__name__, _deprecations)
+del deprecation_getattr

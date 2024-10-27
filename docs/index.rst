@@ -57,8 +57,9 @@ We are building the `BDP ecosystem <https://ecosystem-for-brain-dynamics.readthe
    :maxdepth: 2
    :caption: Tutorials
 
-   tutorials/pygraph-zh.ipynb
-   tutorials/random_numbers.ipynb
+   tutorials/etrace_concepts.ipynb
+   tutorials/etrace_modules.ipynb
+   tutorials/etrace_algorithms.ipynb
 
 
 
