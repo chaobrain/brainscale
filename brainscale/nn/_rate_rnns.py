@@ -74,10 +74,10 @@ class ValinaRNNCell(nn.RNNCell):
       self.activation = activation
 
     # weights
-    self.W = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_W')
+    self.W = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init)
 
   def init_state(self, batch_size: int = None, **kwargs):
-    self.h = ETraceVar(init.param(self._state_initializer, self.num_out, batch_size), name=f'{self.name}.h')
+    self.h = ETraceVar(init.param(self._state_initializer, self.num_out, batch_size))
 
   def reset_state(self, batch_size: int = None, **kwargs):
     self.h.value = init.param(self._state_initializer, self.num_out, batch_size)
@@ -130,12 +130,12 @@ class GRUCell(nn.RNNCell):
       self.activation = activation
 
     # weights
-    self.Wz = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_Wz')
-    self.Wr = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_Wr')
-    self.Wh = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_Wh')
+    self.Wz = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init)
+    self.Wr = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init)
+    self.Wh = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init)
 
   def init_state(self, batch_size: int = None, **kwargs):
-    self.h = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size), name=f'{self.name}.h')
+    self.h = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size))
 
   def reset_state(self, batch_size: int = None, **kwargs):
     self.h.value = init.param(self._state_initializer, [self.num_out], batch_size)
@@ -210,11 +210,11 @@ class MGUCell(nn.RNNCell):
       self.activation = activation
 
     # weights
-    self.Wf = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_Wf')
-    self.Wh = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_Wh')
+    self.Wf = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init)
+    self.Wh = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init)
 
   def init_state(self, batch_size: int = None, **kwargs):
-    self.h = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size), name=f'{self.name}.h')
+    self.h = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size))
 
   def reset_state(self, batch_size: int = None, **kwargs):
     self.h.value = init.param(self._state_initializer, [self.num_out], batch_size)
@@ -315,14 +315,14 @@ class LSTMCell(nn.RNNCell):
       self.activation = activation
 
     # weights
-    self.Wi = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_Wi')
-    self.Wg = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_Wg')
-    self.Wf = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_Wf')
-    self.Wo = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_Wo')
+    self.Wi = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init)
+    self.Wg = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init)
+    self.Wf = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init)
+    self.Wo = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init)
 
   def init_state(self, batch_size: int = None, **kwargs):
-    self.c = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size), name=f'{self.name}.c')
-    self.h = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size), name=f'{self.name}.h')
+    self.c = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size))
+    self.h = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size))
 
   def reset_state(self, batch_size: int = None, **kwargs):
     self.c.value = init.param(self._state_initializer, [self.num_out], batch_size)
@@ -373,10 +373,10 @@ class URLSTMCell(nn.RNNCell):
       self.activation = activation
 
     # weights
-    self.Wu = Linear(num_in + num_out, num_out, w_init=w_init, b_init=None, name=self.name + '_Wg')
-    self.Wf = Linear(num_in + num_out, num_out, w_init=w_init, b_init=None, name=self.name + '_Wf')
-    self.Wr = Linear(num_in + num_out, num_out, w_init=w_init, b_init=None, name=self.name + '_Wi')
-    self.Wo = Linear(num_in + num_out, num_out, w_init=w_init, b_init=None, name=self.name + '_Wo')
+    self.Wu = Linear(num_in + num_out, num_out, w_init=w_init, b_init=None)
+    self.Wf = Linear(num_in + num_out, num_out, w_init=w_init, b_init=None)
+    self.Wr = Linear(num_in + num_out, num_out, w_init=w_init, b_init=None)
+    self.Wo = Linear(num_in + num_out, num_out, w_init=w_init, b_init=None)
     self.bias = ETraceParamOp(self._forget_bias(), op=u.math.add, grad='full')
 
   def _forget_bias(self):
@@ -384,8 +384,8 @@ class URLSTMCell(nn.RNNCell):
     return -u.math.log(1 / u - 1)
 
   def init_state(self, batch_size: int = None, **kwargs):
-    self.c = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size), name=f'{self.name}.c')
-    self.h = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size), name=f'{self.name}.h')
+    self.c = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size))
+    self.h = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size))
 
   def reset_state(self, batch_size: int = None, **kwargs):
     self.c.value = init.param(self._state_initializer, [self.num_out], batch_size)
@@ -426,15 +426,15 @@ class _RHNBlock(bst.nn.Module):
     self.first_layer = first_layer
     self.couple = couple
     if first_layer:
-      self.W_H = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_W_H')
-      self.W_T = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_W_T')
+      self.W_H = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init)
+      self.W_T = Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init)
       if not couple:
-        self.W_C = nn.Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_W_C')
+        self.W_C = nn.Linear(num_in + num_out, num_out, w_init=w_init, b_init=b_init)
     else:
-      self.W_H = Linear(num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_W_H')
-      self.W_T = Linear(num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_W_T')
+      self.W_H = Linear(num_out, num_out, w_init=w_init, b_init=b_init)
+      self.W_T = Linear(num_out, num_out, w_init=w_init, b_init=b_init)
       if not couple:
-        self.W_C = nn.Linear(num_out, num_out, w_init=w_init, b_init=b_init, name=self.name + '_W_C')
+        self.W_C = nn.Linear(num_out, num_out, w_init=w_init, b_init=b_init)
     self.dropout = nn.Dropout(dropout_prob)
 
   def update(self, x, hidden):
@@ -578,16 +578,14 @@ class RHNCell(nn.RNNCell):
     self.couple = couple
     self._state_init = state_init
 
-    self.highways = bst.visible_module_list(
-      [
+    self.highways = [
         _RHNBlock(num_in, num_out, first_layer=l == 0, couple=couple, dropout_prob=dropout_prob,
                   w_init=w_init, b_init=b_init, name=f'highway_{l}')
         for l in range(depth)
       ]
-    )
 
   def init_state(self, batch_size: int = None, **kwargs):
-    self.h = ETraceVar(init.param(self._state_init, [self.num_out], batch_size), name=f'{self.name}.h')
+    self.h = ETraceVar(init.param(self._state_init, [self.num_out], batch_size))
 
   def reset_state(self, batch_size: int = None, **kwargs):
     self.h.value = init.param(self._state_init, [self.num_out], batch_size)
@@ -664,21 +662,21 @@ class MinimalRNNCell(nn.RNNCell):
 
     # functions
     if phi is None:
-      phi = Linear(num_in, num_out, w_init=w_init, b_init=b_init, name=self.name + '_phi')
+      phi = Linear(num_in, num_out, w_init=w_init, b_init=b_init)
     assert callable(phi), f"The phi function should be a callable function. But got {phi}"
     self.phi = phi
 
     # weights
-    self.W_u = Linear(num_out * 2, num_out, w_init=w_init, b_init=b_init, name=self.name + '_W_u')
+    self.W_u = Linear(num_out * 2, num_out, w_init=w_init, b_init=b_init)
 
   def init_state(self, batch_size: int = None, **kwargs):
-    self.h = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size), name=f'{self.name}.h')
+    self.h = ETraceVar(init.param(self._state_initializer, [self.num_out], batch_size))
 
   def reset_state(self, batch_size: int = None, **kwargs):
     self.h.value = init.param(self._state_initializer, [self.num_out], batch_size)
 
   def update(self, x):
     z = self.phi(x)
-    u = functional.sigmoid(self.W_u(jnp.concatenate([z, self.h.value], axis=-1)))
-    self.h.value = u * self.h.value + (1 - u) * z
+    u_ = functional.sigmoid(self.W_u(u.math.concatenate([z, self.h.value], axis=-1)))
+    self.h.value = u_ * self.h.value + (1 - u_) * z
     return self.h.value

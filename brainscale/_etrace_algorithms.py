@@ -252,9 +252,8 @@ class ETraceAlgorithm(bst.nn.Module):
       diag_normalize: Optional[bool] = None,
       vjp_time: str = 't',
       name: Optional[str] = None,
-      mode: Optional[bst.mixin.Mode] = None
   ):
-    super().__init__(name=name, mode=mode)
+    super().__init__(name=name)
 
     # The method to compute the hidden Jacobian diagonal matrix,
     # and whether to normalize the hidden Jacobian diagonal matrix
@@ -966,7 +965,6 @@ def _solve_IO_dim_weight_gradients(
 
 def _zeros_like_batch_or_not(
     batch_size: Optional[int],
-    mode: bst.mixin.Mode,
     x: jax.Array
 ):
   """
@@ -974,16 +972,13 @@ def _zeros_like_batch_or_not(
 
   Args:
     batch_size: int, the batch size.
-    mode: The computing mode.
     x: jax.Array, the input array.
 
   Returns:
     jax.Array, the batched zeros array.
   """
-  if mode.has(bst.mixin.Batching):
-    # TODO:
-    #      Assuming the first axis is the batch dimension.
-    assert batch_size is not None, 'The batch size should be provided. '
+  if batch_size is not None:
+    assert isinstance(batch_size, int), 'The batch size should be an integer. '
     return u.math.zeros((batch_size,) + x.shape[1:], x.dtype)
   else:
     return u.math.zeros_like(x)
@@ -992,10 +987,9 @@ def _zeros_like_batch_or_not(
 def _reset_state_in_a_dict(
     state_dict: Dict[Any, bst.State],
     batch_size: Optional[int],
-    mode: bst.mixin.Mode
 ):
   for k, v in state_dict.items():
-    state_dict[k].value = jax.tree.map(partial(_zeros_like_batch_or_not, batch_size, mode), v)
+    state_dict[k].value = jax.tree.map(partial(_zeros_like_batch_or_not, batch_size), v)
 
 
 class DiagTruncatedAlgorithm(DiagETraceAlgorithmForVJP):
@@ -1027,14 +1021,12 @@ class DiagTruncatedAlgorithm(DiagETraceAlgorithmForVJP):
       diag_normalize: Optional[bool] = None,
       vjp_time: str = 't',
       name: Optional[str] = None,
-      mode: Optional[bst.mixin.Mode] = None
   ):
     super().__init__(
       model,
       diag_normalize=diag_normalize,
       vjp_time=vjp_time,
       name=name,
-      mode=mode
     )
 
     # the learning parameters
@@ -1052,8 +1044,8 @@ class DiagTruncatedAlgorithm(DiagETraceAlgorithmForVJP):
     # The states of weight spatial gradients:
     #   1. x
     #   2. df
-    self.etrace_xs = bst.visible_state_dict()
-    self.etrace_dfs = bst.visible_state_dict()
+    self.etrace_xs = dict()
+    self.etrace_dfs = dict()
     for relation in self.graph.hidden_param_op_relations:
       # For the relation
       #
@@ -1092,8 +1084,8 @@ class DiagTruncatedAlgorithm(DiagETraceAlgorithmForVJP):
     """
 
     def _zeros_like_batch_(x: jax.Array):
-      if self.mode.has(bst.mixin.Batching):
-        assert batch_size is not None, 'The batch size should be provided. '
+      if batch_size is not None:
+        assert isinstance(batch_size, int), 'The batch size should be an integer. '
         shape = (self.n_truncation, batch_size) + x.shape[1:]
       else:
         shape = (self.n_truncation,) + x.shape
@@ -1331,14 +1323,12 @@ class DiagIODimAlgorithm(DiagETraceAlgorithmForVJP):
       diag_normalize: Optional[bool] = None,
       vjp_time: str = 't',
       name: Optional[str] = None,
-      mode: Optional[bst.mixin.Mode] = None
   ):
     super().__init__(
       model,
       diag_normalize=diag_normalize,
       vjp_time=vjp_time,
       name=name,
-      mode=mode
     )
 
     # the learning parameters
@@ -1354,8 +1344,8 @@ class DiagIODimAlgorithm(DiagETraceAlgorithmForVJP):
     # The states of weight spatial gradients:
     #   1. x
     #   2. df
-    self.etrace_xs = bst.visible_state_dict()
-    self.etrace_dfs = bst.visible_state_dict()
+    self.etrace_xs = dict()
+    self.etrace_dfs = dict()
     for relation in self.graph.hidden_param_op_relations:
       _init_IO_dim_state(self, relation)
 
@@ -1363,8 +1353,8 @@ class DiagIODimAlgorithm(DiagETraceAlgorithmForVJP):
     """
     Reset the eligibility trace states.
     """
-    _reset_state_in_a_dict(self.etrace_xs, batch_size, self.mode)
-    _reset_state_in_a_dict(self.etrace_dfs, batch_size, self.mode)
+    _reset_state_in_a_dict(self.etrace_xs, batch_size)
+    _reset_state_in_a_dict(self.etrace_dfs, batch_size)
 
   def get_etrace_of(self, weight: bst.ParamState | WeightID) -> Tuple[Dict, Dict]:
     """
@@ -1735,8 +1725,8 @@ class DiagParamDimAlgorithm(DiagETraceAlgorithmForVJP):
       diag_normalize=diag_normalize,
       vjp_time=vjp_time,
       name=name,
-      mode=mode
     )
+    self.mode = bst.mixin.Mode() if mode is None else mode
 
   def init_etrace_state(self, *args, **kwargs):
     """
@@ -1746,7 +1736,7 @@ class DiagParamDimAlgorithm(DiagETraceAlgorithmForVJP):
     `.compile_graph()` for the details.
     """
     # The states of batched weight gradients
-    self.etrace_bwg = bst.visible_state_dict()
+    self.etrace_bwg = dict()
     for relation in self.graph.hidden_param_op_relations:
       _init_param_dim_state(self, relation)
 
@@ -1754,7 +1744,7 @@ class DiagParamDimAlgorithm(DiagETraceAlgorithmForVJP):
     """
     Reset the eligibility trace states.
     """
-    _reset_state_in_a_dict(self.etrace_bwg, batch_size, self.mode)
+    _reset_state_in_a_dict(self.etrace_bwg, batch_size)
 
   def get_etrace_of(self, weight: bst.ParamState | WeightID) -> Dict:
     """
@@ -1904,13 +1894,10 @@ class DiagHybridDimAlgorithm(DiagETraceAlgorithmForVJP):
       name: Optional[str] = None,
       mode: Optional[bst.mixin.Mode] = None
   ):
-    super().__init__(
-      model,
-      diag_normalize=diag_normalize,
-      vjp_time=vjp_time,
-      name=name,
-      mode=mode
-    )
+    super().__init__(model, diag_normalize=diag_normalize, vjp_time=vjp_time, name=name)
+
+    # computing mode
+    self.mode = bst.mixin.Mode() if mode is None else mode
 
     # the learning parameters
     self.decay, num_rank = _format_decay_and_rank(decay_or_rank)
@@ -1928,9 +1915,9 @@ class DiagHybridDimAlgorithm(DiagETraceAlgorithmForVJP):
     #   2. df
     #   3. batched weight gradients
     #
-    self.etrace_xs = bst.visible_state_dict()
-    self.etrace_dfs = bst.visible_state_dict()
-    self.etrace_bwg = bst.visible_state_dict()
+    self.etrace_xs = dict()
+    self.etrace_dfs = dict()
+    self.etrace_bwg = dict()
 
     for relation in self.graph.hidden_param_op_relations:
       if isinstance(relation.weight, ETraceParamOp):
@@ -1975,9 +1962,9 @@ class DiagHybridDimAlgorithm(DiagETraceAlgorithmForVJP):
     """
     Reset the eligibility trace states.
     """
-    _reset_state_in_a_dict(self.etrace_xs, batch_size, self.mode)
-    _reset_state_in_a_dict(self.etrace_dfs, batch_size, self.mode)
-    _reset_state_in_a_dict(self.etrace_bwg, batch_size, self.mode)
+    _reset_state_in_a_dict(self.etrace_xs, batch_size)
+    _reset_state_in_a_dict(self.etrace_dfs, batch_size)
+    _reset_state_in_a_dict(self.etrace_bwg, batch_size)
 
   def get_etrace_of(self, weight: bst.ParamState | WeightID) -> Tuple[Dict, Dict, Dict]:
     """

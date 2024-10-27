@@ -1997,6 +1997,7 @@ class ETraceGraph:
 
     # --- other returns --- #
     hid2hid_jac = self._compute_hidden2hidden_jacobian(temps)
+
     return out, hiddens, others, hid2weight_jac, hid2hid_jac
 
   def _jaxpr_compute_vjp_model_at_current(
