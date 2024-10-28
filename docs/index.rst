@@ -75,6 +75,7 @@ We are building the `BDP ecosystem <https://ecosystem-for-brain-dynamics.readthe
 .. toctree::
    :hidden:
    :maxdepth: 2
+   :caption: API Reference
 
    changelog.md
    api.rst

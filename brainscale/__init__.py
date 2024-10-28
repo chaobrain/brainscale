@@ -23,6 +23,8 @@ from brainscale._etrace_compiler import *
 from brainscale._etrace_compiler import __all__ as etrace_compiler_all
 from brainscale._etrace_concepts import *
 from brainscale._etrace_concepts import __all__ as concepts_all
+from brainscale._etrace_operators import *
+from brainscale._etrace_operators import __all__ as operators_all
 from . import nn
 
 __all__ = (
@@ -30,12 +32,14 @@ __all__ = (
     + concepts_all
     + etrace_algorithms
     + etrace_compiler_all
+    + operators_all
 )
 
 del (
   concepts_all,
   etrace_algorithms,
   etrace_compiler_all,
+  operators_all,
 )
 
 # Added 2024-10-27
