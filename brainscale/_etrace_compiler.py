@@ -76,6 +76,26 @@ __all__ = [
 ]
 
 
+
+def _remove_quantity(tree):
+  """
+  Remove the quantity from the tree.
+
+  Args:
+    tree: The tree.
+
+  Returns:
+    The tree without the quantity.
+  """
+  def fn(x):
+    if isinstance(x, u.Quantity):
+      return x.magnitude
+    return x
+
+  return jax.tree_map(fn, tree, is_leaf=lambda x: isinstance(x, u.Quantity))
+
+
+
 def indent_code(code: str, indent: int = 2) -> str:
   """
   Indent the code.
@@ -1651,6 +1671,10 @@ class ETraceGraph:
     self.num_out = num_out
     invars_with_state_tree = jax.tree.unflatten(state_tree, jaxpr.invars[num_in:])
     outvars_with_state_tree = jax.tree.unflatten(state_tree, jaxpr.outvars[num_out:])
+
+    # remove the quantity from the invars and outvars
+    invars_with_state_tree = _remove_quantity(invars_with_state_tree)
+    outvars_with_state_tree = _remove_quantity(outvars_with_state_tree)
 
     # -- checking weights as invar -- #
     weight_id_to_invar = {

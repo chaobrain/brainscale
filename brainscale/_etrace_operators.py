@@ -246,6 +246,16 @@ class GeneralETraceOp(StandardETraceOp):
     return dg_weight
 
 
+def binary_op(op, x, y):
+  if isinstance(x, u.Quantity) and isinstance(y, u.Quantity):
+    return op(x, y)
+  if isinstance(x, u.Quantity):
+    return u.Quantity(op(x.magnitude, y), unit=x.unit)
+  if isinstance(y, u.Quantity):
+    return u.Quantity(op(x, y.magnitude), unit=y.unit)
+  return op(x, y)
+
+
 class MatMulETraceOp(StandardETraceOp):
   """
   The standard matrix multiplication operator for the eligibility trace.
@@ -260,19 +270,21 @@ class MatMulETraceOp(StandardETraceOp):
     super().__init__(self._operation, is_diagonal=is_diagonal)
     self.weight_mask = weight_mask
 
-  def _format_weight(self, weight) -> Tuple[Tuple[jax.Array, Optional[jax.Array]], Callable]:
-    if isinstance(weight, dict):
-      weight = (weight['weight'], weight.get('bias', None))
-      unflatten = lambda w, b: {'weight': w, 'bias': b} if (b is not None) else {'weight': w}
-    elif isinstance(weight, (tuple, list)):
-      weight = (weight[0], weight[1] if len(weight) > 1 else None)
+  def _format_weight(self, weights) -> Tuple[Tuple[jax.Array, Optional[jax.Array]], Callable]:
+    if isinstance(weights, dict):
+      weights = (weights['weight'], weights.get('bias', None))
+      unflatten = lambda w, b: {'weight': (w), 'bias': b} if (b is not None) else {'weight': w}
+    elif isinstance(weights, (tuple, list)):
+      weights = (weights[0], weights[1] if len(weights) > 1 else None)
       unflatten = lambda w, b: (w, b) if (b is not None) else (w,)
-    elif isinstance(weight, jax.Array):
-      weight = (weight, None)
+    elif isinstance(weights, jax.Array):
+      weights = (weights, None)
       unflatten = lambda w, b: w if (b is None) else (w, b)
     else:
-      raise ValueError(f'Invalid weight type: {type(weight)}')
-    return weight, unflatten
+      raise ValueError(f'Invalid weight type: {type(weights)}')
+    # weights = jax.tree.map(_get_mantissa, weights, is_leaf=_is_quantity)
+    # units = jax.tree.map(_get_unit, weights, is_leaf=_is_quantity)
+    return weights, unflatten
 
   def _operation(self, x, w):
     (weight, bias), _ = self._format_weight(w)
@@ -318,17 +330,19 @@ class MatMulETraceOp(StandardETraceOp):
         # dh_to_dbias: (batch_size, hidden_size,)
         # ph_to_pwx: (batch_size, input_size,)
         # ph_to_pwy: (batch_size, hidden_size,)
-        dh_to_dweight = dh_to_dweight + u.math.einsum('bi,bh->bih', ph_to_pwx, ph_to_pwy)
+        # dh_to_dweight = dh_to_dweight + u.math.einsum('bi,bh->bih', ph_to_pwx, ph_to_pwy)
+        dh_to_dweight = binary_op(jax.numpy.add, dh_to_dweight, u.math.einsum('bi,bh->bih', ph_to_pwx, ph_to_pwy))
         if dh_to_dbias is not None:
-          dh_to_dbias = dh_to_dbias + ph_to_pwy
+          # dh_to_dbias = dh_to_dbias + ph_to_pwy
+          dh_to_dbias = binary_op(jax.numpy.add, dh_to_dbias, ph_to_pwy)
       else:
         # dh_to_dweight: (input_size, hidden_size,)
         # dh_to_dbias: (hidden_size,)
         # ph_to_pwx: (input_size,)
         # ph_to_pwy: (hidden_size,)
-        dh_to_dweight = (dh_to_dweight + u.math.outer(ph_to_pwx, ph_to_pwy))
+        dh_to_dweight = binary_op(jax.numpy.add, dh_to_dweight, u.math.outer(ph_to_pwx, ph_to_pwy))
         if dh_to_dbias is not None:
-          dh_to_dbias = dh_to_dbias + ph_to_pwy
+          dh_to_dbias = binary_op(jax.numpy.add, dh_to_dbias, ph_to_pwy)
     return unflatten(dh_to_dweight, dh_to_dbias)
 
   def hidden_to_etrace(

@@ -24,6 +24,7 @@ from __future__ import annotations
 import contextlib
 from typing import Callable, Sequence, Tuple, List, Optional
 
+import brainunit as u
 import brainstate as bst
 import jax.lax
 
@@ -73,9 +74,11 @@ class ETraceVar(bst.ShortTermState):
   """
   __module__ = 'brainscale'
 
-  def __init__(self, value: jax.Array, name: Optional[str] = None):
+  def __init__(self, value: bst.typing.ArrayLike, name: Optional[str] = None):
     super().__init__(value, name=name)
-    assert isinstance(self.value, jax.Array), f'Currently, {ETraceVar.__name__} only supports jax.Array.'
+    if not isinstance(self.value, (jax.Array, u.Quantity)):
+      raise TypeError(f'Currently, {ETraceVar.__name__} only supports jax.Array and brainunit.Quantity. '
+                      f'But we got {type(self.value)}.')
     self._check_tree = False
 
 
