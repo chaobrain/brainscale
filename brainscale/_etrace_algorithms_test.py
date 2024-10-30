@@ -26,7 +26,7 @@ from brainstate import init
 import brainscale as nn
 
 
-class _IF_Delta_Dense_Layer(bst.Module):
+class _IF_Delta_Dense_Layer(bst.nn.Module):
   def __init__(
       self,
       n_in,
@@ -55,21 +55,18 @@ class TestDiagOn2(unittest.TestCase):
       bst.mixin.Training(),
       bst.mixin.JointMode(bst.mixin.Batching(), bst.mixin.Training()),
     ]:
-      bst.environ.set(mode=mode)
-
       n_in, n_rec = 4, 10
       snn = _IF_Delta_Dense_Layer(n_in, n_rec)
-      snn = bst.init_states(snn)
-      algorithm = nn.DiagParamDimAlgorithm(snn)
+      snn = bst.nn.init_all_states(snn)
+      algorithm = nn.DiagParamDimAlgorithm(snn, mode)
 
   def test_non_batched_On2_algorithm(self):
-    bst.environ.set(mode=bst.mixin.Training())
 
     n_in, n_rec = 4, 10
     snn = _IF_Delta_Dense_Layer(n_in, n_rec)
-    snn = bst.init_states(snn)
+    snn = bst.nn.init_all_states(snn)
 
-    algorithm = nn.DiagParamDimAlgorithm(snn)
+    algorithm = nn.DiagParamDimAlgorithm(snn, mode=bst.mixin.Batching())
     algorithm.compile_graph(jax.ShapeDtypeStruct((n_in,), bst.environ.dftype()))
 
     def run_snn(i, inp_spk):
@@ -79,20 +76,20 @@ class TestDiagOn2(unittest.TestCase):
 
     nt = 100
     inputs = jnp.asarray(bst.random.rand(nt, n_in) < 0.2, dtype=bst.environ.dftype())
-    outs = bst.transform.for_loop(run_snn, jnp.arange(nt), inputs)
+    outs = bst.compile.for_loop(run_snn, jnp.arange(nt), inputs)
     print(outs.shape)
     self.assertEqual(outs.shape, (nt, n_rec))
 
   def test_batched_On2_algorithm(self):
-    bst.environ.set(mode=bst.mixin.JointMode(bst.mixin.Training(),
-                                             bst.mixin.Batching()))
+    bst.environ.set()
 
     n_batch = 16
     n_in, n_rec = 4, 10
     snn = _IF_Delta_Dense_Layer(n_in, n_rec)
-    snn = bst.init_states(snn, n_batch)
+    snn = bst.nn.init_all_states(snn, n_batch)
 
-    algorithm = nn.DiagParamDimAlgorithm(snn)
+    algorithm = nn.DiagParamDimAlgorithm(snn, mode=bst.mixin.JointMode(bst.mixin.Training(),
+                                             bst.mixin.Batching()))
     algorithm.compile_graph(jax.ShapeDtypeStruct((n_batch, n_in), bst.environ.dftype()))
 
     def run_snn(i, inp_spk):
@@ -102,12 +99,12 @@ class TestDiagOn2(unittest.TestCase):
 
     nt = 100
     inputs = jnp.asarray(bst.random.rand(nt, n_batch, n_in) < 0.2, dtype=bst.environ.dftype())
-    outs = bst.transform.for_loop(run_snn, jnp.arange(nt), inputs)
+    outs = bst.compile.for_loop(run_snn, jnp.arange(nt), inputs)
     print(outs.shape)
     self.assertEqual(outs.shape, (nt, n_batch, n_rec))
 
 
-class _LIF_STDExpCu_Dense_Layer(bst.Module):
+class _LIF_STDExpCu_Dense_Layer(bst.nn.Module):
   """
   The RTRL layer with LIF neurons and dense connected STD-based exponential current synapses.
   """
@@ -220,9 +217,9 @@ class TestDiagGrad(unittest.TestCase):
     std_model = _LIF_STDExpCu_Dense_Layer(n_in, n_rec, inp_std=False)
     stp_model = _LIF_STPExpCu_Dense_Layer(n_in, n_rec, inp_stp=False)
 
-    bst.init_states(std_model, n_batch)
+    bst.nn.init_all_states(std_model, n_batch)
     std_model.neu.V.value = bst.random.uniform(-1., 1.5, std_model.neu.V.value.shape)
-    bst.init_states(stp_model, n_batch)
+    bst.nn.init_all_states(stp_model, n_batch)
     stp_model.neu.V.value = bst.random.uniform(-1., 1.5, stp_model.neu.V.value.shape)
 
     inputs = jnp.asarray(bst.random.rand(n_batch, n_in) < 0.2, dtype=bst.environ.dftype())

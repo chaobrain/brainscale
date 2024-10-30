@@ -1,7 +1,7 @@
 # Scalable Online Learning in Biological Neural Networks
 
 <p align="center">
-  	<img alt="Header image of brainscale." src="https://github.com/chaobrain/brainscale/blob/main/docs/_static/brainscale.jpg" width=50%>
+  	<img alt="Header image of brainscale." src="https://raw.githubusercontent.com/chaobrain/brainscale/main/docs/_static/brainscale.jpg" width=50%>
 </p> 
 
 
@@ -15,7 +15,8 @@
 </p>
 
 
-[``brainscale``](https://github.com/chaobrain/brainscale) provides online learning algorithms for biological spiking neural networks.
+[``brainscale``](https://github.com/chaobrain/brainscale) provides online learning algorithms for biological neural networks. 
+It has been integrated into our establishing [Brain Dynamics Programming ecosystem](https://ecosystem-for-brain-dynamics.readthedocs.io/). 
 
 ## Installation
 
@@ -34,4 +35,4 @@ The official documentation is hosted on Read the Docs: [https://brainscale.readt
 
 ## See also the BDP ecosystem
 
-We are building the BDP ecosystem: https://ecosystem-for-brain-dynamics.readthedocs.io/
+We are building the Brain Dynamics Programming ecosystem: https://ecosystem-for-brain-dynamics.readthedocs.io/

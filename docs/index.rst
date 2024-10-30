@@ -1,7 +1,7 @@
-BrainScale documentation
-========================
+``brainscale`` documentation
+============================
 
-`BrainScale <https://github.com/brainpy/brainscale>`_ is designed for the scalable online learning of biological spiking neural networks.
+`brainscale <https://github.com/chaobrain/brainscale>`_ is designed for the scalable online learning of biological spiking neural networks.
 
 ----
 
@@ -37,7 +37,7 @@ See also the BDP ecosystem
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 
-We are building the `BDP ecosystem <https://ecosystem-for-brain-dynamics.readthedocs.io/>`_.
+We are building the `Brain Dynamics Programming ecosystem <https://ecosystem-for-brain-dynamics.readthedocs.io/>`_.
 
 ----
 
@@ -48,14 +48,26 @@ We are building the `BDP ecosystem <https://ecosystem-for-brain-dynamics.readthe
    :maxdepth: 1
    :caption: Quickstart
 
-   quickstart.ipynb
+   quickstart/concepts-en.ipynb
+   quickstart/snn_online_learning-en.ipynb
+   quickstart/rnn_online_learning-en.ipynb
+
+
+.. toctree::
+   :hidden:
+   :maxdepth: 1
+   :caption: 快速入门
+
+   quickstart/concepts-zh.ipynb
+   quickstart/snn_online_learning-zh.ipynb
+   quickstart/rnn_online_learning-zh.ipynb
 
 
 
 .. toctree::
    :hidden:
    :maxdepth: 2
-   :caption: Tutorials
+   :caption: 使用教程
 
    tutorials/etrace_concepts.ipynb
    tutorials/etrace_modules.ipynb
