@@ -25,7 +25,7 @@ import brainunit as u
 import jax
 from brainstate import functional, init
 
-from brainscale._etrace_concepts import ETraceParamOp, NoTempParamOp
+from brainscale._etrace_concepts import ETraceParamOp, NonTempParamOp
 from brainscale._typing import ArrayLike
 
 __all__ = [
@@ -80,7 +80,7 @@ class _BaseConv(bst.nn.Module):
     num_spatial_dims: int
 
     # the weight and its operations
-    weight_op: ETraceParamOp | NoTempParamOp
+    weight_op: ETraceParamOp | NonTempParamOp
 
     def __init__(
         self,
@@ -208,7 +208,7 @@ class _Conv(_BaseConv):
         if as_etrace_weight:
             self.weight_op = ETraceParamOp(params, op=self._conv_op, grad='full' if full_etrace else None)
         else:
-            self.weight_op = NoTempParamOp(params, op=self._conv_op)
+            self.weight_op = NonTempParamOp(params, op=self._conv_op)
 
         # Evaluate the output shape
         abstract_y = jax.eval_shape(self._conv_op,
@@ -276,43 +276,41 @@ class Conv3d(_Conv):
 
 
 _conv_doc = '''
-  in_size: tuple of int
-    The input shape, without the batch size. This argument is important, since it is
-    used to evaluate the shape of the output.
-  out_channels: int
-    The number of output channels.
-  kernel_size: int, sequence of int
-    The shape of the convolutional kernel.
-    For 1D convolution, the kernel size can be passed as an integer.
-    For all other cases, it must be a sequence of integers.
-  stride: int, sequence of int
-    An integer or a sequence of `n` integers, representing the inter-window strides (default: 1).
-  padding: str, int, sequence of int, sequence of tuple
-    Either the string `'SAME'`, the string `'VALID'`, or a sequence of n `(low,
-    high)` integer pairs that give the padding to apply before and after each
-    spatial dimension.
-  lhs_dilation: int, sequence of int
-    An integer or a sequence of `n` integers, giving the
-    dilation factor to apply in each spatial dimension of `inputs`
-    (default: 1). Convolution with input dilation `d` is equivalent to
-    transposed convolution with stride `d`.
-  rhs_dilation: int, sequence of int
-    An integer or a sequence of `n` integers, giving the
-    dilation factor to apply in each spatial dimension of the convolution
-    kernel (default: 1). Convolution with kernel dilation
-    is also known as 'atrous convolution'.
-  groups: int
-    If specified, divides the input features into groups. default 1.
-  w_init: Callable, ArrayLike, Initializer
-    The initializer for the convolutional kernel.
-  b_init: Optional, Callable, ArrayLike, Initializer
-    The initializer for the bias.
-  w_mask: ArrayLike, Callable, Optional
-    The optional mask of the weights.
-  mode: Mode
-    The computation mode of the current object. Default it is `training`.
-  name: str, Optional
-    The name of the object.
+    in_size: tuple of int
+        The input shape, without the batch size. This argument is important, since it is
+        used to evaluate the shape of the output.
+    out_channels: int
+        The number of output channels.
+    kernel_size: int, sequence of int
+        The shape of the convolutional kernel.
+        For 1D convolution, the kernel size can be passed as an integer.
+        For all other cases, it must be a sequence of integers.
+    stride: int, sequence of int
+        An integer or a sequence of `n` integers, representing the inter-window strides (default: 1).
+    padding: str, int, sequence of int, sequence of tuple
+        Either the string `'SAME'`, the string `'VALID'`, or a sequence of n `(low,
+        high)` integer pairs that give the padding to apply before and after each
+        spatial dimension.
+    lhs_dilation: int, sequence of int
+        An integer or a sequence of `n` integers, giving the
+        dilation factor to apply in each spatial dimension of `inputs`
+        (default: 1). Convolution with input dilation `d` is equivalent to
+        transposed convolution with stride `d`.
+    rhs_dilation: int, sequence of int
+        An integer or a sequence of `n` integers, giving the
+        dilation factor to apply in each spatial dimension of the convolution
+        kernel (default: 1). Convolution with kernel dilation
+        is also known as 'atrous convolution'.
+    groups: int
+        If specified, divides the input features into groups. default 1.
+    w_init: Callable, ArrayLike, Initializer
+        The initializer for the convolutional kernel.
+    b_init: Optional, Callable, ArrayLike, Initializer
+        The initializer for the bias.
+    w_mask: ArrayLike, Callable, Optional
+        The optional mask of the weights.
+    name: str, Optional
+        The name of the object.
 '''
 
 Conv1d.__doc__ = Conv1d.__doc__ % _conv_doc
@@ -375,7 +373,7 @@ class _ScaledWSConv(_BaseConv):
         if as_etrace_weight:
             self.weight_op = ETraceParamOp(params, op=self._conv_op, grad='full' if full_etrace else None)
         else:
-            self.weight_op = NoTempParamOp(params, op=self._conv_op)
+            self.weight_op = NonTempParamOp(params, op=self._conv_op)
 
         # Evaluate the output shape
         abstract_y = jax.eval_shape(self._conv_op,
@@ -444,47 +442,45 @@ class ScaledWSConv3d(_ScaledWSConv):
 
 
 _ws_conv_doc = '''
-  in_size: tuple of int
-    The input shape, without the batch size. This argument is important, since it is
-    used to evaluate the shape of the output.
-  out_channels: int
-    The number of output channels.
-  kernel_size: int, sequence of int
-    The shape of the convolutional kernel.
-    For 1D convolution, the kernel size can be passed as an integer.
-    For all other cases, it must be a sequence of integers.
-  stride: int, sequence of int
-    An integer or a sequence of `n` integers, representing the inter-window strides (default: 1).
-  padding: str, int, sequence of int, sequence of tuple
-    Either the string `'SAME'`, the string `'VALID'`, or a sequence of n `(low,
-    high)` integer pairs that give the padding to apply before and after each
-    spatial dimension.
-  lhs_dilation: int, sequence of int
-    An integer or a sequence of `n` integers, giving the
-    dilation factor to apply in each spatial dimension of `inputs`
-    (default: 1). Convolution with input dilation `d` is equivalent to
-    transposed convolution with stride `d`.
-  rhs_dilation: int, sequence of int
-    An integer or a sequence of `n` integers, giving the
-    dilation factor to apply in each spatial dimension of the convolution
-    kernel (default: 1). Convolution with kernel dilation
-    is also known as 'atrous convolution'.
-  groups: int
-    If specified, divides the input features into groups. default 1.
-  w_init: Callable, ArrayLike, Initializer
-    The initializer for the convolutional kernel.
-  b_init: Optional, Callable, ArrayLike, Initializer
-    The initializer for the bias.
-  ws_gain: bool
-    Whether to add a gain term for the weight standarization. The default is `True`.
-  eps: float
-    The epsilon value for numerical stability.
-  w_mask: ArrayLike, Callable, Optional
-    The optional mask of the weights.
-  mode: Mode
-    The computation mode of the current object. Default it is `training`.
-  name: str, Optional
-    The name of the object.
+    in_size: tuple of int
+        The input shape, without the batch size. This argument is important, since it is
+        used to evaluate the shape of the output.
+    out_channels: int
+        The number of output channels.
+    kernel_size: int, sequence of int
+        The shape of the convolutional kernel.
+        For 1D convolution, the kernel size can be passed as an integer.
+        For all other cases, it must be a sequence of integers.
+    stride: int, sequence of int
+        An integer or a sequence of `n` integers, representing the inter-window strides (default: 1).
+    padding: str, int, sequence of int, sequence of tuple
+        Either the string `'SAME'`, the string `'VALID'`, or a sequence of n `(low,
+        high)` integer pairs that give the padding to apply before and after each
+        spatial dimension.
+    lhs_dilation: int, sequence of int
+        An integer or a sequence of `n` integers, giving the
+        dilation factor to apply in each spatial dimension of `inputs`
+        (default: 1). Convolution with input dilation `d` is equivalent to
+        transposed convolution with stride `d`.
+    rhs_dilation: int, sequence of int
+        An integer or a sequence of `n` integers, giving the
+        dilation factor to apply in each spatial dimension of the convolution
+        kernel (default: 1). Convolution with kernel dilation
+        is also known as 'atrous convolution'.
+    groups: int
+        If specified, divides the input features into groups. default 1.
+    w_init: Callable, ArrayLike, Initializer
+        The initializer for the convolutional kernel.
+    b_init: Optional, Callable, ArrayLike, Initializer
+        The initializer for the bias.
+    ws_gain: bool
+        Whether to add a gain term for the weight standarization. The default is `True`.
+    eps: float
+        The epsilon value for numerical stability.
+    w_mask: ArrayLike, Callable, Optional
+        The optional mask of the weights.
+    name: str, Optional
+        The name of the object.
 
 '''
 

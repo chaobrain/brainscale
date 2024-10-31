@@ -38,7 +38,7 @@ __all__ = [
     'ETraceParam',  # the parameter/weight for the etrace-based learning
     'ETraceOp',  # the operator for the etrace-based learning
     'ETraceParamOp',  # the parameter and operator for the etrace-based learning, combining ETraceParam and ETraceOp
-    'NoTempParamOp',  # the parameter state with an associated operator
+    'NonTempParamOp',  # the parameter state with an associated operator
     'NoGradParamOp',
     'stop_param_gradients',
 ]
@@ -140,6 +140,7 @@ class ETraceOp:
         return y
 
 
+
 class _ETraceGrad(BaseEnum):
     full = 'full'
     approx = 'approx'
@@ -186,7 +187,7 @@ class ETraceParamOp(ETraceParam):
         return self.op(x, self.value)
 
 
-class NoTempParamOp(bst.ParamState):
+class NonTempParamOp(bst.ParamState):
     """
     The Parameter State with an Associated Operator with no temporal dependent back-propagation.
 

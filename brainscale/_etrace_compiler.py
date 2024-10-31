@@ -1540,14 +1540,14 @@ class HiddenWeightOpRelation(NamedTuple):
 
 
 _compiler_docstr = '''
-  diag_normalize: bool
-      Whether to normalize the hidden Jacobian diagonal matrix to the range of ``[-1, 1]``. Default is ``None``.
-  vjp_time: str
-      The time to compute the loss-to-hidden Jacobian. It should be one of the
-      following values:
-
-      - 't': compute the loss-to-hidden Jacobian at the current time step: :math:`\partial L^t / \partial h^t`
-      - 't_minus_1': compute the loss-to-hidden Jacobian at the last time step: :math:`\partial L^t / \partial h^{t-1}`
+    diag_normalize: bool
+          Whether to normalize the hidden Jacobian diagonal matrix to the range of ``[-1, 1]``. Default is ``None``.
+    vjp_time: str
+          The time to compute the loss-to-hidden Jacobian. It should be one of the
+          following values:
+    
+          - 't': compute the loss-to-hidden Jacobian at the current time step: :math:`\partial L^t / \partial h^t`
+          - 't_minus_1': compute the loss-to-hidden Jacobian at the last time step: :math:`\partial L^t / \partial h^{t-1}`
 '''
 
 

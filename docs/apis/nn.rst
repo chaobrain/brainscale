@@ -103,6 +103,7 @@ Normalization Operation
    :nosignatures:
    :template: classtemplate.rst
 
+   BatchNorm0d
    BatchNorm1d
    BatchNorm2d
    BatchNorm3d
@@ -145,7 +146,6 @@ Rate RNNs
    MGUCell
    LSTMCell
    URLSTMCell
-   RHNCell
    MinimalRNNCell
 
 

@@ -24,7 +24,7 @@ import brainstate as bst
 import brainunit as u
 from brainstate import functional, init
 
-from brainscale._etrace_concepts import ETraceParamOp, NoTempParamOp
+from brainscale._etrace_concepts import ETraceParamOp, NonTempParamOp
 from brainscale._etrace_operators import MatMulETraceOp
 from brainscale._typing import ArrayLike
 
@@ -53,8 +53,8 @@ class Linear(bst.nn.Module):
         super().__init__(name=name)
 
         # input and output shape
-        self.in_size = (in_size,) if isinstance(in_size, numbers.Integral) else tuple(in_size)
-        self.out_size = (out_size,) if isinstance(out_size, numbers.Integral) else tuple(out_size)
+        self.in_size = in_size
+        self.out_size = out_size
 
         # w_mask
         self.w_mask = init.param(w_mask, self.in_size + self.out_size)
@@ -69,7 +69,7 @@ class Linear(bst.nn.Module):
         if as_etrace_weight:
             self.weight_op = ETraceParamOp(params, op, grad='full' if full_etrace else None)
         else:
-            self.weight_op = NoTempParamOp(params, op.fun)
+            self.weight_op = NonTempParamOp(params, op.fun)
 
     def update(self, x):
         return self.weight_op.execute(x)
@@ -94,8 +94,8 @@ class SignedWLinear(bst.nn.Module):
         super().__init__(name=name)
 
         # input and output shape
-        self.in_size = (in_size,) if isinstance(in_size, numbers.Integral) else tuple(in_size)
-        self.out_size = (out_size,) if isinstance(out_size, numbers.Integral) else tuple(out_size)
+        self.in_size = in_size
+        self.out_size = out_size
 
         # w_mask
         self.w_sign = w_sign
@@ -105,7 +105,7 @@ class SignedWLinear(bst.nn.Module):
         if as_etrace_weight:
             self.weight_op = ETraceParamOp(weight, self._operation, grad='full' if full_etrace else None)
         else:
-            self.weight_op = NoTempParamOp(weight, self._operation)
+            self.weight_op = NonTempParamOp(weight, self._operation)
 
     def _operation(self, x, w):
         if self.w_sign is None:
@@ -163,8 +163,8 @@ class ScaledWSLinear(bst.nn.Module):
         super().__init__(name=name)
 
         # input and output shape
-        self.in_size = (in_size,) if isinstance(in_size, numbers.Integral) else tuple(in_size)
-        self.out_size = (out_size,) if isinstance(out_size, numbers.Integral) else tuple(out_size)
+        self.in_size = in_size
+        self.out_size = out_size
 
         # w_mask
         self.w_mask = init.param(w_mask, (self.in_size[0], 1))
@@ -185,7 +185,7 @@ class ScaledWSLinear(bst.nn.Module):
         if as_etrace_weight:
             self.weight_op = ETraceParamOp(params, self._operation, grad='full' if full_etrace else None)
         else:
-            self.weight_op = NoTempParamOp(params, self._operation)
+            self.weight_op = NonTempParamOp(params, self._operation)
 
     def update(self, x):
         return self.weight_op.execute(x)

@@ -1,7 +1,7 @@
 ``brainscale`` documentation
 ============================
 
-`brainscale <https://github.com/chaobrain/brainscale>`_ is designed for the scalable online learning of biological spiking neural networks.
+`brainscale <https://github.com/chaobrain/brainscale>`_ is designed for the scalable online learning of biological neural networks.
 
 ----
 
@@ -72,15 +72,7 @@ We are building the `Brain Dynamics Programming ecosystem <https://ecosystem-for
    tutorials/etrace_concepts.ipynb
    tutorials/etrace_modules.ipynb
    tutorials/etrace_algorithms.ipynb
-
-
-
-.. toctree::
-   :hidden:
-   :maxdepth: 2
-   :caption: Examples
-
-   examples/core_examples.rst
+   tutorials/limitations.ipynb
 
 
 

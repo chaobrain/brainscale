@@ -18,9 +18,10 @@ Model Definition
    :template: classtemplate.rst
 
     ETraceVar
+    ETraceState
     ETraceParam
     ETraceParamOp
-    NoTempParamOp
+    NonTempParamOp
     NoGradParamOp
 
 

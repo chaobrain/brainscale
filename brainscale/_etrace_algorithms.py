@@ -66,21 +66,21 @@ __all__ = [
 ]
 
 _common_doc = '''
-  {doc}
-  name: str, optional
-      The name of the etrace algorithm.
-  mode: brainstate.mixin.Mode, optional
-      The mode of the etrace algorithm. Note that the etrace algorithm is particularly sensitive to 
-      ``brainstate.mixin.Batching``, since it is used to compute and initialize the eligibility trace 
-      states with or without batch size.
+    {doc}
+    name: str, optional
+          The name of the etrace algorithm.
+    mode: brainstate.mixin.Mode, optional
+          The mode of the etrace algorithm. Note that the etrace algorithm is particularly sensitive to 
+          ``brainstate.mixin.Batching``, since it is used to compute and initialize the eligibility trace 
+          states with or without batch size.
 
 '''.format(doc=_compiler_docstr)
 
 _io_dim_doc = '''
-  decay_or_rank: float, int
-      The exponential smoothing factor for the eligibility trace. If it is a float,
-      it is the decay factor, should be in the range of (0, 1). If it is an integer,
-      it is the number of approximation rank for the algorithm, should be greater than 0.
+    decay_or_rank: float, int
+          The exponential smoothing factor for the eligibility trace. If it is a float,
+          it is the decay factor, should be in the range of (0, 1). If it is an integer,
+          it is the number of approximation rank for the algorithm, should be greater than 0.
 '''
 
 

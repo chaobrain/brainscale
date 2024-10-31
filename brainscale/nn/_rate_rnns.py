@@ -24,7 +24,7 @@ from brainstate import init, functional, nn
 
 from brainscale._etrace_concepts import ETraceState, ETraceParamOp
 from brainscale._typing import ArrayLike
-from ._conv import Linear
+from ._linear import Linear
 
 __all__ = [
     'ValinaRNNCell', 'GRUCell', 'MGUCell', 'LSTMCell', 'URLSTMCell',

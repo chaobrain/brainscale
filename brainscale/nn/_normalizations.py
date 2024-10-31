@@ -25,7 +25,7 @@ import jax
 import jax.numpy as jnp
 from brainstate import init, nn
 
-from brainscale._etrace_concepts import ETraceParamOp, NoTempParamOp
+from brainscale._etrace_concepts import ETraceParamOp, NonTempParamOp
 from brainscale._typing import DTypeLike, ArrayLike, Size, Axes
 
 __all__ = [
@@ -121,7 +121,7 @@ def _normalize(
     x: ArrayLike,
     mean: Optional[ArrayLike],
     var: Optional[ArrayLike],
-    weights: Optional[ETraceParamOp | NoTempParamOp],
+    weights: Optional[ETraceParamOp | NonTempParamOp],
     reduction_axes: Sequence[int],
     dtype: DTypeLike,
     epsilon: Union[numbers.Number, jax.Array],
@@ -217,7 +217,7 @@ class _BatchNorm(nn.Module):
             if as_etrace_weight:
                 self.weight = ETraceParamOp(weight, op=self._operation, grad='full' if full_etrace else None)
             else:
-                self.weight = NoTempParamOp(weight, op=self._operation)
+                self.weight = NonTempParamOp(weight, op=self._operation)
         else:
             self.weight = None
 
