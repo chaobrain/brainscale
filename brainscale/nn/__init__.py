@@ -13,10 +13,12 @@
 # limitations under the License.
 # ==============================================================================
 
-from ._connections import *
-from ._connections import __all__ as _connections_all
+from ._conv import *
+from ._conv import __all__ as _conv_all
 from ._elementwise import *
 from ._elementwise import __all__ as elementwise_all
+from ._linear import *
+from ._linear import __all__ as _linear_all
 from ._neurons import *
 from ._neurons import __all__ as _neurons_all
 from ._normalizations import *
@@ -31,8 +33,9 @@ from ._synapses import *
 from ._synapses import __all__ as _synapses_all
 
 __all__ = (
-    _connections_all +
+    _conv_all +
     elementwise_all +
+    _linear_all +
     _neurons_all +
     _normalizations_all +
     _poolings_all +
@@ -41,12 +44,13 @@ __all__ = (
     _synapses_all
 )
 del (
-  _connections_all,
-  elementwise_all,
-  _neurons_all,
-  _normalizations_all,
-  _poolings_all,
-  _rate_rnns_all,
-  _readout_all,
-  _synapses_all
+    _conv_all,
+    elementwise_all,
+    _linear_all,
+    _neurons_all,
+    _normalizations_all,
+    _poolings_all,
+    _rate_rnns_all,
+    _readout_all,
+    _synapses_all
 )

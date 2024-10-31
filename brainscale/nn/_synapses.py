@@ -20,34 +20,34 @@ from __future__ import annotations
 import brainstate as bst
 from brainstate import init
 
-from brainscale._etrace_concepts import ETraceVar
+from brainscale._etrace_concepts import ETraceState
 
 __all__ = [
-  # synapse models
-  'Expon', 'STP', 'STD',
+    # synapse models
+    'Expon', 'STP', 'STD',
 ]
 
 
 class Expon(bst.nn.Expon):
-  __doc__ = bst.nn.Expon.__doc__
-  __module__ = 'brainscale'
+    __doc__ = bst.nn.Expon.__doc__
+    __module__ = 'brainscale.nn'
 
-  def init_state(self, batch_size: int = None, **kwargs):
-    self.g = ETraceVar(init.param(self.g_initializer, self.varshape, batch_size))
+    def init_state(self, batch_size: int = None, **kwargs):
+        self.g = ETraceState(init.param(self.g_initializer, self.varshape, batch_size))
 
 
 class STP(bst.nn.STP):
-  __doc__ = bst.nn.STP.__doc__
-  __module__ = 'brainscale'
+    __doc__ = bst.nn.STP.__doc__
+    __module__ = 'brainscale.nn'
 
-  def init_state(self, batch_size: int = None, **kwargs):
-    self.x = ETraceVar(init.param(init.Constant(1.), self.varshape, batch_size))
-    self.u = ETraceVar(init.param(init.Constant(self.U), self.varshape, batch_size))
+    def init_state(self, batch_size: int = None, **kwargs):
+        self.x = ETraceState(init.param(init.Constant(1.), self.varshape, batch_size))
+        self.u = ETraceState(init.param(init.Constant(self.U), self.varshape, batch_size))
 
 
 class STD(bst.nn.STD):
-  __doc__ = bst.nn.STD.__doc__
-  __module__ = 'brainscale'
+    __doc__ = bst.nn.STD.__doc__
+    __module__ = 'brainscale.nn'
 
-  def init_state(self, batch_size: int = None, **kwargs):
-    self.x = ETraceVar(init.param(init.Constant(1.), self.varshape, batch_size))
+    def init_state(self, batch_size: int = None, **kwargs):
+        self.x = ETraceState(init.param(init.Constant(1.), self.varshape, batch_size))

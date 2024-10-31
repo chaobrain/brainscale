@@ -20,34 +20,34 @@ from __future__ import annotations
 import brainstate as bst
 from brainstate import init
 
-from brainscale._etrace_concepts import ETraceVar
+from brainscale._etrace_concepts import ETraceState
 
 __all__ = [
-  # neuron models
-  'IF', 'LIF', 'ALIF',
+    # neuron models
+    'IF', 'LIF', 'ALIF',
 ]
 
 
 class IF(bst.nn.IF):
-  __module__ = 'brainscale'
-  __doc__ = bst.nn.IF.__doc__
+    __module__ = 'brainscale.nn'
+    __doc__ = bst.nn.IF.__doc__
 
-  def init_state(self, batch_size: int = None, **kwargs):
-    self.V = ETraceVar(init.param(self.V_initializer, self.varshape, batch_size))
+    def init_state(self, batch_size: int = None, **kwargs):
+        self.V = ETraceState(init.param(self.V_initializer, self.varshape, batch_size))
 
 
 class LIF(bst.nn.LIF):
-  __module__ = 'brainscale'
-  __doc__ = bst.nn.LIF.__doc__
+    __module__ = 'brainscale.nn'
+    __doc__ = bst.nn.LIF.__doc__
 
-  def init_state(self, batch_size: int = None, **kwargs):
-    self.V = ETraceVar(init.param(self.V_initializer, self.varshape, batch_size))
+    def init_state(self, batch_size: int = None, **kwargs):
+        self.V = ETraceState(init.param(self.V_initializer, self.varshape, batch_size))
 
 
 class ALIF(bst.nn.ALIF):
-  __doc__ = bst.nn.ALIF.__doc__
-  __module__ = 'brainscale'
+    __doc__ = bst.nn.ALIF.__doc__
+    __module__ = 'brainscale.nn'
 
-  def init_state(self, batch_size: int = None, **kwargs):
-    self.V = ETraceVar(init.param(self.V_initializer, self.varshape, batch_size))
-    self.a = ETraceVar(init.param(self.a_initializer, self.varshape, batch_size))
+    def init_state(self, batch_size: int = None, **kwargs):
+        self.V = ETraceState(init.param(self.V_initializer, self.varshape, batch_size))
+        self.a = ETraceState(init.param(self.a_initializer, self.varshape, batch_size))

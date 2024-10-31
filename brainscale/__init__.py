@@ -36,10 +36,10 @@ __all__ = (
 )
 
 del (
-  concepts_all,
-  etrace_algorithms,
-  etrace_compiler_all,
-  operators_all,
+    concepts_all,
+    etrace_algorithms,
+    etrace_compiler_all,
+    operators_all,
 )
 
 # Added 2024-10-27
