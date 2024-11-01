@@ -147,7 +147,7 @@ class _LIF_Delta_Dense_Layer(bst.nn.Module):
         return self.neu.get_spike()
 
 
-class _LIF_ExpCu_Dense_Layer(bst.Module):
+class _LIF_ExpCu_Dense_Layer(bst.nn.Module):
     """
     LIF neurons and dense connected exponential current synapses.
     """
@@ -178,7 +178,7 @@ class _LIF_ExpCu_Dense_Layer(bst.Module):
         return self.neu.get_spike()
 
 
-class ETraceNet(bst.Module):
+class ETraceNet(bst.nn.Module):
     def __init__(
         self, n_in, n_rec, n_out, n_layer, args,
     ):

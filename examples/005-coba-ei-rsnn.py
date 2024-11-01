@@ -533,4 +533,4 @@ def training(
 if __name__ == '__main__':
     with bst.environ.context(dt=1.0 * u.ms):
         training(rec_scale=0.5, ff_scale=1.0, n_rec=400, w_ei_ratio=4., lr=1e-3, net='coba',
-                 tau_a=1500.0 * u.ms, tau_syn=5. * u.ms, tau_neu=400. * u.ms, method='diag')
+                 tau_a=1500.0 * u.ms, tau_syn=5. * u.ms, tau_neu=400. * u.ms)
