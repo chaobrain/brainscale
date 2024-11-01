@@ -331,7 +331,7 @@ class DMSDataset:
 class Trainer(object):
     def __init__(
         self,
-        target: GifNet,
+        target: bst.nn.Module,
         opt: bst.optim.Optimizer,
         dataset: Iterable,
         x_fun: Callable,
@@ -440,7 +440,7 @@ class OnlineTrainer(Trainer):
 
 class BPTTTrainer(Trainer):
     @bst.compile.jit(static_argnums=(0,))
-    def bptt_train(self, inputs, targets):
+    def batch_train(self, inputs, targets):
         # initialize the states
         bst.nn.init_all_states(self.target, inputs.shape[1])
 

@@ -13,6 +13,7 @@
 # limitations under the License.
 # ==============================================================================
 
+# see brainscale documentations for more details.
 
 import brainstate as bst
 import braintools as bts

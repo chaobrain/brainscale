@@ -13,6 +13,8 @@
 # limitations under the License.
 # ==============================================================================
 
+# See brainscale documentation for more details:
+
 
 import brainstate as bst
 import braintools as bts
@@ -192,14 +194,14 @@ class BPTTTrainer(Trainer):
         return loss
 
 
-# online = OnlineTrainer(
-#     target=GRUNet(10, 200, 10, 1),
-#     opt=bst.optim.Adam(0.001),
-#     n_epochs=1000,
-#     n_seq=200,
-#     batch_size=128,
-# )
-# online_losses = online.f_train()
+online = OnlineTrainer(
+    target=GRUNet(10, 200, 10, 1),
+    opt=bst.optim.Adam(0.001),
+    n_epochs=1000,
+    n_seq=200,
+    batch_size=128,
+)
+online_losses = online.f_train()
 
 bptt = BPTTTrainer(
     target=GRUNet(10, 200, 10, 1),

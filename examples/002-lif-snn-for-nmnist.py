@@ -14,6 +14,8 @@
 # ==============================================================================
 
 
+# see brainscale documentations for more details.
+
 import brainstate as bst
 import braintools as bts
 import brainunit as u
@@ -77,10 +79,9 @@ if __name__ == '__main__':
     fig.add_subplot(gs[0, 0])
     plt.plot(losses)
     plt.xlabel('Epoch')
-    plt.ylabel('Loss')
+    plt.ylabel('Training Loss')
     fig.add_subplot(gs[0, 1])
     plt.plot(accs)
     plt.xlabel('Epoch')
-    plt.ylabel('Accuracy')
+    plt.ylabel('Training Accuracy')
     plt.show()
-

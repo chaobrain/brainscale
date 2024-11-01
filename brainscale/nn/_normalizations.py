@@ -229,26 +229,38 @@ class _BatchNorm(nn.Module):
         return x
 
     def _check_input_dim(self, x):
-        if isinstance(self.num_spatial_dims, int):
-            if x.ndim == self.num_spatial_dims + 2:
-                x_shape = x.shape[1:]
-            elif x.ndim == self.num_spatial_dims + 1:
-                x_shape = x.shape
-            else:
-                raise ValueError(f"expected {self.num_spatial_dims + 2}D (with batch) or "
-                                 f"{self.num_spatial_dims + 1}D (without batch) input (got {x.ndim}D input, {x.shape})")
-            if self.in_size != x_shape:
-                raise ValueError(f"The expected input shape is {self.in_size}, while we got {x_shape}.")
+        if x.ndim == self.num_spatial_dims + 2:
+            x_shape = x.shape[1:]
+        elif x.ndim == self.num_spatial_dims + 1:
+            x_shape = x.shape
+        else:
+            raise ValueError(f"expected {self.num_spatial_dims + 2}D (with batch) or "
+                             f"{self.num_spatial_dims + 1}D (without batch) input (got {x.ndim}D input, {x.shape})")
+        if self.in_size != x_shape:
+            raise ValueError(f"The expected input shape is {self.in_size}, while we got {x_shape}.")
 
     def update(self, x):
-        self._check_input_dim(x)
-        fit_phase = bst.environ.get('fit', desc='Whether this is a fitting process. Bool.')
+        # input shape and batch mode or not
+        if x.ndim == self.num_spatial_dims + 2:
+            x_shape = x.shape[1:]
+            batch = True
+        elif x.ndim == self.num_spatial_dims + 1:
+            x_shape = x.shape
+            batch = False
+        else:
+            raise ValueError(f"expected {self.num_spatial_dims + 2}D (with batch) or "
+                             f"{self.num_spatial_dims + 1}D (without batch) input (got {x.ndim}D input, {x.shape})")
+        if self.in_size != x_shape:
+            raise ValueError(f"The expected input shape is {self.in_size}, while we got {x_shape}.")
 
         # reduce the feature axis
-        if self.mode.has(bst.mixin.Batching):
+        if batch:
             reduction_axes = tuple(i for i in range(x.ndim) if (i - 1) not in self.feature_axis)
         else:
             reduction_axes = tuple(i for i in range(x.ndim) if i not in self.feature_axis)
+
+        # fitting phase
+        fit_phase = bst.environ.get('fit', desc='Whether this is a fitting process. Bool.')
 
         # compute the running mean and variance
         if self.track_running_stats:

@@ -85,6 +85,15 @@ We are building the `Brain Dynamics Programming ecosystem <https://ecosystem-for
 .. toctree::
    :hidden:
    :maxdepth: 2
+   :caption: Examples
+
+   examples/core_examples.rst
+
+
+
+.. toctree::
+   :hidden:
+   :maxdepth: 2
    :caption: API Reference
 
    changelog.md
