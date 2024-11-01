@@ -67,12 +67,18 @@ We are building the `Brain Dynamics Programming ecosystem <https://ecosystem-for
 .. toctree::
    :hidden:
    :maxdepth: 2
-   :caption: 使用教程
+   :caption: Advanced Tutorial
 
-   tutorials/etrace_concepts.ipynb
-   tutorials/etrace_modules.ipynb
-   tutorials/etrace_algorithms.ipynb
-   tutorials/limitations.ipynb
+   advanced/limitations-en.ipynb
+
+
+
+.. toctree::
+   :hidden:
+   :maxdepth: 2
+   :caption: 高级教程
+
+   advanced/limitations-zh.ipynb
 
 
 
