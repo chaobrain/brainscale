@@ -23,6 +23,9 @@ It has been integrated into our establishing [Brain Dynamics Programming ecosyst
 You can install ``brainscale`` via pip:
 
 ```bash
+# install the latest brainstate release first
+pip install git+https://github.com/chaobrain/brainstate.git
+
 pip install brainscale --upgrade
 ```
 

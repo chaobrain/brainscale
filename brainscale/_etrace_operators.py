@@ -209,15 +209,26 @@ class GeneralETraceOp(StandardETraceOp):
         x_data = u.math.ones(x_info.shape, x_info.dtype)
 
         # transform
-        fun = lambda dh, x: jax.vjp(partial(op, x), weight_vals)[1](dh)[0]
+        def fn4vjp(dh, x):
+            primals, f_vjp = jax.vjp(partial(op, x), weight_vals)
+            if isinstance(primals, u.Quantity) and isinstance(dh, u.Quantity):
+                assert primals.unit.has_same_dim(dh.unit), (f'The unit of the primal and the derivative must '
+                                                            f'be the same. But we got {primals.unit} and {dh.unit}')
+            elif isinstance(primals, u.Quantity):
+                dh = u.Quantity(dh, unit=primals.unit)
+            elif isinstance(dh, u.Quantity):
+                raise ValueError(f'The primal must be a quantity. Got {type(primals)}')
+            return f_vjp(dh)[0]
+
+        # fun = lambda dh, x: jax.vjp(partial(op, x), weight_vals)[1](dh)[0]
         if mode.has(bst.mixin.Batching):
             # TODO:
             #    assuming the batch size is the first dimension
             x_data = u.math.expand_dims(x_data, axis=1)
             dg_hidden = u.math.expand_dims(dg_hidden, axis=1)
-            dg_weight = jax.vmap(fun)(dg_hidden, x_data)
+            dg_weight = jax.vmap(fn4vjp)(dg_hidden, x_data)
         else:
-            dg_weight = fun(dg_hidden, x_data)
+            dg_weight = fn4vjp(dg_hidden, x_data)
         return dg_weight
 
     @staticmethod
@@ -235,14 +246,25 @@ class GeneralETraceOp(StandardETraceOp):
         #
         # we can compute the gradient of the weight using the following two merging operations:
         #
-        fun = lambda dx, dy: jax.vjp(partial(op, dx), weight_vals)[1](dy)[0]
+        def fn4vjp(dx, dy):
+            primals, f_vjp = jax.vjp(partial(op, dx), weight_vals)
+            if isinstance(primals, u.Quantity) and isinstance(dy, u.Quantity):
+                assert primals.unit.has_same_dim(dy.unit), (f'The unit of the primal and the derivative must '
+                                                            f'be the same. But we got {primals.unit} and {dy.unit}')
+            elif isinstance(primals, u.Quantity):
+                dy = u.Quantity(dy, unit=primals.unit)
+            elif isinstance(dy, u.Quantity):
+                raise ValueError(f'The primal must be a quantity. Got {type(primals)}')
+            return f_vjp(dy)[0]
+
+        # fun = lambda dx, dy: jax.vjp(partial(op, dx), weight_vals)[1](dy)[0]
         if mode.has(bst.mixin.Batching):
             # TODO:
             #    assuming the batch size is the first dimension
-            dg_weight = jax.vmap(fun)(u.math.expand_dims(dg_x, axis=1),
+            dg_weight = jax.vmap(fn4vjp)(u.math.expand_dims(dg_x, axis=1),
                                       u.math.expand_dims(dg_y, axis=1))
         else:
-            dg_weight = fun(dg_x, dg_y)
+            dg_weight = fn4vjp(dg_x, dg_y)
         return dg_weight
 
 

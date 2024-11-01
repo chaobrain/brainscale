@@ -45,10 +45,9 @@ class GIF(bst.nn.Neuron):
         I2_initializer: Callable = bst.init.ZeroInit(unit=u.mA),
         spike_fun: Callable = bst.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
-        keep_size: bool = False,
         name: str = None,
     ):
-        super().__init__(size, keep_size=keep_size, name=name, spk_fun=spike_fun, spk_reset=spk_reset)
+        super().__init__(size, name=name, spk_fun=spike_fun, spk_reset=spk_reset)
 
         # parameters
         self.V_rest = bst.init.param(V_rest, self.varshape, allow_none=False)
