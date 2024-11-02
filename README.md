@@ -20,13 +20,19 @@ It has been integrated into our establishing [Brain Dynamics Programming ecosyst
 
 ## Installation
 
-You can install ``brainscale`` via pip:
+``brainscale`` can run on Python 3.9+ installed on Linux, MacOS, and Windows. You can install ``brainscale`` via pip:
 
 ```bash
 # install the latest brainstate release first
 pip install git+https://github.com/chaobrain/brainstate.git
 
 pip install brainscale --upgrade
+```
+
+or build it from source:
+
+```bash
+pip install -e .
 ```
 
 
