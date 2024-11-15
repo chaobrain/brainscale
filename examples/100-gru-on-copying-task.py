@@ -41,7 +41,8 @@ class CopyDataset:
             ids[..., -10:] = np.ones([self.batch_size, 10]) * 9
             # 输入序列
             x = np.zeros([self.batch_size, self.seq_length, 10])
-            x[..., range(self.seq_length), ids] = 1
+            for i in range(self.batch_size):
+                x[i, range(self.seq_length), ids[i]] = 1
             yield x, ids[..., :10]
 
 
