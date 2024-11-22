@@ -37,12 +37,11 @@ sys.path.insert(0, os.path.abspath('../'))
 
 import brainscale
 
-
 # -- Project information -----------------------------------------------------
 
 project = 'BrainScale'
-copyright = '2024 - , BrainScale'
-author = 'Chaoming Wang'
+copyright = '2024, BrainScale'
+author = 'BrainScale Developer'
 
 # The full version, including alpha/beta/rc tags
 release = brainscale.__version__
@@ -53,18 +52,18 @@ release = brainscale.__version__
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-  'sphinx.ext.autodoc',
-  'sphinx.ext.autosummary',
-  'sphinx.ext.intersphinx',
-  'sphinx.ext.mathjax',
-  'sphinx.ext.napoleon',
-  'sphinx.ext.viewcode',
-  'sphinx_autodoc_typehints',
-  'myst_nb',
-  'matplotlib.sphinxext.plot_directive',
-  'sphinx_thebe',
-  'sphinx_design',
-  'sphinx_math_dollar',
+    'sphinx.ext.autodoc',
+    'sphinx.ext.autosummary',
+    'sphinx.ext.intersphinx',
+    'sphinx.ext.mathjax',
+    'sphinx.ext.napoleon',
+    'sphinx.ext.viewcode',
+    'sphinx_autodoc_typehints',
+    'myst_nb',
+    'matplotlib.sphinxext.plot_directive',
+    'sphinx_thebe',
+    'sphinx_design',
+    'sphinx_math_dollar',
 ]
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
@@ -73,20 +72,12 @@ extensions = [
 templates_path = ['_templates']
 source_suffix = ['.rst', '.ipynb', '.md']
 
-mathjax_config = {
-    'tex2jax': {
-        'inlineMath': [ ["\\(","\\)"] ],
-        'displayMath': [["\\[","\\]"] ],
-    },
-}
-
 mathjax3_config = {
-  "tex": {
-    "inlineMath": [['\\(', '\\)']],
-    "displayMath": [["\\[", "\\]"]],
-  }
+    "tex": {
+        "inlineMath": [['\\(', '\\)']],
+        "displayMath": [["\\[", "\\]"]],
+    }
 }
-
 
 # source_suffix = '.rst'
 autosummary_generate = True
@@ -119,11 +110,11 @@ myst_enable_extensions = [
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 html_theme = "sphinx_book_theme"
-html_logo = "_static/logo.png"
+html_logo = "_static/brainscale.jpg"
 html_title = "BrainScale"
 html_copy_source = True
 html_sourcelink_suffix = ""
-html_favicon = "_static/logo-square.png"
+html_favicon = "_static/brainscale.jpg"
 html_last_updated_fmt = ""
 
 # Add any paths that contain custom static files (such as style sheets) here,
@@ -135,7 +126,6 @@ thebe_config = {
     "repository_url": "https://github.com/binder-examples/jupyter-stacks-datascience",
     "repository_branch": "master",
 }
-
 
 html_theme_options = {
     'show_toc_level': 2,

@@ -15,46 +15,36 @@
 
 # -*- coding: utf-8 -*-
 
-__version__ = "0.0.2"
+__version__ = "0.1.0"
 
-from brainscale._connections import *
-from brainscale._connections import __all__ as connections_all
-from brainscale._dynamics import *
-from brainscale._dynamics import __all__ as dynamics_all
-from brainscale._elementwise import *
-from brainscale._elementwise import __all__ as elementwise_all
 from brainscale._etrace_algorithms import *
 from brainscale._etrace_algorithms import __all__ as etrace_algorithms
 from brainscale._etrace_compiler import *
 from brainscale._etrace_compiler import __all__ as etrace_compiler_all
 from brainscale._etrace_concepts import *
 from brainscale._etrace_concepts import __all__ as concepts_all
-from brainscale._normalizations import *
-from brainscale._normalizations import __all__ as normalizations_all
-from brainscale._poolings import *
-from brainscale._poolings import __all__ as poolings_all
-from brainscale._rate_rnns import *
-from brainscale._rate_rnns import __all__ as rate_rnns
-from brainscale._readout import *
-from brainscale._readout import __all__ as readout_all
+from brainscale._etrace_operators import *
+from brainscale._etrace_operators import __all__ as operators_all
+from . import nn
 
-__all__ = (concepts_all +
-           connections_all +
-           dynamics_all +
-           etrace_algorithms +
-           etrace_compiler_all +
-           normalizations_all +
-           rate_rnns +
-           readout_all +
-           elementwise_all +
-           poolings_all)
+__all__ = (
+    ['nn']
+    + concepts_all
+    + etrace_algorithms
+    + etrace_compiler_all
+    + operators_all
+)
 
-del (concepts_all,
-     connections_all,
-     dynamics_all,
-     etrace_algorithms,
-     normalizations_all,
-     etrace_compiler_all,
-     readout_all,
-     elementwise_all,
-     poolings_all,)
+del (
+    concepts_all,
+    etrace_algorithms,
+    etrace_compiler_all,
+    operators_all,
+)
+
+# Added 2024-10-27
+from ._misc import deprecation_getattr
+
+_deprecations = {k: (f"'brainscale.{k}' has been moved into brainscale.nn.{k}", getattr(nn, k)) for k in nn.__all__}
+__getattr__ = deprecation_getattr(__name__, _deprecations)
+del deprecation_getattr

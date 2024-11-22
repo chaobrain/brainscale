@@ -23,14 +23,14 @@ import brainstate as bst
 import jax
 
 __all__ = [
-  'PyTree', 'StateID', 'WeightID', 'Size', 'Axis', 'Axes',
-  'Inputs', 'Outputs',
-  'HiddenVals', 'StateVals', 'WeightVals', 'ETraceVals',
-  'HiddenInVar', 'HiddenOutVar',
-  'dG_Inputs', 'dG_Weight', 'dG_Hidden', 'dG_State',
-  'ArrayLike', 'DType', 'DTypeLike', 'WeightXVar', 'WeightYVar',
-  'WeightXs', 'WeightDfs', 'TempData', 'Current', 'Conductance', 'Spike',
-  'Hid2WeightJacobian', 'Hid2HidJacobian', 'Hid2HidDiagJacobian',
+    'PyTree', 'StateID', 'WeightID', 'Size', 'Axis', 'Axes',
+    'Inputs', 'Outputs',
+    'HiddenVals', 'StateVals', 'WeightVals', 'ETraceVals',
+    'HiddenInVar', 'HiddenOutVar',
+    'dG_Inputs', 'dG_Weight', 'dG_Hidden', 'dG_State',
+    'ArrayLike', 'DType', 'DTypeLike', 'WeightXVar', 'WeightYVar',
+    'WeightXs', 'WeightDfs', 'TempData', 'Current', 'Conductance', 'Spike',
+    'Hid2WeightJacobian', 'Hid2HidJacobian', 'Hid2HidDiagJacobian',
 ]
 
 ArrayLike = bst.typing.ArrayLike
@@ -76,4 +76,3 @@ Spike = ArrayLike  # the spike signal
 Hid2HidDiagJacobian = Dict[FrozenSet[HiddenOutVar], Dict[HiddenOutVar, List[jax.Array]]]
 Hid2WeightJacobian = Any
 Hid2HidJacobian = Any
-

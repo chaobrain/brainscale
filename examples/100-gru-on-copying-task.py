@@ -1,0 +1,220 @@
+# Copyright 2024 BDP Ecosystem Limited. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ==============================================================================
+
+# See brainscale documentation for more details:
+
+
+import brainstate as bst
+import braintools as bts
+import jax
+import matplotlib.pyplot as plt
+import numpy as np
+from tqdm import tqdm
+
+import brainscale
+
+
+class CopyDataset:
+    def __init__(self, time_lag: int, batch_size: int):
+        super().__init__()
+        self.seq_length = time_lag + 20
+        self.batch_size = batch_size
+
+    def __iter__(self):
+        while True:
+            ids = np.zeros([self.batch_size, self.seq_length], dtype=int)
+            # 随机生成10个数字
+            ids[..., :10] = np.random.randint(1, 9, (self.batch_size, 10))
+            # 在输入序列最后10位中添加10个占位符
+            ids[..., -10:] = np.ones([self.batch_size, 10]) * 9
+            # 输入序列
+            x = np.zeros([self.batch_size, self.seq_length, 10])
+            for i in range(self.batch_size):
+                x[i, range(self.seq_length), ids[i]] = 1
+            yield x, ids[..., :10]
+
+
+class GRUNet(bst.nn.Module):
+    def __init__(self, n_in, n_rec, n_out, n_layer):
+        super().__init__()
+
+        # 构建GRU多层网络
+        layers = []
+        for _ in range(n_layer):
+            layers.append(brainscale.nn.GRUCell(n_in, n_rec))
+            n_in = n_rec
+        self.layer = bst.nn.Sequential(*layers)
+        # 构建输出层
+        self.readout = brainscale.nn.Linear(n_rec, n_out, as_etrace_weight=False)
+
+    def update(self, x):
+        return self.readout(self.layer(x))
+
+
+class Trainer(object):
+    def __init__(
+        self,
+        target: bst.nn.Module,
+        opt: bst.optim.Optimizer,
+        n_epochs: int,
+        n_seq: int,
+        batch_size: int = 128,
+    ):
+        super().__init__()
+
+        # target network
+        self.target = target
+
+        # optimizer
+        self.opt = opt
+        weights = self.target.states().subset(bst.ParamState)
+        opt.register_trainable_weights(weights)
+
+        # training parameters
+        self.n_epochs = n_epochs
+        self.n_seq = n_seq
+        self.batch_size = batch_size
+
+    def batch_train(self, xs, ys):
+        raise NotImplementedError
+
+    def f_train(self):
+        dataloader = CopyDataset(self.n_seq, self.batch_size)
+        bar = tqdm(enumerate(dataloader), total=self.n_epochs)
+        losses = []
+        for i, (x_local, y_local) in bar:
+            if i == self.n_epochs:
+                break
+            # training
+            x_local = jax.numpy.asarray(np.transpose(x_local, (1, 0, 2)))
+            y_local = jax.numpy.asarray(np.transpose(y_local, (1, 0)))
+            r = self.batch_train(x_local, y_local)
+            bar.set_description(f'Training {i:5d}, loss = {float(r):.5f}', refresh=True)
+        return np.asarray(losses)
+
+
+class OnlineTrainer(Trainer):
+    def __init__(self, *args, vjp_time='t', **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.vjp_time = vjp_time
+
+    @bst.compile.jit(static_argnums=(0,))
+    def batch_train(self, inputs, target):
+        weights = self.target.states(bst.ParamState)
+
+        # 对于每一个batch的数据，重新初始化模型状态
+        bst.nn.init_all_states(self.target, inputs.shape[1])
+
+        # 初始化在线学习模型
+        # 此处，我们需要使用 mode 来指定使用数据集是具有 batch 维度的
+        model = brainscale.DiagParamDimAlgorithm(self.target, vjp_time=self.vjp_time, mode=bst.mixin.Batching())
+
+        # 使用一个样例数据编译在线学习eligibility trace
+        model.compile_graph(inputs[0])
+
+        def _etrace_loss(i, inp, tar):
+            # call the model
+            out = model(inp, running_index=i)
+
+            # calculate the loss
+            loss = bts.metric.softmax_cross_entropy_with_integer_labels(out, tar).mean()
+            return loss, out
+
+        def _etrace_grad(prev_grads, x):
+            i, inp, tar = x
+            # 计算当前时刻的梯度
+            f_grad = bst.augment.grad(_etrace_loss, weights, has_aux=True, return_value=True)
+            cur_grads, local_loss, out = f_grad(i, inp, tar)
+            # 累计梯度
+            next_grads = jax.tree.map(lambda a, b: a + b, prev_grads, cur_grads)
+            # 返回累计后的梯度和损失函数值
+            return next_grads, (out, local_loss)
+
+        def _etrace_train(indices_, inputs_):
+            # 初始化梯度
+            grads = jax.tree.map(lambda a: jax.numpy.zeros_like(a), {k: v.value for k, v in weights.items()})
+            # 沿着时间轴计算和累积梯度
+            grads, (outs, losses) = bst.compile.scan(_etrace_grad, grads, (indices_, inputs_, target))
+            # 更新梯度
+            self.opt.update(grads)
+            return losses.mean()
+
+        # running indices
+        indices = np.arange(inputs.shape[0])
+
+        # 在T时刻之前，模型更新其状态和eligibility trace
+        n_sim = self.n_seq + 10
+        bst.compile.for_loop(lambda i, inp: model(inp, running_index=i), indices[:n_sim], inputs[:n_sim])
+
+        # 在T时刻之后，模型开始在线学习
+        r = _etrace_train(indices[n_sim:], inputs[n_sim:])
+        return r
+
+
+class BPTTTrainer(Trainer):
+    @bst.compile.jit(static_argnums=(0,))
+    def batch_train(self, inputs, targets):
+        # initialize the states
+        bst.nn.init_all_states(self.target, inputs.shape[1])
+
+        # 需要求解梯度的参数
+        weights = self.target.states(bst.ParamState)
+
+        def _run_step_train(inp, tar):
+            out = self.target(inp)
+            loss = bts.metric.softmax_cross_entropy_with_integer_labels(out, tar).mean()
+            return out, loss
+
+        def _bptt_grad_step():
+            # 在T时刻之前，模型更新其状态及其eligibility trace
+            n_sim = self.n_seq + 10
+            _ = bst.compile.for_loop(self.target, inputs[:n_sim])
+            # 在T时刻之后，模型开始在线学习
+            outs, losses = bst.compile.for_loop(_run_step_train, inputs[n_sim:], targets)
+            return losses.mean(), outs
+
+        # gradients
+        grads, loss, outs = bst.augment.grad(_bptt_grad_step, weights, has_aux=True, return_value=True)()
+
+        # optimization
+        self.opt.update(grads)
+
+        return loss
+
+
+online = OnlineTrainer(
+    target=GRUNet(10, 200, 10, 1),
+    opt=bst.optim.Adam(0.001),
+    n_epochs=1000,
+    n_seq=200,
+    batch_size=128,
+)
+online_losses = online.f_train()
+
+bptt = BPTTTrainer(
+    target=GRUNet(10, 200, 10, 1),
+    opt=bst.optim.Adam(0.001),
+    n_epochs=1000,
+    n_seq=200,
+    batch_size=128,
+)
+bptt_losses = bptt.f_train()
+
+plt.plot(online_losses, label='Online Learning')
+plt.plot(bptt_losses, label='BPTT')
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.legend()

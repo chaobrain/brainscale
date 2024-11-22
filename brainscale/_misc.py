@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import warnings
 from enum import Enum
 from typing import Sequence
 
@@ -24,61 +25,74 @@ import brainstate as bst
 git_issue_addr = 'https://github.com/chaoming0625/brainscale/issues'
 
 
+def deprecation_getattr(module, deprecations):
+    def getattr(name):
+        if name in deprecations:
+            message, fn = deprecations[name]
+            if fn is None:  # Is the deprecation accelerated?
+                raise AttributeError(message)
+            warnings.warn(message, DeprecationWarning, stacklevel=2)
+            return fn
+        raise AttributeError(f"module {module!r} has no attribute {name!r}")
+
+    return getattr
+
+
 class NotSupportedError(Exception):
-  __module__ = 'brainscale'
+    __module__ = 'brainscale'
 
 
 class CompilationError(Exception):
-  __module__ = 'brainscale'
+    __module__ = 'brainscale'
 
 
 def state_traceback(states: Sequence[bst.State]):
-  """
-  Traceback the states of the brain model.
+    """
+    Traceback the states of the brain model.
 
-  Parameters
-  ----------
-  states : Sequence[bst.State]
-    The states of the brain model.
+    Parameters
+    ----------
+    states : Sequence[bst.State]
+      The states of the brain model.
 
-  Returns
-  -------
-  str
-    The traceback information of the states.
-  """
-  state_info = []
-  for i, state in enumerate(states):
-    state_info.append(
-      f'State {i}: {state}\n'
-      f'defined at \n'
-      f'{state.source_info.traceback}\n'
-    )
-  return '\n'.join(state_info)
+    Returns
+    -------
+    str
+      The traceback information of the states.
+    """
+    state_info = []
+    for i, state in enumerate(states):
+        state_info.append(
+            f'State {i}: {state}\n'
+            f'defined at \n'
+            f'{state.source_info.traceback}\n'
+        )
+    return '\n'.join(state_info)
 
 
 def set_module_as(module: str = 'brainscale'):
-  def wrapper(fun: callable):
-    fun.__module__ = module
-    return fun
+    def wrapper(fun: callable):
+        fun.__module__ = module
+        return fun
 
-  return wrapper
+    return wrapper
 
 
 class BaseEnum(Enum):
-  @classmethod
-  def get_by_name(cls, name: str):
-    all_names = []
-    for item in cls:
-      all_names.append(item.name)
-      if item.name == name:
-        return item
-    raise ValueError(f'Cannot find the {cls.__name__} type {name}. Only support {all_names}.')
+    @classmethod
+    def get_by_name(cls, name: str):
+        all_names = []
+        for item in cls:
+            all_names.append(item.name)
+            if item.name == name:
+                return item
+        raise ValueError(f'Cannot find the {cls.__name__} type {name}. Only support {all_names}.')
 
-  @classmethod
-  def get(cls, item: str | Enum):
-    if isinstance(item, cls):
-      return item
-    elif isinstance(item, str):
-      return cls.get_by_name(item)
-    else:
-      raise ValueError(f'Cannot find the {cls.__name__} type {item}.')
+    @classmethod
+    def get(cls, item: str | Enum):
+        if isinstance(item, cls):
+            return item
+        elif isinstance(item, str):
+            return cls.get_by_name(item)
+        else:
+            raise ValueError(f'Cannot find the {cls.__name__} type {item}.')

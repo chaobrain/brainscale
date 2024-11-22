@@ -18,9 +18,10 @@ Model Definition
    :template: classtemplate.rst
 
     ETraceVar
+    ETraceState
     ETraceParam
     ETraceParamOp
-    NoTempParamOp
+    NonTempParamOp
     NoGradParamOp
 
 
@@ -37,6 +38,7 @@ ETrace Operations
     StandardETraceOp
     GeneralETraceOp
     MatMulETraceOp
+    stop_param_gradients
 
 
 Model Compilation

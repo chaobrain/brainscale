@@ -1,4 +1,4 @@
-# Contributing to BrainPy
+# Contributing to BrainScale
 
-For information on how to contribute to BrainPy, see
-[Contributing to BrainPy](https://brainpy.readthedocs.io/en/latest/tutorial_advanced/contributing.html).
+For information on how to contribute to BrainScale, see
+[Contributing to BrainScale](https://brainpy.readthedocs.io/en/latest/tutorial_advanced/contributing.html).
