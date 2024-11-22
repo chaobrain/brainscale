@@ -65,7 +65,7 @@ __all__ = [
     'DiagHybridDimAlgorithm',  # the diagonally approximated algorithm with hybrid complexity (either I/O or parameter)
 ]
 
-_common_doc = '''
+_common_doc = r'''
     {doc}
     name: str, optional
           The name of the etrace algorithm.
@@ -466,10 +466,12 @@ class DiagETraceAlgorithmForVJP(FakedETraceAlgorithm):
         )
         # assign the weight values back,
         # [KEY] assuming the weight values are not changed
-        assign_state_values(self.param_states, weight_vals)
+        assign_state_values(self.param_states, weight_vals, write=False)
+
         # assign the new hidden and state values
         assign_state_values(self.hidden_states, hidden_vals)
         assign_state_values(self.other_states, other_vals)
+
         # assign the new etrace values
         self._assign_etrace_data(new_etrace_vals)
         return out
@@ -503,7 +505,7 @@ class DiagETraceAlgorithmForVJP(FakedETraceAlgorithm):
         # ----------------------------------------------------------------------------------------------
 
         # state value assignment
-        assign_state_values(self.param_states, weight_vals)
+        assign_state_values(self.param_states, weight_vals, write=False)
         assign_state_values(self.hidden_states, hidden_vals)
         assign_state_values(self.other_states, oth_state_vals)
 
@@ -564,7 +566,7 @@ class DiagETraceAlgorithmForVJP(FakedETraceAlgorithm):
         # ----------------------------------------------------------------------------------------------
 
         # state value assignment
-        assign_state_values(self.param_states, weight_vals)
+        assign_state_values(self.param_states, weight_vals, write=False)
         assign_state_values(self.hidden_states, hidden_vals)
         assign_state_values(self.other_states, othstate_vals)
 
@@ -650,9 +652,11 @@ class DiagETraceAlgorithmForVJP(FakedETraceAlgorithm):
             #   - the gradients of the non-etrace parameters
             #   - the gradients of the other states
             #   - the gradients of the loss-to-hidden at the current time step
-            dg_args, dg_last_hiddens, dg_non_etrace_params, dg_oth_states, dl_to_dh_at_t = (
-                jax.tree.unflatten(in_tree, cts_out)
-            )
+            (dg_args,
+             dg_last_hiddens,
+             dg_non_etrace_params,
+             dg_oth_states,
+             dl_to_dh_at_t) = jax.tree.unflatten(in_tree, cts_out)
             assert len(self.graph.out_hidden_jaxvars) == len(dl_to_dh_at_t)
             dl_to_dh_at_t = {
                 hid_var: dg for hid_var, dg in
@@ -667,12 +671,17 @@ class DiagETraceAlgorithmForVJP(FakedETraceAlgorithm):
             #   - the gradients of the non-etrace parameters
             #   - the gradients of the etrace parameters
             #   - the gradients of the other states
-            dg_args, dg_last_hiddens, dg_non_etrace_params, dg_etrace_params, dg_oth_states = (
-                jax.tree.unflatten(in_tree, cts_out)
-            )
+            (dg_args,
+             dg_last_hiddens,
+             dg_non_etrace_params,
+             dg_etrace_params,
+             dg_oth_states) = jax.tree.unflatten(in_tree, cts_out)
             # TODO: checking whether the correspondence is correct
             assert len(self.graph.out_hidden_jaxvars) == len(dg_last_hiddens)
-            dl_to_dh_at_t = {hid_var: dg for hid_var, dg in zip(self.graph.out_hidden_jaxvars, dg_last_hiddens)}
+            dl_to_dh_at_t = {
+                hid_var: dg
+                for hid_var, dg in zip(self.graph.out_hidden_jaxvars, dg_last_hiddens)
+            }
 
         else:
             raise ValueError(f'The VJP time {self.vjp_time} is not supported. ')

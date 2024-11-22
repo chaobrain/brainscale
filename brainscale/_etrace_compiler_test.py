@@ -27,7 +27,7 @@ import brainscale as nn
 from brainscale._etrace_compiler import CompilationError, NotSupportedError
 
 
-class IF_Delta_Dense_Layer(bst.Module):
+class IF_Delta_Dense_Layer(bst.nn.Module):
     """
     The RTRL layer with IF neurons and dense connected delta synapses.
     """
@@ -54,11 +54,13 @@ class IF_Delta_Dense_Layer(bst.Module):
 
 class TestCompiler(unittest.TestCase):
     def test_no_weight_in_etrace_op(self):
-        class Linear(bst.Module):
-            def __init__(self,
-                         in_size: bst.typing.Size,
-                         out_size: bst.typing.Size,
-                         w_init: Callable = bst.init.KaimingNormal()):
+        class Linear(bst.nn.Module):
+            def __init__(
+                self,
+                in_size: bst.typing.Size,
+                out_size: bst.typing.Size,
+                w_init: Callable = bst.init.KaimingNormal()
+            ):
                 super().__init__()
                 self.in_size = (in_size,) if isinstance(in_size, numbers.Integral) else tuple(in_size)
                 self.out_size = (out_size,) if isinstance(out_size, numbers.Integral) else tuple(out_size)
@@ -73,7 +75,7 @@ class TestCompiler(unittest.TestCase):
             def _operation(self, x, params):
                 return x @ jnp.ones(self.in_size + self.out_size)
 
-        model = bst.init_states(IF_Delta_Dense_Layer(Linear, 10, 20), 16)
+        model = bst.nn.init_all_states(IF_Delta_Dense_Layer(Linear, 10, 20), 16)
         inp_spk = jnp.asarray(bst.random.rand(16, 10) < 0.3, dtype=bst.environ.dftype())
         graph = nn.ETraceGraph(model)
 
@@ -83,7 +85,7 @@ class TestCompiler(unittest.TestCase):
         bst.util.clear_buffer_memory()
 
     def test_multi_weights_in_etrace_op(self):
-        class Linear(bst.Module):
+        class Linear(bst.nn.Module):
             def __init__(self, in_size: bst.typing.Size, out_size: bst.typing.Size, w_init=bst.init.KaimingNormal()):
                 super().__init__()
                 self.in_size = (in_size,) if isinstance(in_size, numbers.Integral) else tuple(in_size)
@@ -101,7 +103,7 @@ class TestCompiler(unittest.TestCase):
             def _operation(self, x, params):
                 return x @ jnp.ones(self.in_size + self.out_size)
 
-        model = bst.init_states(IF_Delta_Dense_Layer(Linear, 10, 20), 16)
+        model = bst.nn.init_all_states(IF_Delta_Dense_Layer(Linear, 10, 20), 16)
         inp_spk = jnp.asarray(bst.random.rand(16, 10) < 0.3, dtype=bst.environ.dftype())
         graph = nn.ETraceGraph(model)
 
@@ -111,9 +113,13 @@ class TestCompiler(unittest.TestCase):
         bst.util.clear_buffer_memory()
 
     def test_multi_returns_in_etrace_op(self):
-        class Linear(bst.Module):
-            def __init__(self, in_size: bst.typing.Size, out_size: bst.typing.Size,
-                         w_init: Callable = bst.init.KaimingNormal()):
+        class Linear(bst.nn.Module):
+            def __init__(
+                self,
+                in_size: bst.typing.Size,
+                out_size: bst.typing.Size,
+                w_init: Callable = bst.init.KaimingNormal()
+            ):
                 super().__init__()
                 self.in_size = (in_size,) if isinstance(in_size, numbers.Integral) else tuple(in_size)
                 self.out_size = (out_size,) if isinstance(out_size, numbers.Integral) else tuple(out_size)
@@ -131,7 +137,7 @@ class TestCompiler(unittest.TestCase):
                 return y1, y2
 
         model = IF_Delta_Dense_Layer(Linear, 10, 20)
-        bst.init_states(model, 16)
+        bst.nn.init_all_states(model, 16)
 
         inp_spk = jnp.asarray(bst.random.rand(16, 10) < 0.3, dtype=bst.environ.dftype())
         graph = nn.ETraceGraph(model)
@@ -142,8 +148,13 @@ class TestCompiler(unittest.TestCase):
         bst.util.clear_buffer_memory()
 
     def test_etrace_op_jaxpr(self):
-        class Linear1(bst.Module):
-            def __init__(self, in_size: int, out_size: int, w_init: Callable = bst.init.KaimingNormal()):
+        class Linear1(bst.nn.Module):
+            def __init__(
+                self,
+                in_size: int,
+                out_size: int,
+                w_init: Callable = bst.init.KaimingNormal()
+            ):
                 super().__init__()
                 self.in_size = (in_size,)
                 self.out_size = (out_size,)
@@ -160,7 +171,7 @@ class TestCompiler(unittest.TestCase):
                 return x @ (params['weight'] * self.mask)
 
         model = IF_Delta_Dense_Layer(Linear1, 10, 20)
-        bst.init_states(model, 16)
+        bst.nn.init_all_states(model, 16)
 
         inp_spk = jnp.asarray(bst.random.rand(16, 10) < 0.3, dtype=bst.environ.dftype())
         graph = nn.ETraceGraph(model)
@@ -172,7 +183,7 @@ class TestCompiler(unittest.TestCase):
     def test_train_both_etrace_weight_and_non_etrace_weight(self):
         bst.environ.set(mode=bst.mixin.JointMode(bst.mixin.Batching(), bst.mixin.Training()))
 
-        class Model(bst.Module):
+        class Model(bst.nn.Module):
             def __init__(self):
                 super().__init__()
 
@@ -190,7 +201,7 @@ class TestCompiler(unittest.TestCase):
 
         # model
         model = Model()
-        bst.init_states(model, 16)
+        bst.nn.init_all_states(model, 16)
 
         def run_model(i, inp):
             bst.environ.set(i=i)
@@ -202,7 +213,7 @@ class TestCompiler(unittest.TestCase):
         out = algorithm(0, inp_spk, running_index=0)
 
         weights = model.states().subset(bst.ParamState)
-        grads = bst.transform.grad(lambda x: algorithm(0, x, running_index=0).sum(), grad_vars=weights)(inp_spk)
+        grads = bst.augment.grad(lambda x: algorithm(0, x, running_index=0).sum(), grad_vars=weights)(inp_spk)
 
         # print(out)
         print(grads)
@@ -210,7 +221,7 @@ class TestCompiler(unittest.TestCase):
 
 class TestShowGraph(unittest.TestCase):
     def test_show_graph(self):
-        class Linear1(bst.Module):
+        class Linear1(bst.nn.Module):
             def __init__(self, in_size: int, out_size: int, w_init: Callable = bst.init.KaimingNormal()):
                 super().__init__()
                 self.in_size = (in_size,)
@@ -228,7 +239,7 @@ class TestShowGraph(unittest.TestCase):
                 return x @ (params['weight'] * self.mask)
 
         model = IF_Delta_Dense_Layer(Linear1, 10, 20)
-        bst.init_states(model, 16)
+        bst.nn.init_all_states(model, 16)
 
         inp_spk = jnp.asarray(bst.random.rand(16, 10) < 0.3, dtype=bst.environ.dftype())
         graph = nn.ETraceGraph(model)
@@ -240,7 +251,7 @@ class TestShowGraph(unittest.TestCase):
     def test_show_lstm_graph(self):
         bst.environ.set(mode=bst.mixin.JointMode(bst.mixin.Batching(), bst.mixin.Training()))
         cell = nn.LSTMCell(10, 20, activation=jnp.tanh)
-        bst.init_states(cell, 16)
+        bst.nn.init_all_states(cell, 16)
 
         graph = nn.ETraceGraph(cell)
         graph.compile_graph(jnp.zeros((16, 10)))
@@ -254,7 +265,7 @@ class TestShowGraph(unittest.TestCase):
     def test_show_gru_graph(self):
         bst.environ.set(mode=bst.mixin.JointMode(bst.mixin.Batching(), bst.mixin.Training()))
         cell = nn.GRUCell(10, 20, activation=jnp.tanh)
-        bst.init_states(cell, 16)
+        bst.nn.init_all_states(cell, 16)
 
         graph = nn.ETraceGraph(cell)
         graph.compile_graph(jnp.zeros((16, 10)))

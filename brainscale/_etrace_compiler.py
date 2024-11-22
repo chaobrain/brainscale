@@ -1539,7 +1539,7 @@ class HiddenWeightOpRelation(NamedTuple):
     hidden_var_to_transition: Dict[HiddenOutVar, HiddenTransition]
 
 
-_compiler_docstr = '''
+_compiler_docstr = r'''
     diag_normalize: bool
           Whether to normalize the hidden Jacobian diagonal matrix to the range of ``[-1, 1]``. Default is ``None``.
     vjp_time: str
@@ -2035,7 +2035,7 @@ class ETraceGraph:
         def fun_for_vjp(inputs, hiddens, non_etrace_weights, oth_states, perturbs):
             # assign state values
             assign_state_values(hidden_states, hiddens)
-            assign_state_values(non_etrace_weight_states, non_etrace_weights)
+            assign_state_values(non_etrace_weight_states, non_etrace_weights, write=False)
             assign_state_values(other_states, oth_states)
             # get state values by the "stateful_model", to preserve the order of states
             old_state_vals = [st.value for st in self.stateful_model.get_states()]
@@ -2089,7 +2089,7 @@ class ETraceGraph:
         jaxpr, _, consts = pe.trace_to_jaxpr_dynamic(rule, out_avals)
 
         # recovering the other non-etrace weights, although the weights are not changed
-        assign_state_values(non_etrace_weight_states, non_etrace_weight_vals)
+        assign_state_values(non_etrace_weight_states, non_etrace_weight_vals, write=False)
         return out, hidden_vals, other_vals, temps, Residuals(jaxpr, in_tree(), out_tree, consts)
 
     def _jaxpr_compute_vjp_model_at_last(
@@ -2105,9 +2105,10 @@ class ETraceGraph:
         def fun_for_vjp(inputs, hiddens, non_etrace_weights, etrace_weights, oth_states):
             # assign state values
             assign_state_values(hidden_states, hiddens)
-            assign_state_values(etrace_param_states, etrace_weights)
-            assign_state_values(non_etrace_weight_states, non_etrace_weights)
+            assign_state_values(etrace_param_states, etrace_weights, write=False)
+            assign_state_values(non_etrace_weight_states, non_etrace_weights, write=False)
             assign_state_values(other_states, oth_states)
+
             # get state values by the "stateful_model", to preserve the order of states
             old_state_vals = [st.value for st in self.stateful_model.get_states()]
 
@@ -2127,7 +2128,8 @@ class ETraceGraph:
             # outputs
             state_outs = [temps[v] for v in self.out_state_jaxvars]
             out, new_state_vals = self.stateful_model.get_out_treedef().unflatten(
-                jaxpr_outs[:self.num_out] + state_outs)
+                jaxpr_outs[:self.num_out] + state_outs
+            )
             # get new state values, do not return the weight values, since they are not changed
             new_hiddens, new_others = split_state_values(
                 self.stateful_model.get_states(),
@@ -2155,12 +2157,13 @@ class ETraceGraph:
         rule, in_tree = jax.api_util.flatten_fun_nokwargs(lu.wrap_init(f_vjp), out_tree)
         out_avals = [jax.core.get_aval(x).at_least_vspace() for x in out_flat]
         jaxpr, _, consts = pe.trace_to_jaxpr_dynamic(rule, out_avals)
+        residual = Residuals(jaxpr, in_tree(), out_tree, consts)
 
         # recovering the other non-etrace weights,
         # although the weights are not changed
-        assign_state_values(non_etrace_weight_states, non_etrace_weight_vals)
-        assign_state_values(etrace_param_states, etrace_weight_vals)
-        return out, hidden_vals, other_vals, temps, Residuals(jaxpr, in_tree(), out_tree, consts)
+        assign_state_values(non_etrace_weight_states, non_etrace_weight_vals, write=False)
+        assign_state_values(etrace_param_states, etrace_weight_vals, write=False)
+        return out, hidden_vals, other_vals, temps, residual
 
     def solve_h2w_h2h_jacobian_and_l2h_vjp(
         self, *args,

@@ -269,7 +269,11 @@ def stop_param_gradients():
         _stop_param_gradient = False
 
 
-def assign_state_values(states, state_values):
+def assign_state_values(
+    states: Sequence[bst.State],
+    state_values: Sequence[PyTree],
+    write: bool = True
+):
     """
     Assign values to the states.
 
@@ -277,8 +281,12 @@ def assign_state_values(states, state_values):
       states: The states to be assigned.
       state_values: The values to be assigned.
     """
-    for st, val in zip(states, state_values):
-        st.value = val
+    if write:
+        for st, val in zip(states, state_values):
+            st.value = val
+    else:
+        for st, val in zip(states, state_values):
+            st.restore_value(val)
 
 
 def split_states(

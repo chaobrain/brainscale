@@ -101,7 +101,7 @@ class SignedWLinear(bst.nn.Module):
         self.w_sign = w_sign
 
         # weights
-        weight = init.param(w_init, self.in_size + self.out_size, allow_none=False)
+        weight = init.param(w_init, [self.in_size[-1], self.out_size[-1]], allow_none=False)
         if as_etrace_weight:
             self.weight_op = ETraceParamOp(weight, self._operation, grad='full' if full_etrace else None)
         else:

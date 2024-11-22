@@ -123,10 +123,10 @@ class _LIF_STDExpCu_Dense_Layer(bst.nn.Module):
         else:
             self.std_inp = None
 
-        self.syn = bst.nn.HalfProjAlignPostMg(
+        self.syn = bst.nn.AlignPostProj(
             comm=nn.Linear(n_in + n_rec, n_rec, jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0)),
-            syn=nn.Expon.delayed(size=n_rec, tau=tau_syn),
-            out=bst.nn.CUBA.delayed(),
+            syn=nn.Expon.desc(size=n_rec, tau=tau_syn),
+            out=bst.nn.CUBA.desc(),
             post=self.neu
         )
 
@@ -140,7 +140,7 @@ class _LIF_STDExpCu_Dense_Layer(bst.nn.Module):
         return self.neu.get_spike()
 
 
-class _LIF_STPExpCu_Dense_Layer(bst.Module):
+class _LIF_STPExpCu_Dense_Layer(bst.nn.Module):
     def __init__(
         self,
         n_in, n_rec, inp_stp=False, tau_mem=5., tau_syn=10., V_th=1.,
@@ -156,10 +156,10 @@ class _LIF_STPExpCu_Dense_Layer(bst.Module):
         if inp_stp:
             self.stp_inp = nn.STP(n_in, tau_f=500., tau_d=100.)
 
-        self.syn = bst.nn.HalfProjAlignPostMg(
+        self.syn = bst.nn.AlignPostProj(
             comm=nn.Linear(n_in + n_rec, n_rec, jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])])),
-            syn=nn.Expon.delayed(size=n_rec, tau=tau_syn),
-            out=bst.nn.CUBA.delayed(),
+            syn=nn.Expon.desc(size=n_rec, tau=tau_syn),
+            out=bst.nn.CUBA.desc(),
             post=self.neu
         )
 
