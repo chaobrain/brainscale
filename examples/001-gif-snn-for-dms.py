@@ -46,7 +46,7 @@ if __name__ == '__main__':
             A2=1. * u.mA,
         )
 
-        net.verify(next(iter(data))[0], num_show=2)
+        # net.verify(next(iter(data))[0], num_show=2)
 
         onliner = OnlineTrainer(
             target=net,
