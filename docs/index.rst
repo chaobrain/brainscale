@@ -97,5 +97,7 @@ We are building the `Brain Dynamics Programming ecosystem <https://ecosystem-for
    :caption: API Reference
 
    changelog.md
-   api.rst
+   apis/concepts.rst
+   apis/algorithms.rst
+   apis/nn.rst
 
