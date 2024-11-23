@@ -18,6 +18,7 @@ import unittest
 from functools import partial, reduce
 from typing import Callable
 
+import brainunit as u
 import brainstate as bst
 import jax
 import jax.numpy as jnp
@@ -31,25 +32,28 @@ class _IF_Delta_Dense_Layer(bst.nn.Module):
         self,
         n_in,
         n_rec,
-        tau_mem: bst.typing.ArrayLike = 5.,
-        V_th: bst.typing.ArrayLike = 1.,
+        tau_mem: bst.typing.ArrayLike = 5. * u.ms,
+        V_th: bst.typing.ArrayLike = 1. * u.mV,
         spk_reset: str = 'soft',
         rec_init=init.KaimingNormal(),
         ff_init=init.KaimingNormal()
     ):
         super().__init__()
         self.neu = nn.IF(n_rec, tau=tau_mem, spk_reset=spk_reset, V_th=V_th)
-        w_init = jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0)
+        w_init = u.math.concatenate([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0)
         self.syn = nn.Linear(n_in + n_rec, n_rec, w_init=w_init)
 
     def update(self, spk):
-        spk = jnp.concat([spk, self.neu.get_spike()], axis=-1)
+        spk = u.math.concatenate([spk, self.neu.get_spike()], axis=-1)
         return self.neu(self.syn(spk))
 
 
 class TestDiagOn2(unittest.TestCase):
 
     def test_if_delta_etrace_update_On2(self):
+
+        bst.environ.set(dt=1. * u.ms)
+
         for mode in [
             bst.mixin.Batching(),
             bst.mixin.Training(),
@@ -61,6 +65,8 @@ class TestDiagOn2(unittest.TestCase):
             algorithm = nn.DiagParamDimAlgorithm(snn, mode)
 
     def test_non_batched_On2_algorithm(self):
+        bst.environ.set(dt=1. * u.ms)
+
         n_in, n_rec = 4, 10
         snn = _IF_Delta_Dense_Layer(n_in, n_rec)
         snn = bst.nn.init_all_states(snn)
@@ -80,7 +86,7 @@ class TestDiagOn2(unittest.TestCase):
         self.assertEqual(outs.shape, (nt, n_rec))
 
     def test_batched_On2_algorithm(self):
-        bst.environ.set()
+        bst.environ.set(dt=1. * u.ms)
 
         n_batch = 16
         n_in, n_rec = 4, 10

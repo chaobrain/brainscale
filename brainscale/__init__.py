@@ -19,8 +19,8 @@ __version__ = "0.1.0"
 
 from brainscale._etrace_algorithms import *
 from brainscale._etrace_algorithms import __all__ as etrace_algorithms
-from brainscale._etrace_compiler import *
-from brainscale._etrace_compiler import __all__ as etrace_compiler_all
+from brainscale._etrace_graph import *
+from brainscale._etrace_graph import __all__ as etrace_compiler_all
 from brainscale._etrace_concepts import *
 from brainscale._etrace_concepts import __all__ as concepts_all
 from brainscale._etrace_operators import *

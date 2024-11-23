@@ -17,7 +17,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Sequence, Union, FrozenSet, List
+from typing import Any, Dict, Sequence, Union, FrozenSet, List, Tuple
 
 import brainstate as bst
 import jax
@@ -44,16 +44,18 @@ WeightID = int
 Size = bst.typing.Size
 Axis = int
 Axes = Union[int, Sequence[int]]
+Path = Tuple[str, ...]
 
 # --- inputs and outputs --- #
 Inputs = PyTree
 Outputs = PyTree
 
 # --- state values --- #
-HiddenVals = Sequence[PyTree]
-StateVals = Sequence[PyTree]
-WeightVals = Sequence[PyTree]
-ETraceVals = PyTree
+HiddenVals = Dict[Path, PyTree]
+StateVals = Dict[Path, PyTree]
+WeightVals = Dict[Path, PyTree]
+ETraceVals = Dict[Path, PyTree]
+
 HiddenOutVar = jax.core.Var
 HiddenInVar = jax.core.Var
 
@@ -62,6 +64,11 @@ dG_Inputs = PyTree  # gradients of inputs
 dG_Weight = Sequence[PyTree]  # gradients of weights
 dG_Hidden = Sequence[PyTree]  # gradients of hidden states
 dG_State = Sequence[PyTree]  # gradients of other states
+
+ETraceX_Key = jax.core.Var
+ETraceDF_Key = Tuple[jax.core.Var, Path]
+
+HidHidJac_Key = Tuple[Path, Path]
 
 # --- data --- #
 WeightXVar = jax.core.Var
@@ -74,5 +81,8 @@ Conductance = ArrayLike  # the synaptic conductance
 Spike = ArrayLike  # the spike signal
 # the diagonal Jacobian of the hidden-to-hidden function
 Hid2HidDiagJacobian = Dict[FrozenSet[HiddenOutVar], Dict[HiddenOutVar, List[jax.Array]]]
-Hid2WeightJacobian = Any
-Hid2HidJacobian = Any
+Hid2WeightJacobian = Tuple[
+    Dict[ETraceX_Key, jax.Array],
+    Dict[ETraceDF_Key, jax.Array]
+]
+Hid2HidJacobian = Dict[HidHidJac_Key, jax.Array]

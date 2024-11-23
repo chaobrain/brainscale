@@ -19,12 +19,14 @@ import numbers
 import unittest
 from typing import Callable
 
+
+import brainunit as u
 import brainstate as bst
 import jax
 import jax.numpy as jnp
 
 import brainscale as nn
-from brainscale._etrace_compiler import CompilationError, NotSupportedError
+from brainscale._etrace_graph import CompilationError, NotSupportedError
 
 
 class IF_Delta_Dense_Layer(bst.nn.Module):
@@ -37,8 +39,8 @@ class IF_Delta_Dense_Layer(bst.nn.Module):
         linear_cls,
         n_in: int,
         n_rec: int,
-        tau_mem: bst.typing.ArrayLike = 5.,
-        V_th: bst.typing.ArrayLike = 1.,
+        tau_mem: bst.typing.ArrayLike = 5. * u.ms,
+        V_th: bst.typing.ArrayLike = 1. * u.mV,
         spk_fun: Callable = bst.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
         init: Callable = bst.init.KaimingNormal(),
@@ -48,7 +50,7 @@ class IF_Delta_Dense_Layer(bst.nn.Module):
         self.syn = linear_cls(n_in + n_rec, n_rec, w_init=init)
 
     def update(self, spk):
-        spk = jnp.concat([spk, self.neu.get_spike()], axis=-1)
+        spk = u.math.concatenate([spk, self.neu.get_spike()], axis=-1)
         return self.neu(self.syn(spk))
 
 
@@ -75,6 +77,7 @@ class TestCompiler(unittest.TestCase):
             def _operation(self, x, params):
                 return x @ jnp.ones(self.in_size + self.out_size)
 
+        bst.environ.set(dt=1. * u.ms)
         model = bst.nn.init_all_states(IF_Delta_Dense_Layer(Linear, 10, 20), 16)
         inp_spk = jnp.asarray(bst.random.rand(16, 10) < 0.3, dtype=bst.environ.dftype())
         graph = nn.ETraceGraph(model)
@@ -102,6 +105,8 @@ class TestCompiler(unittest.TestCase):
 
             def _operation(self, x, params):
                 return x @ jnp.ones(self.in_size + self.out_size)
+
+        bst.environ.set(dt=1. * u.ms)
 
         model = bst.nn.init_all_states(IF_Delta_Dense_Layer(Linear, 10, 20), 16)
         inp_spk = jnp.asarray(bst.random.rand(16, 10) < 0.3, dtype=bst.environ.dftype())

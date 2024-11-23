@@ -51,9 +51,9 @@ class StandardETraceOp(ETraceOp):
         ph_to_pwy: jax.Array
     ):
         r"""
-        Compute the eligibility trace updates.
+        Standard operator for computing the eligibility trace updates.
 
-        Update: ``eligibility trace`` * ``hidden diagonal Jacobian`` + ``new hidden-weight Jacobian``
+        Update: ``eligibility trace`` * ``diagonal hidden Jacobian`` + ``new hidden-to-weight Jacobian``
 
         .. math::
            d\epsilon^t = D_h ⊙ d\epsilon^{t-1} + df^t
@@ -64,6 +64,17 @@ class StandardETraceOp(ETraceOp):
         For example::
 
           ∂V^t/∂V^t-1 * ∂V^t-1/∂θ1 + ∂V^t/∂a^t-1 * ∂a^t-1/∂θ1 + ... + ∂V^t/∂θ1^t
+
+
+        Args:
+            mode: the mode of the operation, which may contain the batching information.
+            w: the weight value.
+            dh_to_dw: the hidden-to-weight Jacobian.
+            diag_jac: the diagonal Jacobian $\frac{ \partial h^t } { \partial h^{t-1} } $ of the hidden states.
+            ph_to_pwx: the partial derivative of the hidden with respect to the weight operation input,
+                    i.e., the input $x^t$.
+            ph_to_pwy: the partial derivative of the hidden with respect to the weight operation output,
+                    i.e., the output $\frac{ \partial h^t } { \partial y^t }$.
 
         """
         raise NotImplementedError
@@ -76,14 +87,22 @@ class StandardETraceOp(ETraceOp):
         dh_to_dw: WeightTree
     ):
         r"""
-        Compute the hidden-to-etrace updates.
+        Compute the gradient of the loss with respect to the weight operation.
 
-        This function is used to merge the hidden dimensional gradients into the
-        parameter-dimensional gradients. For example:
+        This function is used to merge the hidden dimensional gradients (i.e. the loss-to-hidden
+        gradient) into the eligibility trace updates.
 
         .. math::
 
-           dL/dW = (dL/dH) \circ (dH / dW)
+           dL/dW = (dL/dH) \circ (dH / dW) \approx \frac{ \partial L^t } { \partial h^t } \circ \epsilon^t
+
+        Args:
+            mode: the mode of the operation, which may contain the batching information.
+            w: the weight value.
+            dl_to_dh: the derivative of the loss with respect to the hidden
+                states, i.e., $\frac{ \partial L^t } { \partial h^t }$.
+            dh_to_dw: the derivative of the hidden states with respect to the weight operation,
+                i.e., the eligibility trace $\frac{ \partial h^t } { \partial W^t } \approx \epsilon^t$.
 
         """
         raise NotImplementedError
@@ -91,10 +110,8 @@ class StandardETraceOp(ETraceOp):
 
 class GeneralETraceOp(StandardETraceOp):
     """
-    The general operator for computing the eligibility trace updates.
-
-    This operator can be applied to any operation, but does not guarantee the
-    computational efficiency.
+    The general operator for computing the eligibility trace updates, which can be applied to any :py:class:`ETraceOp`,
+    but does not guarantee the computational efficiency.
     """
 
     def __init__(
@@ -122,8 +139,11 @@ class GeneralETraceOp(StandardETraceOp):
         diag_jac: List[jax.Array],
         ph_to_pwx: jax.Array,
         ph_to_pwy: Optional[jax.Array],
-    ) -> WeightTree:
+    ):
         """
+        This is the general method for computing the eligibility trace updates, which
+        can be applied to any :py:class:`ETraceOp`, but does not guarantee the computational efficiency.
+
         See the :meth:`StandardETraceOp.etrace_update` for more details.
         """
 
@@ -176,6 +196,9 @@ class GeneralETraceOp(StandardETraceOp):
         dh_to_dw: PyTree
     ):
         """
+        This is the general method for computing the gradient of the loss with respect to the weight operation.
+        It can be applied to any :py:class:`ETraceOp`, but does not guarantee the computational efficiency.
+
         See the :meth:`StandardETraceOp.hidden_to_etrace` for more details.
         """
 
@@ -280,7 +303,9 @@ def binary_op(op, x, y):
 
 class MatMulETraceOp(StandardETraceOp):
     """
-    The standard matrix multiplication operator for the eligibility trace.
+    The standard matrix multiplication operator for the eligibility trace updates.
+
+    This operator is much more efficient than the :py:class:`GeneralETraceOp` for the matrix multiplication operation.
 
     """
 
@@ -327,6 +352,8 @@ class MatMulETraceOp(StandardETraceOp):
         ph_to_pwy: Optional[jax.Array],
     ):
         """
+        This is the standard method for computing the eligibility trace updates for the matrix multiplication operation.
+
         See the :meth:`StandardETraceOp.etrace_update` for more details.
         """
 
@@ -376,6 +403,9 @@ class MatMulETraceOp(StandardETraceOp):
         dh_to_dw: PyTree
     ):
         """
+        This is the standard method for computing the gradient of the loss with respect to the weight operation
+        for the matrix multiplication operation.
+
         See the :meth:`StandardETraceOp.hidden_to_etrace` for more details.
         """
 

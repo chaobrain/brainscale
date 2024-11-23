@@ -22,14 +22,19 @@
 from __future__ import annotations
 
 import contextlib
-from typing import Callable, Sequence, Tuple, List, Optional
+import threading
+from typing import Callable, Sequence, Tuple, List, Optional, Hashable, Dict
 
 import brainstate as bst
 import brainunit as u
 import jax.lax
 
 from ._misc import BaseEnum
-from ._typing import PyTree
+from ._typing import (PyTree,
+                      Path,
+                      WeightVals,
+                      HiddenVals,
+                      StateVals)
 
 __all__ = [
     # eligibility trace related concepts
@@ -43,9 +48,16 @@ __all__ = [
     'stop_param_gradients',
 ]
 
-_stop_param_gradient = False
 _etrace_op_name = '_etrace_weight_operator_call_'
 _etrace_op_name_enable_grad = '_etrace_weight_operator_call_enable_grad_'
+
+
+class CONTEXT(threading.local):
+    def __init__(self):
+        self.stop_param_gradient = [False]
+
+
+context = CONTEXT()
 
 
 def wrap_etrace_fun(fun, name: str = _etrace_op_name):
@@ -68,10 +80,10 @@ def is_etrace_op_enable_gradient(jit_param_name: str):
 
 class ETraceState(bst.ShortTermState):
     """
-    The Eligibility Trace Hidden Variable.
+    The Eligibility Trace Hidden State.
 
     Args:
-      value: The value of the hidden variable. Currently only support a `jax.Array`.
+      value: The value of the hidden state. Currently only support a `jax.Array` or `brainunit.Quantity`.
     """
     __module__ = 'brainscale'
 
@@ -88,16 +100,21 @@ ETraceVar = ETraceState
 
 class ETraceParam(bst.ParamState):
     """
-    The Eligibility Trace Weight.
+    The Eligibility Trace Weight Parameter.
 
     Args:
       value: The value of the weight. Can be a PyTree.
+      name: The name of the weight.
     """
     __module__ = 'brainscale'
 
     is_not_etrace: bool
 
-    def __init__(self, value: PyTree, name: Optional[str] = None):
+    def __init__(
+        self,
+        value: PyTree,
+        name: Optional[str] = None
+    ):
         super().__init__(value, name=name)
 
         self.is_not_etrace = False
@@ -115,6 +132,7 @@ class ETraceOp:
 
     Args:
       fun: The operator function.
+      is_diagonal: bool. Whether the operator is in the hidden diagonal or not.
     """
     __module__ = 'brainscale'
 
@@ -135,10 +153,9 @@ class ETraceOp:
 
     def __call__(self, x: jax.Array, weight: PyTree) -> jax.Array:
         y = self._jitted_call(x, weight)
-        if _stop_param_gradient and not self.is_diagonal:
+        if context.stop_param_gradient[-1] and not self.is_diagonal:
             y = jax.lax.stop_gradient(self._jitted_call(x, weight))
         return y
-
 
 
 class _ETraceGrad(BaseEnum):
@@ -250,23 +267,24 @@ class NoGradParamOp(object):
 
 
 @contextlib.contextmanager
-def stop_param_gradients():
+def stop_param_gradients(stop_or_not: bool = True):
     """
     Stop the weight gradients for the ETrace weight operator.
 
-    Example:
-      ```
-      with stop_weight_gradients():
-        # do something
-      ```
+    Example::
 
+      >>> import brainscale
+      >>> with brainscale.stop_weight_gradients():
+      >>>    # do something
+
+    Args:
+        stop_or_not: Whether to stop the weight gradients.
     """
-    global _stop_param_gradient
     try:
-        _stop_param_gradient = True
+        context.stop_param_gradient.append(stop_or_not)
         yield
     finally:
-        _stop_param_gradient = False
+        context.stop_param_gradient.pop()
 
 
 def assign_state_values(
@@ -280,6 +298,7 @@ def assign_state_values(
     Args:
       states: The states to be assigned.
       state_values: The values to be assigned.
+      write: Whether to write the values to the states. If False, the values will be restored.
     """
     if write:
         for st, val in zip(states, state_values):
@@ -287,6 +306,53 @@ def assign_state_values(
     else:
         for st, val in zip(states, state_values):
             st.restore_value(val)
+
+
+def assign_dict_state_values(
+    states: Dict[Path, bst.State],
+    state_values: Dict[Path, PyTree],
+    write: bool = True
+):
+    """
+    Assign values to the states.
+
+    Args:
+      states: The states to be assigned.
+      state_values: The values to be assigned.
+      write: Whether to write the values to the states. If False, the values will be restored.
+    """
+    if set(states.keys()) != set(state_values.keys()):
+        raise ValueError('The keys of states and state_values must be the same.')
+
+    if write:
+        for key in states.keys():
+            states[key].value = state_values[key]
+    else:
+        for key in states.keys():
+            states[key].restore_value(state_values[key])
+
+
+def assign_state_values_v2(
+    states: Dict[Hashable, bst.State],
+    state_values: Dict[Hashable, PyTree],
+    write: bool = True
+):
+    """
+    Assign values to the states.
+
+    Args:
+      states: The states to be assigned.
+      state_values: The values to be assigned.
+      write: Whether to write the values to the states. If False, the values will be restored.
+    """
+    assert set(states.keys()) == set(state_values.keys()), 'The keys of states and state_values must be the same.'
+
+    if write:
+        for key in states.keys():
+            states[key].value = state_values[key]
+    else:
+        for key in states.keys():
+            states[key].restore_value(state_values[key])
 
 
 def split_states(
@@ -356,4 +422,172 @@ def split_states_v2(
                 param_states.append(st)
             else:
                 other_states.append(st)
+    return etrace_param_states, hidden_states, param_states, other_states
+
+
+def sequence_split_state_values(
+    states: Sequence[bst.State],
+    state_values: List[PyTree],
+    include_weight: bool = True
+) -> (
+    Tuple[Sequence[PyTree], Sequence[PyTree], Sequence[PyTree]]
+    |
+    Tuple[Sequence[PyTree], Sequence[PyTree]]
+):
+    """
+    Split the state values into the weight values, the hidden values, and the other state values.
+
+    The weight values are the values of the ``braincore.ParamState`` states (including ``ETraceParam``).
+    The hidden values are the values of the ``ETraceState`` states.
+    The other state values are the values of the other states.
+
+    Parameters:
+    -----------
+    states: Sequence[bst.State]
+      The states of the model.
+    state_values: List[PyTree]
+      The values of the states.
+    include_weight: bool
+      Whether to include the weight values.
+
+    Returns:
+    --------
+    The weight values, the hidden values, and the other state values.
+
+    Examples:
+    ---------
+    >>> sequence_split_state_values(states, state_values)
+    (weight_vals, hidden_vals, other_vals)
+
+    >>> sequence_split_state_values(states, state_values, include_weight=False)
+    (hidden_vals, other_vals)
+    """
+    if include_weight:
+        weight_vals, hidden_vals, other_vals = [], [], []
+        for st, val in zip(states, state_values):
+            if isinstance(st, bst.ParamState):
+                weight_vals.append(val)
+            elif isinstance(st, ETraceState):
+                hidden_vals.append(val)
+            else:
+                other_vals.append(val)
+        return weight_vals, hidden_vals, other_vals
+    else:
+        hidden_vals, other_vals = [], []
+        for st, val in zip(states, state_values):
+            if isinstance(st, bst.ParamState):
+                pass
+            elif isinstance(st, ETraceState):
+                hidden_vals.append(val)
+            else:
+                other_vals.append(val)
+        return hidden_vals, other_vals
+
+
+
+def dict_split_state_values(
+    states: Dict[Path, bst.State],
+    state_values: Dict[Path, PyTree],
+)-> Tuple[WeightVals, HiddenVals, StateVals]:
+    weight_vals = bst.util.FlattedDict()
+    hidden_vals = bst.util.FlattedDict()
+    other_vals = bst.util.FlattedDict()
+    for path, state in states.items():
+        val = state_values[path]
+        if isinstance(state, bst.ParamState):
+            weight_vals[path] = val
+        elif isinstance(state, ETraceState):
+            hidden_vals[path] = val
+        else:
+            other_vals[path] = val
+    return weight_vals, hidden_vals, other_vals
+
+def split_dict_states_v1(
+    states: Dict[Path, bst.State]
+) -> Tuple[
+    Dict[Path, ETraceState],
+    Dict[Path, bst.ParamState],
+    Dict[Path, bst.State]
+]:
+    """
+    Split the states into weight states, hidden states, and other states.
+
+    .. note::
+
+        This function is important since it determines what ParamState should be
+        trained with the eligibility trace and what should not.
+
+    Args:
+      states: The states to be split.
+
+    Returns:
+      hidden_states: The hidden states.
+      param_states: The other kinds of parameter states.
+      other_states: The other states.
+    """
+    hidden_states = bst.util.FlattedDict()
+    param_states = bst.util.FlattedDict()
+    other_states = bst.util.FlattedDict()
+    for key, st in states.items():
+        if isinstance(st, ETraceState):
+            hidden_states[key] = st
+        elif isinstance(st, bst.ParamState):
+            # The ParamState which is not an ETraceParam,
+            # should be treated as a normal parameter state
+            # and be trained with spatial gradients only
+            param_states[key] = st
+        else:
+            other_states[key] = st
+    return hidden_states, param_states, other_states
+
+
+def split_dict_states_v2(
+    states: Dict[Path, bst.State]
+) -> Tuple[
+    Dict[Path, ETraceParam],
+    Dict[Path, ETraceState],
+    Dict[Path, bst.ParamState],
+    Dict[Path, bst.State]
+]:
+    """
+    Split the states into weight states, hidden states, and other states.
+
+    .. note::
+
+        This function is important since it determines what ParamState should be
+        trained with the eligibility trace and what should not.
+
+    Args:
+      states: The states to be split.
+
+    Returns:
+      etrace_param_states: The etrace parameter states.
+      hidden_states: The hidden states.
+      param_states: The other kinds of parameter states.
+      other_states: The other states.
+    """
+    etrace_param_states = bst.util.FlattedDict()
+    hidden_states = bst.util.FlattedDict()
+    param_states = bst.util.FlattedDict()
+    other_states = bst.util.FlattedDict()
+    for key, st in states.items():
+        if isinstance(st, ETraceState):
+            hidden_states[key] = st
+        elif isinstance(st, ETraceParam):
+            if st.is_not_etrace:
+                # The ETraceParam is set to "is_not_etrace" since
+                # no hidden state is associated with it,
+                # so it should be treated as a normal parameter state
+                # and be trained with spatial gradients only
+                param_states[key] = st
+            else:
+                etrace_param_states[key] = st
+        else:
+            if isinstance(st, bst.ParamState):
+                # The ParamState which is not an ETraceParam,
+                # should be treated as a normal parameter state
+                # and be trained with spatial gradients only
+                param_states[key] = st
+            else:
+                other_states[key] = st
     return etrace_param_states, hidden_states, param_states, other_states
