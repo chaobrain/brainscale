@@ -36,7 +36,7 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import (Callable, Dict, Sequence, Tuple)
+from typing import (Dict, Sequence, Tuple)
 
 import brainstate as bst
 import brainunit as u
@@ -50,13 +50,11 @@ from ._etrace_compiler import (HiddenWeightOpRelation,
                                compile_graph,
                                indent_code,
                                _summarize_source_info, )
-from ._etrace_concepts import (ETraceParam,
-                               ETraceState)
+from ._etrace_concepts import (ETraceState)
 from ._etrace_concepts import (assign_dict_state_values,
                                dict_split_state_values,
                                split_dict_states_v2)
 from ._jaxpr_to_source_code import jaxpr_to_python_code
-from ._misc import (set_module_as)
 from ._typing import (PyTree,
                       TempData,
                       Outputs,
@@ -797,4 +795,3 @@ class ETraceGraph:
           The outputs, hidden states, other states, the spatial gradients of the weights, and the residuals.
         """
         return self._jaxpr_compute_model_with_vjp(*args)
-

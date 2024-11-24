@@ -32,7 +32,6 @@ import jax.core
 from ._etrace_concepts import (assign_state_values_v2,
                                split_states_v2,
                                ETraceState,
-                               ETraceParam,
                                ETraceParamOp,
                                _ETraceGrad)
 from ._etrace_graph import (ETraceGraph,
