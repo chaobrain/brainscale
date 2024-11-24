@@ -40,18 +40,6 @@ ETrace Operations
     MatMulETraceOp
 
 
-ETrace Algorithm Compilation
-----------------------------
-
-.. autosummary::
-   :toctree: generated/
-   :nosignatures:
-   :template: classtemplate.rst
-
-    ETraceGraph
-    build_etrace_graph
-
-
 Others
 -------
 

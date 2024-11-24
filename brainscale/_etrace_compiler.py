@@ -27,7 +27,7 @@
 #   [2024-11-22] compatible with `brainstate>=0.1.0` (#17)
 #   [2024-11-23] Add the support for vjp_time_ahead > 1, it can combine the
 #                advantage of etrace learning and backpropagation through time.
-#   [2024-11] version 0.0.3, a complete new revision for better model debugging.
+#   [2024-11-24] version 0.0.3, a complete new revision for better model debugging.
 #
 # ==============================================================================
 
@@ -1444,7 +1444,7 @@ class HiddenWeightOpRelation(NamedTuple):
 
 def compile_graph(
     model: bst.nn.Module,
-    vjp_time_ahead: int,
+    multi_step: bool,
     *args,
     **kwargs
 ):
@@ -1657,7 +1657,7 @@ def compile_graph(
     )
     augmented_jaxpr = jax.core.ClosedJaxpr(jaxpr, closed_jaxpr.consts)
 
-    if vjp_time_ahead == 0:
+    if not multi_step:
         # ---               add perturbations to the hidden states                  --- #
         # --- new jaxpr with hidden state perturbations for computing the residuals --- #
         jaxpr_with_hidden_perturb = JaxprEvaluationForHiddenPerturbation(
@@ -1684,4 +1684,5 @@ def compile_graph(
         hidden_outvar_to_hidden,
         hidden_invar_to_hidden,
         hidden_outvar_to_transition,
+        hidden_param_op_relations,
     )

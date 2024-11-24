@@ -313,7 +313,8 @@ class DMSDataset:
         for _ in range(self.num_batch):
             xs, ys = [], []
             for _ in range(self.batch_size):
-                x, y = _dms(self.num_steps,
+                x, y = _dms(
+                    self.num_steps,
                             self.num_inputs,
                             self.n_motion_choice,
                             self.motion_tuning,
@@ -321,7 +322,8 @@ class DMSDataset:
                             self.test_time,
                             fr,
                             bg_fr,
-                            self._rotate)
+                            self._rotate
+                            )
                 xs.append(x)
                 ys.append(y)
             yield np.asarray(xs), np.asarray(ys)

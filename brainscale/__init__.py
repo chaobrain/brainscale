@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-__version__ = "0.1.0"
+__version__ = "0.0.3"
 
 from brainscale._etrace_algorithms import *
 from brainscale._etrace_algorithms import __all__ as etrace_algorithms

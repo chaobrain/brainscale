@@ -17,7 +17,7 @@ import time
 from typing import Callable, Iterable
 
 import brainstate as bst
-import braintools as bts
+import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
@@ -283,7 +283,7 @@ class _SNNEINet(bst.nn.Module):
 
         rec_spks, rec_mems, outs = bst.compile.for_loop(step, inputs, pbar=bst.compile.ProgressBar(10))
 
-        fig, gs = bts.visualize.get_figure(4, n2show, 3., 4.5)
+        fig, gs = braintools.visualize.get_figure(4, n2show, 3., 4.5)
         for i in range(n2show):
             # input spikes
             ax = fig.add_subplot(gs[0, i])
@@ -417,25 +417,24 @@ class Trainer:
         else:
             raise ValueError(f'Unknown online learning methods: {self.method}.')
 
-        def _etrace_grad(i, inp):
+        def _etrace_grad(inp):
             # call the model
-            out = model(inp, running_index=i)
+            out = model(inp)
             # calculate the loss
-            me = bts.metric.softmax_cross_entropy_with_integer_labels(out, targets).mean()
+            me = braintools.metric.softmax_cross_entropy_with_integer_labels(out, targets).mean()
             return me, out
 
         def _etrace_step(prev_grads, x):
             # no need to return weights and states, since they are generated then no longer needed
-            i, inp = x
             f_grad = bst.augment.grad(_etrace_grad, weights, has_aux=True, return_value=True)
-            cur_grads, local_loss, out = f_grad(i, inp)
+            cur_grads, local_loss, out = f_grad(x)
             next_grads = jax.tree.map(lambda a, b: a + b, prev_grads, cur_grads)
             return next_grads, (out, local_loss)
 
-        def _etrace_train(indices_, inputs_):
+        def _etrace_train(inputs_):
             # forward propagation
             grads = jax.tree.map(jnp.zeros_like, weights.to_dict_values())
-            grads, (outs, mse_ls) = bst.compile.scan(_etrace_step, grads, (indices_, inputs_))
+            grads, (outs, mse_ls) = bst.compile.scan(_etrace_step, grads, inputs_)
             acc = self._acc(outs, targets)
 
             grads = bst.functional.clip_grad_norm(grads, 1.)
@@ -445,12 +444,10 @@ class Trainer:
 
         # running indices
         if self.n_sim > 0:
-            bst.compile.for_loop(lambda i, inp: model(inp, running_index=i),
-                                 indices[:self.n_sim],
-                                 inputs[:self.n_sim])
-            r = _etrace_train(indices[self.n_sim:], inputs[self.n_sim:])
+            bst.compile.for_loop(model, inputs[:self.n_sim])
+            r = _etrace_train(inputs[self.n_sim:])
         else:
-            r = _etrace_train(indices, inputs)
+            r = _etrace_train(inputs)
         return r
 
     def f_train(self):
@@ -534,3 +531,4 @@ if __name__ == '__main__':
     with bst.environ.context(dt=1.0 * u.ms):
         training(rec_scale=0.5, ff_scale=1.0, n_rec=400, w_ei_ratio=4., lr=1e-3, net='coba',
                  tau_a=1500.0 * u.ms, tau_syn=5. * u.ms, tau_neu=400. * u.ms)
+

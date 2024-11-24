@@ -196,26 +196,25 @@ class OnlineTrainer(Trainer):
             model = brainscale.DiagIODimAlgorithm(self.target, self.decay_or_rank)
             model.compile_graph(inputs[0])
 
-        def _etrace_grad(i, inp):
+        def _etrace_grad(inp):
             with bst.environ.context(fit=True):
                 # call the model
-                out = model(inp, running_index=i)
+                out = model(inp)
                 # calculate the loss
                 loss = bts.metric.softmax_cross_entropy_with_integer_labels(out, targets).mean()
                 return loss, out
 
         def _etrace_step(prev_grads, x):
             # no need to return weights and states, since they are generated then no longer needed
-            i, inp = x
             f_grad = bst.augment.grad(_etrace_grad, weights, has_aux=True, return_value=True)
-            cur_grads, local_loss, out = f_grad(i, inp)
+            cur_grads, local_loss, out = f_grad(x)
             next_grads = jax.tree.map(lambda a, b: a + b, prev_grads, cur_grads)
             return next_grads, (out, local_loss)
 
-        def _etrace_train(indices_, inputs_):
+        def _etrace_train(inputs_):
             # forward propagation
             grads = jax.tree.map(u.math.zeros_like, weights.to_dict_values())
-            grads, (outs, losses) = bst.compile.scan(_etrace_step, grads, (indices_, inputs_))
+            grads, (outs, losses) = bst.compile.scan(_etrace_step, grads, inputs_)
             # gradient updates
             # grads = bst.functional.clip_grad_norm(grads, 1.)
             self.opt.update(grads)
@@ -223,8 +222,7 @@ class OnlineTrainer(Trainer):
             return losses.mean(), outs
 
         # running indices
-        indices = np.arange(inputs.shape[0])
-        loss, outs = _etrace_train(indices, inputs)
+        loss, outs = _etrace_train(inputs)
 
         # returns
         return loss, self._acc(outs, targets)

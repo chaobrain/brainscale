@@ -345,7 +345,10 @@ def assign_state_values_v2(
       state_values: The values to be assigned.
       write: Whether to write the values to the states. If False, the values will be restored.
     """
-    assert set(states.keys()) == set(state_values.keys()), 'The keys of states and state_values must be the same.'
+    assert set(states.keys()) == set(state_values.keys()), (f'The keys of states and state_values must be '
+                                                            f'the same. Got: \n '
+                                                            f'{states.keys()} \n '
+                                                            f'{state_values.keys()}')
 
     if write:
         for key in states.keys():
@@ -484,14 +487,13 @@ def sequence_split_state_values(
         return hidden_vals, other_vals
 
 
-
 def dict_split_state_values(
     states: Dict[Path, bst.State],
     state_values: Dict[Path, PyTree],
-)-> Tuple[WeightVals, HiddenVals, StateVals]:
-    weight_vals = bst.util.FlattedDict()
-    hidden_vals = bst.util.FlattedDict()
-    other_vals = bst.util.FlattedDict()
+) -> Tuple[WeightVals, HiddenVals, StateVals]:
+    weight_vals = dict()
+    hidden_vals = dict()
+    other_vals = dict()
     for path, state in states.items():
         val = state_values[path]
         if isinstance(state, bst.ParamState):
@@ -501,6 +503,7 @@ def dict_split_state_values(
         else:
             other_vals[path] = val
     return weight_vals, hidden_vals, other_vals
+
 
 def split_dict_states_v1(
     states: Dict[Path, bst.State]
@@ -525,9 +528,9 @@ def split_dict_states_v1(
       param_states: The other kinds of parameter states.
       other_states: The other states.
     """
-    hidden_states = bst.util.FlattedDict()
-    param_states = bst.util.FlattedDict()
-    other_states = bst.util.FlattedDict()
+    hidden_states = dict()
+    param_states = dict()
+    other_states = dict()
     for key, st in states.items():
         if isinstance(st, ETraceState):
             hidden_states[key] = st
@@ -566,10 +569,10 @@ def split_dict_states_v2(
       param_states: The other kinds of parameter states.
       other_states: The other states.
     """
-    etrace_param_states = bst.util.FlattedDict()
-    hidden_states = bst.util.FlattedDict()
-    param_states = bst.util.FlattedDict()
-    other_states = bst.util.FlattedDict()
+    etrace_param_states = dict()
+    hidden_states = dict()
+    param_states = dict()
+    other_states = dict()
     for key, st in states.items():
         if isinstance(st, ETraceState):
             hidden_states[key] = st

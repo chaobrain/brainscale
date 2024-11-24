@@ -1,5 +1,5 @@
-Online Learning Algorithms
-==========================
+Online Learning Compiler
+========================
 
 .. currentmodule:: brainscale
 
@@ -8,12 +8,14 @@ Online Learning Algorithms
    :depth: 1
 
 
+Compilation
+-----------
+
 .. autosummary::
    :toctree: generated/
    :nosignatures:
    :template: classtemplate.rst
 
-    ETraceAlgorithm
-    DiagIODimAlgorithm
-    DiagParamDimAlgorithm
-    DiagHybridDimAlgorithm
+    ETraceGraph
+
+

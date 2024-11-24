@@ -71,17 +71,18 @@ class TestDiagOn2(unittest.TestCase):
         snn = _IF_Delta_Dense_Layer(n_in, n_rec)
         snn = bst.nn.init_all_states(snn)
 
-        algorithm = nn.DiagParamDimAlgorithm(snn, mode=bst.mixin.Batching())
-        algorithm.compile_graph(jax.ShapeDtypeStruct((n_in,), bst.environ.dftype()))
-
-        def run_snn(i, inp_spk):
-            with bst.environ.context(i=i, t=i * bst.environ.get_dt()):
-                out = algorithm.update_model_and_etrace(inp_spk)
-            return out
-
         nt = 100
         inputs = jnp.asarray(bst.random.rand(nt, n_in) < 0.2, dtype=bst.environ.dftype())
-        outs = bst.compile.for_loop(run_snn, jnp.arange(nt), inputs)
+
+        algorithm = nn.DiagParamDimAlgorithm(snn, mode=bst.mixin.Mode())
+        algorithm.compile_graph(inputs[0])
+
+        def run_snn(inp_spk):
+            # with bst.environ.context(t=i * bst.environ.get_dt()):
+            out = algorithm(inp_spk)
+            return out
+
+        outs = bst.compile.for_loop(run_snn, inputs)
         print(outs.shape)
         self.assertEqual(outs.shape, (nt, n_rec))
 
@@ -99,7 +100,7 @@ class TestDiagOn2(unittest.TestCase):
 
         def run_snn(i, inp_spk):
             with bst.environ.context(i=i, t=i * bst.environ.get_dt()):
-                out = algorithm.update_model_and_etrace(inp_spk)
+                out = algorithm.update(inp_spk)
             return out
 
         nt = 100

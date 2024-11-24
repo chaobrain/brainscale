@@ -89,7 +89,7 @@ def try_alif_etrace_single_step():
     out = algorithm(inp_spk, 0)
 
     weights = snn.states().subset(nn.ETraceParam)
-    grads = bc.transform.grad(algorithm.update_model_and_etrace, grad_vars=weights)(inp_spk, 0)
+    grads = bc.transform.grad(algorithm.update, grad_vars=weights)(inp_spk, 0)
 
     print(out)
     print(grads)
@@ -106,7 +106,7 @@ def try_if_delta_etrace_update():
 
     def run_snn(i, inp_spk):
         bc.environ.set(i=i, t=i * bc.environ.get_dt())
-        out = algorithm.update_model_and_etrace(inp_spk)
+        out = algorithm.update(inp_spk)
         return out
 
     nt = 100
@@ -126,7 +126,7 @@ def try_if_delta_etrace_update_On2():
 
     def run_snn(i, inp_spk):
         bc.environ.set(i=i, t=i * bc.environ.get_dt())
-        out = algorithm.update_model_and_etrace(inp_spk)
+        out = algorithm.update(inp_spk)
         return out
 
     nt = 100
@@ -146,7 +146,7 @@ def try_if_delta_etrace_update_batched_On2():
 
     def run_snn(i, inp_spk):
         bc.environ.set(i=i, t=i * bc.environ.get_dt())
-        out = algorithm.update_model_and_etrace(inp_spk)
+        out = algorithm.update(inp_spk)
         return out
 
     nt = 100
@@ -168,9 +168,9 @@ def try_if_delta_etrace_update_and_grad():
     def run_snn(last_grads, inputs):
         i, inp_spk = inputs
         bc.environ.set(i=i, t=i * bc.environ.get_dt())
-        out = algorithm.update_model_and_etrace(inp_spk)
+        out = algorithm.update(inp_spk)
 
-        grads = bc.transform.grad(lambda x: algorithm.update_model_and_etrace(x).sum(),
+        grads = bc.transform.grad(lambda x: algorithm.update(x).sum(),
                                   grad_vars=weights)(inp_spk)
         grads = jax.tree.map(jnp.add, last_grads, grads)
         return grads, out
@@ -196,7 +196,7 @@ def try_if_delta_etrace_grad_vs_bptt_grad():
         def run_snn(last_grads, inputs):
             i, inp_spk = inputs
             bc.environ.set(i=i, t=i * bc.environ.get_dt())
-            out = algorithm.update_model_and_etrace(inp_spk)
+            out = algorithm.update(inp_spk)
 
             grads = bc.transform.grad(lambda x: algorithm(x, running_index=i).sum(),
                                       grad_vars=weights)(inp_spk)
