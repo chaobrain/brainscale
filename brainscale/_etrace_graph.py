@@ -52,8 +52,8 @@ from ._etrace_compiler import (WeightOpHiddenRelation,
                                compile_graph,
                                indent_code,
                                _summarize_source_info, )
-from ._etrace_concepts import (ETraceState)
-from ._etrace_concepts import (assign_dict_state_values,
+from ._etrace_concepts import (ETraceState,
+                               assign_dict_state_values,
                                dict_split_state_values,
                                split_dict_states_v2)
 from ._jaxpr_to_source_code import jaxpr_to_python_code
