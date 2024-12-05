@@ -22,13 +22,19 @@ import brainstate as bst
 import brainunit as u
 from brainstate import init, functional, nn
 
-from brainscale._etrace_concepts import ETraceState, ETraceParamOp
+from brainscale._etrace_concepts import ETraceState, ETraceParamOp, ElementWiseParamOp
 from brainscale._typing import ArrayLike
 from ._linear import Linear
 
 __all__ = [
-    'ValinaRNNCell', 'GRUCell', 'MGUCell',
-    'LSTMCell', 'URLSTMCell', 'MinimalRNNCell',
+    'ValinaRNNCell',
+    'GRUCell',
+    'MGUCell',
+    'LSTMCell',
+    'URLSTMCell',
+    'MinimalRNNCell',
+    'MinimalRNNv2Cell',
+    'LRUCell',
 ]
 
 
@@ -542,3 +548,178 @@ class MinimalRNNCell(nn.RNNCell):
         u_ = functional.sigmoid(self.W_u(u.math.concatenate([z, self.h.value], axis=-1)))
         self.h.value = u_ * self.h.value + (1 - u_) * z
         return self.h.value
+
+
+class MinimalRNNv2Cell(nn.RNNCell):
+    r"""
+    Minimal RNN Cell, implemented as in
+    `MinimalRNN: Toward More Interpretable and Trainable Recurrent Neural Networks <https://arxiv.org/abs/1711.06788>`_
+
+    Model
+    -----
+
+    At each step $t$, the model first maps its input $\mathbf{x}_t$ to a
+    latent space through
+    $$\mathbf{z}_t=\Phi(\mathbf{x}_t)$$
+    $\Phi(\cdot)$ here can be any highly flexible functions such  as neural networks.
+    Default, we take $\Phi(\cdot)$ as a fully connected layer with tanh activation. That
+    is,  $\Phi ( \mathbf{x} _t) = \tanh ( \mathbf{W} _x\mathbf{x} _t+ \mathbf{b} _z) .$
+
+    Given the latent representation $\mathbf{z}_t$ of the input, MinimalRNN then updates its states simply as:
+
+    $$\mathbf{h}_t=\mathbf{u}_t\odot\mathbf{h}_{t-1}+(\mathbf{1}-\mathbf{u}_t)\odot\mathbf{z}_t$$
+
+    where $\mathbf{u}_t=\sigma(\mathbf{U}_h\mathbf{h}_{t-1}+\mathbf{U}_z\mathbf{z}_t+\mathbf{b}_u)$ is the update
+    gate.
+
+
+    Parameters
+    ----------
+    in_size: bst.typing.Size
+        The number of input units.
+    out_size: bst.typing.Size
+        The number of hidden units.
+    w_init: callable, ArrayLike
+        The input weight initializer.
+    b_init: callable, ArrayLike
+        The bias weight initializer.
+    state_init: callable, ArrayLike
+        The state initializer.
+    name: optional, str
+        The name of the module.
+
+    """
+    __module__ = 'brainscale.nn'
+
+    def __init__(
+        self,
+        in_size: bst.typing.Size,
+        out_size: bst.typing.Size,
+        w_init: Union[ArrayLike, Callable] = init.Orthogonal(),
+        b_init: Union[ArrayLike, Callable] = init.ZeroInit(),
+        state_init: Union[ArrayLike, Callable] = init.ZeroInit(),
+        name: str = None,
+    ):
+        super().__init__(name=name)
+
+        # parameters
+        self._state_initializer = state_init
+        self.out_size = out_size
+        self.in_size = in_size
+
+        # functions
+        self.phi = Linear(self.in_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
+
+        # weights
+        self.W_u = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
+
+    def init_state(self, batch_size: int = None, **kwargs):
+        self.h = ETraceState(init.param(self._state_initializer, self.out_size, batch_size))
+
+    def reset_state(self, batch_size: int = None, **kwargs):
+        self.h.value = init.param(self._state_initializer, self.out_size, batch_size)
+
+    def update(self, x):
+        u_ = functional.sigmoid(self.W_u(u.math.concatenate([x, self.h.value], axis=-1)))
+        self.h.value = u_ * self.h.value + (1 - u_) * self.phi(x)
+        return self.h.value
+
+
+def glorot_init(s):
+    return bst.random.randn(*s) / u.math.sqrt(s[0])
+
+
+class LRUCell(bst.nn.Module):
+    r"""
+    `Linear Recurrent Unit <https://arxiv.org/abs/2303.06349>`_ (LRU) layer.
+
+    .. math::
+
+       h_{t+1} = \lambda * h_t + \exp(\gamma^{\mathrm{log}}) B x_{t+1} \\
+       \lambda = \text{diag}(\exp(-\exp(\nu^{\mathrm{log}}) + i \exp(\theta^\mathrm{log}))) \\
+       y_t = Re[C h_t + D x_t]
+
+    Args:
+        d_hidden: int
+            Hidden state dimension.
+        d_model: int
+            Input and output dimensions.
+        r_min: float, optional
+            Smallest lambda norm.
+        r_max: float, optional
+            Largest lambda norm.
+        max_phase: float, optional
+            Max phase lambda.
+    """
+
+    def __init__(
+        self,
+        d_model: int,  # input and output dimensions
+        d_hidden: int,  # hidden state dimension
+        r_min: float = 0.0,  # smallest lambda norm
+        r_max: float = 1.0,  # largest lambda norm
+        max_phase: float = 6.28,  # max phase lambda
+    ):
+        super().__init__()
+
+        self.in_size = d_model
+        self.out_size = d_hidden
+
+        self.d_hidden = d_hidden
+        self.d_model = d_model
+        self.r_min = r_min
+        self.r_max = r_max
+        self.max_phase = max_phase
+
+        # -------- recurrent weight matrix --------
+
+        # theta parameter
+        theta_log = u.math.log(max_phase * bst.random.uniform(size=d_hidden))
+        self.theta_log = ElementWiseParamOp(theta_log, op=lambda p: u.math.exp(p))
+
+        # nu parameter
+        nu_log = u.math.log(
+            -0.5 * u.math.log(
+                bst.random.uniform(size=d_hidden) * (r_max ** 2 - r_min ** 2) + r_min ** 2
+            )
+        )
+        self.nu_log = ElementWiseParamOp(nu_log, op=lambda v: u.math.exp(-u.math.exp(v)))
+
+        # -------- input weight matrix --------
+
+        # gamma parameter
+        diag_lambda = u.math.exp(-u.math.exp(nu_log) + 1j * u.math.exp(theta_log))
+        gamma_log = u.math.log(u.math.sqrt(1 - u.math.abs(diag_lambda) ** 2))
+        self.gamma_log = ElementWiseParamOp(gamma_log, op=lambda p: u.math.exp(p))
+
+        # Glorot initialized Input/Output projection matrices
+        self.B_re = Linear(d_model, d_hidden, w_init=glorot_init, b_init=None)
+        self.B_im = Linear(d_model, d_hidden, w_init=glorot_init, b_init=None)
+
+        # -------- output weight matrix --------
+
+        self.C_re = Linear(d_hidden, d_model, w_init=glorot_init, b_init=None)
+        self.C_im = Linear(d_hidden, d_model, w_init=glorot_init, b_init=None)
+
+        # Parameter for skip connection
+        D = bst.random.randn(d_model)
+        self.D = ETraceParamOp(D, lambda x, p: x * p, is_diagonal=True)
+
+    def init_state(self, batch_size: int = None, **kwargs):
+        self.h_re = ETraceState(bst.init.param(bst.init.ZeroInit(), self.d_hidden, batch_size))
+        self.h_im = ETraceState(bst.init.param(bst.init.ZeroInit(), self.d_hidden, batch_size))
+
+    def reset_state(self, batch_size: int = None, **kwargs):
+        self.h_re.value = bst.init.param(bst.init.ZeroInit(), self.d_hidden, batch_size)
+        self.h_im.value = bst.init.param(bst.init.ZeroInit(), self.d_hidden, batch_size)
+
+    def update(self, inputs):
+        a = self.nu_log.execute()
+        b = self.theta_log.execute()
+        c = self.gamma_log.execute()
+        a_cos_b = a * u.math.cos(b)
+        a_sin_b = a * u.math.sin(b)
+        self.h_re.value = a_cos_b * self.h_re.value - a_sin_b * self.h_im.value + c * self.B_re(inputs)
+        self.h_im.value = a_sin_b * self.h_re.value + a_cos_b * self.h_im.value + c * self.B_im(inputs)
+        r = self.C_re(self.h_re.value) - self.C_im(self.h_im.value) + self.D.execute(inputs)
+        return r
