@@ -187,7 +187,7 @@ class GIF(bst.nn.Neuron):
     def update(self, x=0. * u.mA):
         # 如果前一时刻发放了脉冲，则将膜电位和适应性电流进行重置
         last_spk = self.get_spike()
-        last_spk = jax.lax.stop_gradient(last_spk)
+        # last_spk = jax.lax.stop_gradient(last_spk)
         last_V = self.V.value - self.V_th_inf * last_spk
         last_I2 = self.I2.value - self.A2 * last_spk
         # 更新状态

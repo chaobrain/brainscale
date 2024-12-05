@@ -17,5 +17,7 @@ Compilation
    :template: classtemplate.rst
 
     ETraceGraph
+    compile_graph
+    CompiledGraph
 
 
