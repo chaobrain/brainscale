@@ -22,7 +22,7 @@ from typing import Sequence
 
 import brainstate as bst
 
-git_issue_addr = 'https://github.com/chaoming0625/brainscale/issues'
+git_issue_addr = 'https://github.com/chaobrain/brainscale/issues'
 
 
 def deprecation_getattr(module, deprecations):

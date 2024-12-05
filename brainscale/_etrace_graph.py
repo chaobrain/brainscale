@@ -16,6 +16,8 @@
 # Copyright: 2024, Chaoming Wang
 # Date: 2024-04-03
 #
+# ==============================================================================
+#
 # Refinement History:
 #   [2024-04-03] Created
 #   [2024-04-06] Added the traceback information for the error messages.
@@ -44,7 +46,7 @@ import jax.core
 from jax.extend import linear_util as lu
 from jax.interpreters import partial_eval as pe
 
-from ._etrace_compiler import (HiddenWeightOpRelation,
+from ._etrace_compiler import (WeightOpHiddenRelation,
                                HiddenGroup,
                                HiddenTransition,
                                compile_graph,
@@ -152,7 +154,7 @@ class ETraceGraph:
     # 1. The most important data structure for the graph, which implementing
     #    the relationship between the etrace weights and the etrace states.
     #
-    hidden_param_op_relations: Tuple[HiddenWeightOpRelation, ...]
+    hidden_param_op_relations: Tuple[WeightOpHiddenRelation, ...]
 
     #
     # 2. The relationship between the hidden states, and state transitions.

@@ -108,6 +108,11 @@ class StandardETraceOp(ETraceOp):
         raise NotImplementedError
 
 
+X = bst.typing.ArrayLike
+W = bst.typing.PyTree
+Y = bst.typing.ArrayLike
+
+
 class GeneralETraceOp(StandardETraceOp):
     """
     The general operator for computing the eligibility trace updates, which can be applied to any :py:class:`ETraceOp`,
@@ -116,7 +121,7 @@ class GeneralETraceOp(StandardETraceOp):
 
     def __init__(
         self,
-        op: Callable,
+        op: Callable[[X, W], Y],
         xinfo: jax.ShapeDtypeStruct,
         is_diagonal: bool = False
     ):
@@ -149,8 +154,11 @@ class GeneralETraceOp(StandardETraceOp):
 
         assert isinstance(dh_to_dw, (list, tuple)), f'The dh_to_dw must be a list of pytrees. Got {type(dh_to_dw)}'
         assert isinstance(diag_jac, (list, tuple)), f'The diag_jac must be a list of jax.Array. Got {type(diag_jac)}'
-        assert len(dh_to_dw) == len(diag_jac), (f'The length of dh_to_dw and diag_jac must be the same. '
-                                                f'Got {len(dh_to_dw)} and {len(diag_jac)}')
+        assert len(dh_to_dw) == len(diag_jac), (
+            f'The length of dh_to_dw and diag_jac must be the same. '
+            f'Got {len(dh_to_dw)} and {len(diag_jac)}'
+        )
+
         #
         # Step 1:
         #
@@ -162,16 +170,23 @@ class GeneralETraceOp(StandardETraceOp):
             #
             # convert the diagonal hidden-to-hidden Jacobian to the
             # dimension of weights
-            dg_weight = self.dy_to_weight(mode,
-                                          w,
-                                          self.op,
-                                          self.xinfo,
-                                          diag)
+            dg_weight = self.dy_to_weight(
+                mode,
+                w,
+                self.op,
+                self.xinfo,
+                diag
+            )
+
             #
             # compute the element-wise multiplication of:
             #      diagonal * \epsilon (dh_to_dw)
             diag_mul_dw = jax.tree.map(u.math.multiply, dg_weight, dw)
-            final_dw = diag_mul_dw if final_dw is None else jax.tree.map(u.math.add, final_dw, diag_mul_dw)
+            final_dw = (
+                diag_mul_dw
+                if final_dw is None else
+                jax.tree.map(u.math.add, final_dw, diag_mul_dw)
+            )
 
         #
         # Step 2:
@@ -180,11 +195,13 @@ class GeneralETraceOp(StandardETraceOp):
         #        dϵ^t = D_h ⊙ dϵ^t-1 + df^t, where D_h is the hidden-to-hidden Jacobian diagonal matrix.
         #
         if ph_to_pwy is not None:
-            current_etrace = self.dx_dy_to_weight(mode,
-                                                  w,
-                                                  self.op,
-                                                  ph_to_pwx,
-                                                  ph_to_pwy)
+            current_etrace = self.dx_dy_to_weight(
+                mode,
+                w,
+                self.op,
+                ph_to_pwx,
+                ph_to_pwy
+            )
             final_dw = jax.tree.map(u.math.add, final_dw, current_etrace)
         return final_dw
 
@@ -203,11 +220,13 @@ class GeneralETraceOp(StandardETraceOp):
         """
 
         # compute: dL/dW = (dL/dH) \circ (dH / dW)
-        dg_weight = self.dy_to_weight(mode,
-                                      w,
-                                      self.op,
-                                      self.xinfo,
-                                      dl_to_dh)
+        dg_weight = self.dy_to_weight(
+            mode,
+            w,
+            self.op,
+            self.xinfo,
+            dl_to_dh
+        )
         return jax.tree.map(u.math.multiply, dg_weight, dh_to_dw)
 
     @staticmethod
@@ -235,12 +254,15 @@ class GeneralETraceOp(StandardETraceOp):
         def fn4vjp(dh, x):
             primals, f_vjp = jax.vjp(partial(op, x), weight_vals)
             if isinstance(primals, u.Quantity) and isinstance(dh, u.Quantity):
-                assert primals.unit.has_same_dim(dh.unit), (f'The unit of the primal and the derivative must '
-                                                            f'be the same. But we got {primals.unit} and {dh.unit}')
+                assert primals.unit.has_same_dim(dh.unit), (
+                    f'The unit of the primal and the derivative must '
+                    f'be the same. But we got {primals.unit} and {dh.unit}'
+                )
             elif isinstance(primals, u.Quantity):
                 dh = u.Quantity(dh, unit=primals.unit)
             elif isinstance(dh, u.Quantity):
                 raise ValueError(f'The primal must be a quantity. Got {type(primals)}')
+            # dh = u.math.asarray(dh, dtype=primals.dtype)
             return f_vjp(dh)[0]
 
         # fun = lambda dh, x: jax.vjp(partial(op, x), weight_vals)[1](dh)[0]
@@ -272,12 +294,15 @@ class GeneralETraceOp(StandardETraceOp):
         def fn4vjp(dx, dy):
             primals, f_vjp = jax.vjp(partial(op, dx), weight_vals)
             if isinstance(primals, u.Quantity) and isinstance(dy, u.Quantity):
-                assert primals.unit.has_same_dim(dy.unit), (f'The unit of the primal and the derivative must '
-                                                            f'be the same. But we got {primals.unit} and {dy.unit}')
+                assert primals.unit.has_same_dim(dy.unit), (
+                    f'The unit of the primal and the derivative must '
+                    f'be the same. But we got {primals.unit} and {dy.unit}'
+                )
             elif isinstance(primals, u.Quantity):
                 dy = u.Quantity(dy, unit=primals.unit)
             elif isinstance(dy, u.Quantity):
                 raise ValueError(f'The primal must be a quantity. Got {type(primals)}')
+            # dy = u.math.asarray(dy, dtype=primals.dtype)
             return f_vjp(dy)[0]
 
         # fun = lambda dx, dy: jax.vjp(partial(op, dx), weight_vals)[1](dy)[0]
@@ -285,7 +310,7 @@ class GeneralETraceOp(StandardETraceOp):
             # TODO:
             #    assuming the batch size is the first dimension
             dg_weight = jax.vmap(fn4vjp)(u.math.expand_dims(dg_x, axis=1),
-                                      u.math.expand_dims(dg_y, axis=1))
+                                         u.math.expand_dims(dg_y, axis=1))
         else:
             dg_weight = fn4vjp(dg_x, dg_y)
         return dg_weight
@@ -365,8 +390,10 @@ class MatMulETraceOp(StandardETraceOp):
 
         assert isinstance(dh_to_dw, (list, tuple)), f'The dh_to_dw must be a list of pytrees. Got {type(dh_to_dw)}'
         assert isinstance(diag_jac, (list, tuple)), f'The diag_jac must be a list of jax.Array. Got {type(diag_jac)}'
-        assert len(dh_to_dw) == len(diag_jac), (f'The length of dh_to_dw and diag_jac must be the same. '
-                                                f'Got {len(dh_to_dw)} and {len(diag_jac)}')
+        assert len(dh_to_dw) == len(diag_jac), (
+            f'The length of dh_to_dw and diag_jac must be the same. '
+            f'Got {len(dh_to_dw)} and {len(diag_jac)}'
+        )
 
         diag_mul_dhdw = [self.hidden_to_etrace(mode, w, dh, dw)
                          for dh, dw in zip(diag_jac, dh_to_dw)]

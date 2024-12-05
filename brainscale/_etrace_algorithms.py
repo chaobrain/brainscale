@@ -35,7 +35,7 @@ from ._etrace_concepts import (assign_state_values_v2,
                                ETraceParamOp,
                                _ETraceGrad)
 from ._etrace_graph import (ETraceGraph,
-                            HiddenWeightOpRelation,
+                            WeightOpHiddenRelation,
                             HiddenGroup)
 from ._etrace_operators import (StandardETraceOp,
                                 GeneralETraceOp)
@@ -300,7 +300,7 @@ class ETraceAlgorithm(bst.nn.Module):
         return self.graph.show_graph()
 
     def __call__(self, *args, multi_step: bool = False) -> Any:
-        """
+        r"""
         Update the model and the eligibility trace states.
 
         multi_step: bool
@@ -844,7 +844,7 @@ class _IODimAlgorithm(Protocol):
 
 def _init_IO_dim_state(
     self: _IODimAlgorithm,
-    relation: HiddenWeightOpRelation,
+    relation: WeightOpHiddenRelation,
 ):
     # For the relation
     #
@@ -888,7 +888,7 @@ def _update_IO_dim_etrace_scan_fn(
     hist_etrace_vals: Tuple[Dict, Dict],
     jacobians: Tuple[Hid2WeightJacobian, Hid2HidJacobian],
     state_id_to_path: Dict[int, Path],
-    hid_weight_op_relations: Sequence[HiddenWeightOpRelation],
+    hid_weight_op_relations: Sequence[WeightOpHiddenRelation],
     decay: float,
 ):
     hid2weight_jac: Hid2WeightJacobian = jacobians[0]
@@ -936,7 +936,7 @@ def _update_IO_dim_etrace_scan_fn(
         new_etrace_xs[xkey] = _low_pass_filter(hist_xs[xkey], xs[xkey], decay)
 
     for hwo_relation in hid_weight_op_relations:
-        hwo_relation: HiddenWeightOpRelation
+        hwo_relation: WeightOpHiddenRelation
 
         for group in hwo_relation.hidden_groups:
             group: HiddenGroup
@@ -993,7 +993,7 @@ def _solve_IO_dim_weight_gradients(
     hist_etrace_data,
     dG_weights: Dict[Path, dG_Weight],
     dG_hiddens: Dict[Path, jax.Array],
-    weight_hidden_relations: Sequence[HiddenWeightOpRelation],
+    weight_hidden_relations: Sequence[WeightOpHiddenRelation],
     weight_vals: Dict[Path, PyTree],
     running_index: int,
     decay: float,
@@ -1265,7 +1265,7 @@ class DiagTruncatedAlgorithm(DiagETraceAlgorithmForVJP):
             new_etrace_xs[xkey] = u.math.concatenate((hist_xs[xkey][1:], u.math.expand_dims(xs[xkey], 0)), axis=0)
 
         for hwo_relation in self.graph.hidden_param_op_relations:
-            hwo_relation: HiddenWeightOpRelation
+            hwo_relation: WeightOpHiddenRelation
 
             for group in hwo_relation.hidden_groups:
                 group: HiddenGroup
@@ -1478,7 +1478,7 @@ class DiagIODimAlgorithm(DiagETraceAlgorithmForVJP):
         etrace_dfs = dict()
         find_this_weight = False
         for relation in self.graph.hidden_param_op_relations:
-            relation: HiddenWeightOpRelation
+            relation: WeightOpHiddenRelation
             if id(relation.weight) != weight_id:
                 continue
             find_this_weight = True
@@ -1610,7 +1610,7 @@ class _ParamDimAlgorithm(Protocol):
 
 def _init_param_dim_state(
     self: _ParamDimAlgorithm,
-    relation: HiddenWeightOpRelation
+    relation: WeightOpHiddenRelation
 ):
     # For the relation
     #
@@ -1670,7 +1670,7 @@ def _update_param_dim_etrace_scan_fn(
     new_etrace_bwg = dict()
 
     for relation in hidden_param_op_relations:
-        relation: HiddenWeightOpRelation
+        relation: WeightOpHiddenRelation
 
         #
         # ParamDim algorithm relies on the "ETraceOp" to compute the etrace updates
@@ -1750,7 +1750,7 @@ def _solve_param_dim_weight_gradients(
     hist_etrace_data: Dict[ETraceWG_Key, PyTree],
     dG_weights: Dict[Path, dG_Weight],
     dG_hiddens: Dict[Path, jax.Array],
-    weight_hidden_relations: Sequence[HiddenWeightOpRelation],
+    weight_hidden_relations: Sequence[WeightOpHiddenRelation],
     weight_path_to_vals: Dict[Path, PyTree],
     mode: bst.mixin.Mode,
     state_id_to_path: Dict[int, Path],
@@ -1896,7 +1896,7 @@ class DiagParamDimAlgorithm(DiagETraceAlgorithmForVJP):
         find_this_weight = False
         etraces = dict()
         for relation in self.graph.hidden_param_op_relations:
-            relation: HiddenWeightOpRelation
+            relation: WeightOpHiddenRelation
             if id(relation.weight) != weight_id:
                 continue
             find_this_weight = True
@@ -1995,7 +1995,7 @@ def _numel(pytree: PyTree):
 
 
 def _is_weight_need_full_grad(
-    relation: HiddenWeightOpRelation,
+    relation: WeightOpHiddenRelation,
     mode: bst.mixin.Mode
 ):
     if isinstance(relation.weight, ETraceParamOp):
@@ -2162,7 +2162,7 @@ class DiagHybridDimAlgorithm(DiagETraceAlgorithmForVJP):
         etrace_bws = dict()
         find_this_weight = False
         for relation in self.graph.hidden_param_op_relations:
-            relation: HiddenWeightOpRelation
+            relation: WeightOpHiddenRelation
             if id(relation.weight) != weight_id:
                 continue
             find_this_weight = True

@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import contextlib
 import threading
+from enum import Enum
 from typing import Callable, Sequence, Tuple, List, Optional, Hashable, Dict
 
 import brainstate as bst
@@ -41,6 +42,7 @@ __all__ = [
     'ETraceState',  # the hidden state for the etrace-based learning
     'ETraceVar',
     'ETraceParam',  # the parameter/weight for the etrace-based learning
+    'ElementWiseParamOp',
     'ETraceOp',  # the operator for the etrace-based learning
     'ETraceParamOp',  # the parameter and operator for the etrace-based learning, combining ETraceParam and ETraceOp
     'NonTempParamOp',  # the parameter state with an associated operator
@@ -178,8 +180,8 @@ class ETraceParamOp(ETraceParam):
     def __init__(
         self,
         weight: PyTree,
-        op: Callable,
-        grad: Optional[str] = None,
+        op: Callable[[jax.Array, WeightVals], jax.Array],
+        grad: Optional[str | Enum] = None,
         is_diagonal: bool = None,
         name: Optional[str] = None
     ):
@@ -189,7 +191,6 @@ class ETraceParamOp(ETraceParam):
         # gradient
         if grad is None:
             grad = 'adaptive'
-        assert isinstance(grad, str), f'Currently, {ETraceParamOp.__name__} only supports str.'
         self.gradient = _ETraceGrad.get(grad)
 
         # operation
@@ -202,6 +203,28 @@ class ETraceParamOp(ETraceParam):
 
     def execute(self, x: jax.Array) -> jax.Array:
         return self.op(x, self.value)
+
+
+class ElementWiseParamOp(ETraceParamOp):
+    """
+    The Element-wise Eligibility Trace Weight and its Associated Operator.
+
+    Args:
+      weight: The weight of the ETrace.
+      op: The operator for the ETrace. See `ETraceOp`.
+    """
+    __module__ = 'brainscale'
+
+    def __init__(
+        self,
+        weight: PyTree,
+        op: Callable[[WeightVals], jax.Array],
+    ):
+        super().__init__(weight, lambda x, w: op(w), grad=_ETraceGrad.full, is_diagonal=True)
+
+    def execute(self) -> jax.Array:
+        ones = u.math.zeros(1)
+        return self.op(ones, self.value)
 
 
 class NonTempParamOp(bst.ParamState):

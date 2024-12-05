@@ -26,7 +26,7 @@ import jax
 import jax.numpy as jnp
 
 import brainscale as nn
-from brainscale._etrace_graph import CompilationError, NotSupportedError
+from brainscale._misc import CompilationError, NotSupportedError
 
 
 class IF_Delta_Dense_Layer(bst.nn.Module):
