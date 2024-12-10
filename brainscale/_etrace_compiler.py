@@ -126,7 +126,7 @@ def _check_pjit(eqn, self):
         raise NotImplementedError(
             'Currently, we do not support the weight states are used within a jit function. \n'
             'Please remove your jit compilation on the intermediate steps. \n\n'
-            f'The weight state is: {self.invar_to_hidden_path[invar]}. \n'
+            f'The weight state is: {self.invar_to_state_path[invar]}. \n'  # TODO
             f'The Jaxpr of the JIT function is: \n\n'
             f'{eqn} \n\n'
         )
@@ -1345,7 +1345,7 @@ class JaxprEvaluationForHiddenPerturbation(JaxprEvaluation):
 
     def compile(self) -> jax.core.ClosedJaxpr:
         # new invars, the var order is the same as the hidden_outvars
-        self.new_invars = {
+        self.perturb_invars = {
             v: self._new_var_like(v)
             for v in self.hidden_outvars
         }
@@ -1373,19 +1373,27 @@ class JaxprEvaluationForHiddenPerturbation(JaxprEvaluation):
         # new jaxpr
         jaxpr = jax.core.Jaxpr(
             constvars=list(self.closed_jaxpr.jaxpr.constvars),
-            invars=list(self.closed_jaxpr.jaxpr.invars) + list(self.new_invars.values()),
+            invars=list(self.closed_jaxpr.jaxpr.invars) + list(self.perturb_invars.values()),
             outvars=list(self.closed_jaxpr.jaxpr.outvars),
             eqns=self.revised_eqns
         )
         revised_closed_jaxpr = jax.core.ClosedJaxpr(jaxpr, self.closed_jaxpr.literals)
 
         # remove the temporal data
-        self.new_invars = dict()
+        self.perturb_invars = dict()
         self.revised_eqns = []
         self.hidden_jaxvars_to_remove = set()
         return revised_closed_jaxpr
 
-    def _add_perturb_eqn(self, eqn: jax.core.JaxprEqn, perturb_var: jax.core.Var):
+    def _eval_pjit(self, eqn: jax.core.JaxprEqn) -> None:
+        """
+        Evaluating the pjit primitive.
+        """
+        self._eval_eqn(eqn)
+
+    def _add_perturb_eqn(self,
+                         eqn: jax.core.JaxprEqn,
+                         perturb_var: jax.core.Var):
         # ------------------------------------------------
         #
         # For the hidden var eqn, we want to add a perturbation:
@@ -1419,7 +1427,7 @@ class JaxprEvaluationForHiddenPerturbation(JaxprEvaluation):
             if eqn.outvars[0] in self.hidden_jaxvars_to_remove:
                 hidden_var = eqn.outvars[0]
                 self.hidden_jaxvars_to_remove.remove(hidden_var)
-                self._add_perturb_eqn(eqn, self.new_invars[hidden_var])
+                self._add_perturb_eqn(eqn, self.perturb_invars[hidden_var])
                 return
         self.revised_eqns.append(eqn.replace())
 
@@ -1605,9 +1613,6 @@ class WeightOpHiddenRelation(NamedTuple):
     x: WeightXVar
     y: WeightYVar
     jaxpr_y2hid: jax.core.Jaxpr
-    # hidden_vars: List[HiddenOutVar]
-    # hidden_groups: List[HiddenGroup]
-    # hidden_var_to_transition: Dict[HiddenOutVar, HiddenTransition]
     hidden_paths: List[Path]
     hidden_groups: List[HiddenGroupV2]
     hidden_path_to_transition: Dict[Path, HiddenTransition]
@@ -1867,7 +1872,9 @@ def compile_graph(
         constvars=list(jaxpr.constvars),
         invars=list(jaxpr.invars),
         outvars=list(out_all_jaxvars),
-        eqns=list(jaxpr.eqns)
+        eqns=list(jaxpr.eqns),
+        effects=jaxpr.effects,
+        debug_info=jaxpr.debug_info,
     )
     augmented_jaxpr = jax.core.ClosedJaxpr(jaxpr, closed_jaxpr.consts)
 
