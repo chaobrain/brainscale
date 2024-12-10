@@ -15,16 +15,20 @@
 
 # -*- coding: utf-8 -*-
 
-__version__ = "0.1.0"
+__version__ = "0.0.3"
 
+from brainscale._etrace_compiler import *
+from brainscale._etrace_compiler import __all__ as etrace_compiler
 from brainscale._etrace_algorithms import *
 from brainscale._etrace_algorithms import __all__ as etrace_algorithms
-from brainscale._etrace_compiler import *
-from brainscale._etrace_compiler import __all__ as etrace_compiler_all
+from brainscale._etrace_graph import *
+from brainscale._etrace_graph import __all__ as etrace_compiler_all
 from brainscale._etrace_concepts import *
 from brainscale._etrace_concepts import __all__ as concepts_all
 from brainscale._etrace_operators import *
 from brainscale._etrace_operators import __all__ as operators_all
+from brainscale._misc import *
+from brainscale._misc import __all__ as misc_all
 from . import nn
 
 __all__ = (
@@ -32,14 +36,18 @@ __all__ = (
     + concepts_all
     + etrace_algorithms
     + etrace_compiler_all
+    + etrace_compiler
     + operators_all
+    + misc_all
 )
 
 del (
     concepts_all,
     etrace_algorithms,
     etrace_compiler_all,
+    etrace_compiler,
     operators_all,
+    misc_all,
 )
 
 # Added 2024-10-27

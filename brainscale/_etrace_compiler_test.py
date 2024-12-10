@@ -13,264 +13,315 @@
 # limitations under the License.
 # ==============================================================================
 
-from __future__ import annotations
 
-import numbers
 import unittest
-from typing import Callable
+from pprint import pprint
 
 import brainstate as bst
-import jax
-import jax.numpy as jnp
+import brainunit as u
 
-import brainscale as nn
-from brainscale._etrace_compiler import CompilationError, NotSupportedError
+import brainscale
+from brainscale._etrace_model_test import (
+    IF_Delta_Dense_Layer,
+    LIF_ExpCo_Dense_Layer,
+    ALIF_ExpCo_Dense_Layer,
+    LIF_ExpCu_Dense_Layer,
+    LIF_STDExpCu_Dense_Layer,
+    LIF_STPExpCu_Dense_Layer,
+    ALIF_ExpCu_Dense_Layer,
+    ALIF_Delta_Dense_Layer,
+    ALIF_STDExpCu_Dense_Layer,
+    ALIF_STPExpCu_Dense_Layer,
+)
 
-
-class IF_Delta_Dense_Layer(bst.nn.Module):
-    """
-    The RTRL layer with IF neurons and dense connected delta synapses.
-    """
-
-    def __init__(
-        self,
-        linear_cls,
-        n_in: int,
-        n_rec: int,
-        tau_mem: bst.typing.ArrayLike = 5.,
-        V_th: bst.typing.ArrayLike = 1.,
-        spk_fun: Callable = bst.surrogate.ReluGrad(),
-        spk_reset: str = 'soft',
-        init: Callable = bst.init.KaimingNormal(),
-    ):
-        super().__init__()
-        self.neu = nn.IF(n_rec, tau=tau_mem, spk_fun=spk_fun, spk_reset=spk_reset, V_th=V_th)
-        self.syn = linear_cls(n_in + n_rec, n_rec, w_init=init)
-
-    def update(self, spk):
-        spk = jnp.concat([spk, self.neu.get_spike()], axis=-1)
-        return self.neu(self.syn(spk))
+pprint
 
 
-class TestCompiler(unittest.TestCase):
-    def test_no_weight_in_etrace_op(self):
-        class Linear(bst.nn.Module):
-            def __init__(
-                self,
-                in_size: bst.typing.Size,
-                out_size: bst.typing.Size,
-                w_init: Callable = bst.init.KaimingNormal()
-            ):
-                super().__init__()
-                self.in_size = (in_size,) if isinstance(in_size, numbers.Integral) else tuple(in_size)
-                self.out_size = (out_size,) if isinstance(out_size, numbers.Integral) else tuple(out_size)
-                params = dict(weight=bst.init.param(w_init, self.in_size + self.out_size, allow_none=False))
-                self.weight = nn.ETraceParam(params)
-                self.op = nn.ETraceOp(self._operation)
+class TestCompileGraphRNN(unittest.TestCase):
+    def test_gru_one_layer(self):
+        n_in = 3
+        n_out = 4
 
-            def update(self, x):
-                # test that no EtraceWeight is used in the etrace operator
-                return self.op(x, None)
+        gru = brainscale.nn.GRUCell(n_in, n_out)
+        bst.nn.init_all_states(gru)
 
-            def _operation(self, x, params):
-                return x @ jnp.ones(self.in_size + self.out_size)
+        input = bst.random.rand(n_in)
+        graph = brainscale.compile_graph(gru, False, input)
 
-        model = bst.nn.init_all_states(IF_Delta_Dense_Layer(Linear, 10, 20), 16)
-        inp_spk = jnp.asarray(bst.random.rand(16, 10) < 0.3, dtype=bst.environ.dftype())
-        graph = nn.ETraceGraph(model)
+        self.assertTrue(isinstance(graph, brainscale.CompiledGraph))
+        self.assertTrue(graph.num_out == 1)
+        self.assertTrue(len(graph.stateful_fn_states) == 4)
+        self.assertTrue(len(graph.hidden_groups) == 1)
 
-        with self.assertRaises(CompilationError):
-            graph.compile_graph(inp_spk)
+        param_states = gru.states(bst.ParamState)
+        self.assertTrue(len(param_states) == 3)
+        self.assertTrue(len(graph.hidden_param_op_relations) == 2)
 
-        bst.util.clear_buffer_memory()
+        # pprint(graph)
 
-    def test_multi_weights_in_etrace_op(self):
-        class Linear(bst.nn.Module):
-            def __init__(self, in_size: bst.typing.Size, out_size: bst.typing.Size, w_init=bst.init.KaimingNormal()):
-                super().__init__()
-                self.in_size = (in_size,) if isinstance(in_size, numbers.Integral) else tuple(in_size)
-                self.out_size = (out_size,) if isinstance(out_size, numbers.Integral) else tuple(out_size)
-                params = dict(weight=bst.init.param(w_init, self.in_size + self.out_size, allow_none=False))
-                self.weight1 = nn.ETraceParam(params)
-                params = dict(weight=bst.init.param(w_init, self.in_size + self.out_size, allow_none=False))
-                self.weight2 = nn.ETraceParam(params)
-                self.op = nn.ETraceOp(self._operation)
+    def test_lru_one_layer(self):
+        n_in = 3
+        n_out = 4
 
-            def update(self, x):
-                # Test that multiple EtraceWeights are not supported
-                return self.op(x, (self.weight1.value, self.weight2.value))
+        lru = brainscale.nn.LRUCell(n_in, n_out)
+        bst.nn.init_all_states(lru)
 
-            def _operation(self, x, params):
-                return x @ jnp.ones(self.in_size + self.out_size)
+        input = bst.random.rand(n_in)
+        graph = brainscale.compile_graph(lru, False, input)
 
-        model = bst.nn.init_all_states(IF_Delta_Dense_Layer(Linear, 10, 20), 16)
-        inp_spk = jnp.asarray(bst.random.rand(16, 10) < 0.3, dtype=bst.environ.dftype())
-        graph = nn.ETraceGraph(model)
+        self.assertTrue(len(graph.hidden_groups) == 1)
+        self.assertTrue(len(graph.hidden_groups[0].hidden_paths) == 2)
 
-        with self.assertRaises(CompilationError):
-            graph.compile_graph(inp_spk)
+        for relation in graph.hidden_param_op_relations:
+            if relation.path[0] in ['C_re', 'C_im', 'D']:
+                self.assertTrue(len(relation.hidden_paths) == 0)
 
-        bst.util.clear_buffer_memory()
+        # pprint(graph)
 
-    def test_multi_returns_in_etrace_op(self):
-        class Linear(bst.nn.Module):
-            def __init__(
-                self,
-                in_size: bst.typing.Size,
-                out_size: bst.typing.Size,
-                w_init: Callable = bst.init.KaimingNormal()
-            ):
-                super().__init__()
-                self.in_size = (in_size,) if isinstance(in_size, numbers.Integral) else tuple(in_size)
-                self.out_size = (out_size,) if isinstance(out_size, numbers.Integral) else tuple(out_size)
-                params = dict(weight=bst.init.param(w_init, self.in_size + self.out_size, allow_none=False))
-                self.weight1 = nn.ETraceParam(params)
-                self.op = nn.ETraceOp(self._operation)
+    def test_lstm_one_layer(self):
+        n_in = 3
+        n_out = 4
 
-            def update(self, x):
-                res = self.op(x, self.weight1.value)
-                return res[0] + res[1]
+        lstm = brainscale.nn.LSTMCell(n_in, n_out)
+        bst.nn.init_all_states(lstm)
 
-            def _operation(self, x, params):
-                y1 = x @ jnp.ones(self.in_size + self.out_size)
-                y2 = x @ params['weight']
-                return y1, y2
+        input = bst.random.rand(n_in)
+        graph = brainscale.compile_graph(lstm, False, input)
 
-        model = IF_Delta_Dense_Layer(Linear, 10, 20)
-        bst.nn.init_all_states(model, 16)
+        self.assertTrue(isinstance(graph, brainscale.CompiledGraph))
+        self.assertTrue(graph.num_out == 1)
+        self.assertTrue(len(graph.hidden_groups) == 1)
+        self.assertTrue(len(graph.hidden_groups[0].hidden_paths) == 2)
+        self.assertTrue(len(graph.stateful_fn_states) == 6)
 
-        inp_spk = jnp.asarray(bst.random.rand(16, 10) < 0.3, dtype=bst.environ.dftype())
-        graph = nn.ETraceGraph(model)
+        hid_states = lstm.states(brainscale.ETraceState)
+        self.assertTrue(len(hid_states) == len(graph.hid_path_to_transition))
 
-        with self.assertRaises(NotSupportedError):
-            graph.compile_graph(inp_spk)
+        param_states = lstm.states(bst.ParamState)
+        self.assertTrue(len(param_states) == len(graph.hidden_param_op_relations))
 
-        bst.util.clear_buffer_memory()
+        hidden_paths = set(graph.hidden_groups[0].hidden_paths)
+        for relation in graph.hidden_param_op_relations:
+            if relation.path[0] == 'Wo':
+                self.assertTrue(set(relation.hidden_paths) == set([('h',)]))
+            else:
+                self.assertTrue(set(relation.hidden_paths) == hidden_paths)
 
-    def test_etrace_op_jaxpr(self):
-        class Linear1(bst.nn.Module):
-            def __init__(
-                self,
-                in_size: int,
-                out_size: int,
-                w_init: Callable = bst.init.KaimingNormal()
-            ):
-                super().__init__()
-                self.in_size = (in_size,)
-                self.out_size = (out_size,)
-                params = dict(weight=bst.init.param(w_init, self.in_size + self.out_size, allow_none=False))
-                self.weight = nn.ETraceParam(params)
-                self.mask = bst.random.random(self.in_size + self.out_size) < 0.5
-                self.op = nn.ETraceOp(self._operation)
+        # pprint(graph)
 
-            def update(self, x):
-                res = self.op(x, self.weight.value)
-                return res
+    def test_lstm_two_layers(self):
+        n_in = 3
+        n_out = 4
 
-            def _operation(self, x, params):
-                return x @ (params['weight'] * self.mask)
+        net = bst.nn.Sequential(
+            brainscale.nn.LSTMCell(n_in, n_out),
+            bst.nn.ReLU(),
+            brainscale.nn.LSTMCell(n_out, n_in),
+        )
+        bst.nn.init_all_states(net)
 
-        model = IF_Delta_Dense_Layer(Linear1, 10, 20)
-        bst.nn.init_all_states(model, 16)
+        input = bst.random.rand(n_in)
+        graph = brainscale.compile_graph(net, False, input)
 
-        inp_spk = jnp.asarray(bst.random.rand(16, 10) < 0.3, dtype=bst.environ.dftype())
-        graph = nn.ETraceGraph(model)
-        with jax.disable_jit():
-            graph.compile_graph(inp_spk)
+        self.assertTrue(isinstance(graph, brainscale.CompiledGraph))
+        self.assertTrue(graph.num_out == 1)
+        self.assertTrue(len(graph.hidden_groups) == 2)
+        self.assertTrue(len(graph.hidden_groups[0].hidden_paths) == 2)
+        self.assertTrue(len(graph.hidden_groups[1].hidden_paths) == 2)
 
-        bst.util.clear_buffer_memory()
+        hidden_group1_path = {('layers', 0, 'c'), ('layers', 0, 'h')}
+        hidden_group2_path = {('layers', 2, 'c'), ('layers', 2, 'h')}
 
-    def test_train_both_etrace_weight_and_non_etrace_weight(self):
-        bst.environ.set(mode=bst.mixin.JointMode(bst.mixin.Batching(), bst.mixin.Training()))
+        for relation in graph.hidden_param_op_relations:
+            if relation.path[1] == 0:
+                if relation.path[2] != 'Wo':
+                    self.assertTrue(set(relation.hidden_paths) == hidden_group1_path)
+            if relation.path[1] == 2:
+                if relation.path[2] != 'Wo':
+                    self.assertTrue(set(relation.hidden_paths) == hidden_group2_path)
 
-        class Model(bst.nn.Module):
-            def __init__(self):
-                super().__init__()
+        # pprint(graph)
 
-                self.linear1 = nn.Linear(10, 30, as_etrace_weight=True)
-                self.linear2 = nn.Linear(10, 30, as_etrace_weight=False)
-                self.lif = nn.LIF(30)
+    def test_lru_two_layers(self):
+        n_in = 3
+        n_out = 4
 
-            def update(self, x):
-                y1 = self.linear1(x)
-                y2 = self.linear2(x)
-                return self.lif(y1 + y2)
+        net = bst.nn.Sequential(
+            brainscale.nn.LRUCell(n_in, n_out),
+            bst.nn.ReLU(),
+            brainscale.nn.LRUCell(n_in, n_out),
+        )
+        bst.nn.init_all_states(net)
 
-        # inputs
-        inp_spk = jnp.asarray(bst.random.rand(16, 10) < 0.3, dtype=bst.environ.dftype())
+        input = bst.random.rand(n_in)
+        graph = brainscale.compile_graph(net, False, input)
 
-        # model
-        model = Model()
-        bst.nn.init_all_states(model, 16)
+        self.assertTrue(len(graph.hidden_groups) == 2)
+        self.assertTrue(len(graph.hidden_groups[0].hidden_paths) == 2)
+        self.assertTrue(len(graph.hidden_groups[1].hidden_paths) == 2)
+        self.assertTrue(len(graph.hidden_param_op_relations) == 10)
 
-        def run_model(i, inp):
-            bst.environ.set(i=i)
-            return model(inp)
+        layer1_hiddens = {('layers', 0, 'h_im'), ('layers', 0, 'h_re')}
+        layer2_hiddens = {('layers', 2, 'h_im'), ('layers', 2, 'h_re')}
 
-        # algorithms
-        algorithm = nn.DiagIODimAlgorithm(run_model, decay_or_rank=100)
-        algorithm.compile_graph(0, inp_spk)
-        out = algorithm(0, inp_spk, running_index=0)
+        for relation in graph.hidden_param_op_relations:
+            if relation.path[1] == 0 and relation.path[2] not in ['B_im', 'B_re']:
+                self.assertTrue(set(relation.hidden_paths) == layer1_hiddens)
+            if relation.path[1] == 2 and relation.path[2] not in ['B_im', 'B_re']:
+                self.assertTrue(set(relation.hidden_paths) == layer2_hiddens)
 
-        weights = model.states().subset(bst.ParamState)
-        grads = bst.augment.grad(lambda x: algorithm(0, x, running_index=0).sum(), grad_vars=weights)(inp_spk)
+    def test_lru_two_layers_v2(self):
+        n_in = 4
+        n_out = 4
 
-        # print(out)
-        print(grads)
+        net = bst.nn.Sequential(
+            brainscale.nn.LRUCell(n_in, n_out),
+            bst.nn.ReLU(),
+            brainscale.nn.LRUCell(n_in, n_out),
+        )
+        bst.nn.init_all_states(net)
+
+        input = bst.random.rand(n_in)
+        graph = brainscale.compile_graph(net, False, input)
+
+        self.assertTrue(len(graph.hidden_groups) == 2)
+        self.assertTrue(len(graph.hidden_groups[0].hidden_paths) == 2)
+        self.assertTrue(len(graph.hidden_groups[1].hidden_paths) == 2)
+        self.assertTrue(len(graph.hidden_param_op_relations) == 10)
+
+        layer1_hiddens = {('layers', 0, 'h_im'), ('layers', 0, 'h_re')}
+        layer2_hiddens = {('layers', 2, 'h_im'), ('layers', 2, 'h_re')}
+
+        for relation in graph.hidden_param_op_relations:
+            if relation.path[1] == 0 and relation.path[2] not in ['B_im', 'B_re']:
+                self.assertTrue(set(relation.hidden_paths) == layer1_hiddens)
+            if relation.path[1] == 2 and relation.path[2] not in ['B_im', 'B_re']:
+                self.assertTrue(set(relation.hidden_paths) == layer2_hiddens)
 
 
-class TestShowGraph(unittest.TestCase):
-    def test_show_graph(self):
-        class Linear1(bst.nn.Module):
-            def __init__(self, in_size: int, out_size: int, w_init: Callable = bst.init.KaimingNormal()):
-                super().__init__()
-                self.in_size = (in_size,)
-                self.out_size = (out_size,)
-                params = dict(weight=bst.init.param(w_init, self.in_size + self.out_size, allow_none=False))
-                self.weight = nn.ETraceParam(params)
-                self.mask = bst.random.random(self.in_size + self.out_size) < 0.5
-                self.op = nn.ETraceOp(self._operation)
+class TestCompileGraphSNN(unittest.TestCase):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-            def update(self, x):
-                res = self.op(x, self.weight.value)
-                return res
+        bst.environ.set(dt=0.1 * u.ms)
 
-            def _operation(self, x, params):
-                return x @ (params['weight'] * self.mask)
+    def test_if_delta_dense(self):
+        n_in = 3
+        n_rec = 4
 
-        model = IF_Delta_Dense_Layer(Linear1, 10, 20)
-        bst.nn.init_all_states(model, 16)
+        net = IF_Delta_Dense_Layer(n_in, n_rec)
+        bst.nn.init_all_states(net)
 
-        inp_spk = jnp.asarray(bst.random.rand(16, 10) < 0.3, dtype=bst.environ.dftype())
-        graph = nn.ETraceGraph(model)
-        graph.compile_graph(inp_spk)
-        graph.show_graph()
+        input = bst.random.rand(n_in)
+        graph = brainscale.compile_graph(net, False, input)
 
-        bst.util.clear_buffer_memory()
+        pprint(graph)
+        pass
 
-    def test_show_lstm_graph(self):
-        bst.environ.set(mode=bst.mixin.JointMode(bst.mixin.Batching(), bst.mixin.Training()))
-        cell = nn.LSTMCell(10, 20, activation=jnp.tanh)
-        bst.nn.init_all_states(cell, 16)
+    def test_lif_expco_dense_layer(self):
+        n_in = 3
+        n_rec = 4
 
-        graph = nn.ETraceGraph(cell)
-        graph.compile_graph(jnp.zeros((16, 10)))
-        graph.show_graph()
+        net = LIF_ExpCo_Dense_Layer(n_in, n_rec)
+        bst.nn.init_all_states(net)
 
-        print(graph.hidden_param_op_relations)
-        # self.assertTrue(len(graph.hidden_param_op_relations) == 3)
+        input = bst.random.rand(n_in)
+        graph = brainscale.compile_graph(net, False, input)
 
-        bst.util.clear_buffer_memory()
+        pprint(graph)
 
-    def test_show_gru_graph(self):
-        bst.environ.set(mode=bst.mixin.JointMode(bst.mixin.Batching(), bst.mixin.Training()))
-        cell = nn.GRUCell(10, 20, activation=jnp.tanh)
-        bst.nn.init_all_states(cell, 16)
+    def test_alif_expco_dense_layer(self):
+        n_in = 3
+        n_rec = 4
 
-        graph = nn.ETraceGraph(cell)
-        graph.compile_graph(jnp.zeros((16, 10)))
-        graph.show_graph()
+        net = ALIF_ExpCo_Dense_Layer(n_in, n_rec)
+        bst.nn.init_all_states(net)
 
-        self.assertTrue(len(graph.hidden_param_op_relations) == 3)
+        input = bst.random.rand(n_in)
+        graph = brainscale.compile_graph(net, False, input)
 
-        bst.util.clear_buffer_memory()
+        pprint(graph)
+
+    def test_lif_expcu_dense_layer(self):
+        n_in = 3
+        n_rec = 4
+
+        net = LIF_ExpCu_Dense_Layer(n_in, n_rec)
+        bst.nn.init_all_states(net)
+
+        input = bst.random.rand(n_in)
+        graph = brainscale.compile_graph(net, False, input)
+
+        pprint(graph)
+
+    def test_lif_std_expcu_dense_layer(self):
+        n_in = 3
+        n_rec = 4
+
+        net = LIF_STDExpCu_Dense_Layer(n_in, n_rec)
+        bst.nn.init_all_states(net)
+
+        input = bst.random.rand(n_in)
+        graph = brainscale.compile_graph(net, False, input)
+
+        pprint(graph)
+
+    def test_lif_stp_expcu_dense_layer(self):
+        n_in = 3
+        n_rec = 4
+
+        net = LIF_STPExpCu_Dense_Layer(n_in, n_rec)
+        bst.nn.init_all_states(net)
+
+        input = bst.random.rand(n_in)
+        graph = brainscale.compile_graph(net, False, input)
+
+        pprint(graph)
+
+    def test_alif_expcu_dense_layer(self):
+        n_in = 3
+        n_rec = 4
+
+        net = ALIF_ExpCu_Dense_Layer(n_in, n_rec)
+        bst.nn.init_all_states(net)
+
+        input = bst.random.rand(n_in)
+        graph = brainscale.compile_graph(net, False, input)
+
+        pprint(graph)
+
+    def test_alif_delta_dense_layer(self):
+        n_in = 3
+        n_rec = 4
+
+        net = ALIF_Delta_Dense_Layer(n_in, n_rec)
+        bst.nn.init_all_states(net)
+
+        input = bst.random.rand(n_in)
+        graph = brainscale.compile_graph(net, False, input)
+
+        pprint(graph)
+
+    def test_alif_std_expcu_dense_layer(self):
+        n_in = 3
+        n_rec = 4
+
+        net = ALIF_STDExpCu_Dense_Layer(n_in, n_rec)
+        bst.nn.init_all_states(net)
+
+        input = bst.random.rand(n_in)
+        graph = brainscale.compile_graph(net, False, input)
+
+        pprint(graph)
+
+    def test_alif_stp_expcu_dense_layer(self):
+        n_in = 3
+        n_rec = 4
+
+        net = ALIF_STPExpCu_Dense_Layer(n_in, n_rec)
+        bst.nn.init_all_states(net)
+
+        input = bst.random.rand(n_in)
+        graph = brainscale.compile_graph(net, False, input)
+
+        pprint(graph)

@@ -27,7 +27,7 @@ __all__ = [
     'Softsign', 'Tanhshrink', 'Softmin', 'Softmax', 'Softmax2d', 'LogSoftmax',
 
     # dropout
-    'Dropout', 'Dropout1d', 'Dropout2d', 'Dropout3d', 'AlphaDropout', 'FeatureAlphaDropout',
+    'Dropout', 'Dropout1d', 'Dropout2d', 'Dropout3d',
 
     # others
     'Identity', 'SpikeBitwise',
@@ -188,15 +188,6 @@ class Dropout3d(bst.nn.Dropout3d):
     __doc__ = bst.nn.Dropout3d.__doc__
     __module__ = 'brainscale.nn'
 
-
-class AlphaDropout(bst.nn.AlphaDropout):
-    __doc__ = bst.nn.AlphaDropout.__doc__
-    __module__ = 'brainscale.nn'
-
-
-class FeatureAlphaDropout(bst.nn.FeatureAlphaDropout):
-    __doc__ = bst.nn.FeatureAlphaDropout.__doc__
-    __module__ = 'brainscale.nn'
 
 
 class Identity(bst.nn.Identity):

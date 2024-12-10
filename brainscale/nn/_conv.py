@@ -29,8 +29,12 @@ from brainscale._etrace_concepts import ETraceParamOp, NonTempParamOp
 from brainscale._typing import ArrayLike
 
 __all__ = [
-    'Conv1d', 'Conv2d', 'Conv3d',
-    'ScaledWSConv1d', 'ScaledWSConv2d', 'ScaledWSConv3d',
+    'Conv1d',
+    'Conv2d',
+    'Conv3d',
+    'ScaledWSConv1d',
+    'ScaledWSConv2d',
+    'ScaledWSConv3d',
 ]
 
 T = TypeVar('T')

@@ -6,6 +6,39 @@
 ----
 
 
+
+Basic Usage
+^^^^^^^^^^^
+
+
+Here we show how easy it is to use `brainscale` to build and train a simple SNN/RNN model.
+
+
+
+.. code-block::
+
+   import brainscale
+   import brainstate as bst
+
+   # define models as usual
+   model = bst.nn.Sequential(
+       bst.nn.GRU(2, 2),
+       bst.nn.GRU(2, 1),
+   )
+
+   # initialize the model
+   bst.nn.init_all_states(model)
+
+   # the only thing you need to do just two lines of code
+   model = brainscale.DiagParamDimAlgorithm(model, None)
+   model.compile_graph(your_inputs)
+
+   # train your model as usual
+   ...
+
+----
+
+
 Installation
 ^^^^^^^^^^^^
 
@@ -97,5 +130,8 @@ We are building the `Brain Dynamics Programming ecosystem <https://ecosystem-for
    :caption: API Reference
 
    changelog.md
-   api.rst
+   apis/concepts.rst
+   apis/compiler.rst
+   apis/algorithms.rst
+   apis/nn.rst
 

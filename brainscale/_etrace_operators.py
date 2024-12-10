@@ -24,6 +24,7 @@ import jax
 import jax.core
 
 from ._etrace_concepts import ETraceOp
+from ._misc import remove_units
 from ._typing import PyTree
 
 WeightTree = Any
@@ -32,6 +33,7 @@ __all__ = [
     'StandardETraceOp',
     'GeneralETraceOp',
     'MatMulETraceOp',
+    'ElementWiseOp',
 ]
 
 
@@ -51,9 +53,9 @@ class StandardETraceOp(ETraceOp):
         ph_to_pwy: jax.Array
     ):
         r"""
-        Compute the eligibility trace updates.
+        Standard operator for computing the eligibility trace updates.
 
-        Update: ``eligibility trace`` * ``hidden diagonal Jacobian`` + ``new hidden-weight Jacobian``
+        Update: ``eligibility trace`` * ``diagonal hidden Jacobian`` + ``new hidden-to-weight Jacobian``
 
         .. math::
            d\epsilon^t = D_h ⊙ d\epsilon^{t-1} + df^t
@@ -64,6 +66,17 @@ class StandardETraceOp(ETraceOp):
         For example::
 
           ∂V^t/∂V^t-1 * ∂V^t-1/∂θ1 + ∂V^t/∂a^t-1 * ∂a^t-1/∂θ1 + ... + ∂V^t/∂θ1^t
+
+
+        Args:
+            mode: the mode of the operation, which may contain the batching information.
+            w: the weight value.
+            dh_to_dw: the hidden-to-weight Jacobian.
+            diag_jac: the diagonal Jacobian $\frac{ \partial h^t } { \partial h^{t-1} } $ of the hidden states.
+            ph_to_pwx: the partial derivative of the hidden with respect to the weight operation input,
+                    i.e., the input $x^t$.
+            ph_to_pwy: the partial derivative of the hidden with respect to the weight operation output,
+                    i.e., the output $\frac{ \partial h^t } { \partial y^t }$.
 
         """
         raise NotImplementedError
@@ -76,30 +89,41 @@ class StandardETraceOp(ETraceOp):
         dh_to_dw: WeightTree
     ):
         r"""
-        Compute the hidden-to-etrace updates.
+        Compute the gradient of the loss with respect to the weight operation.
 
-        This function is used to merge the hidden dimensional gradients into the
-        parameter-dimensional gradients. For example:
+        This function is used to merge the hidden dimensional gradients (i.e. the loss-to-hidden
+        gradient) into the eligibility trace updates.
 
         .. math::
 
-           dL/dW = (dL/dH) \circ (dH / dW)
+           dL/dW = (dL/dH) \circ (dH / dW) \approx \frac{ \partial L^t } { \partial h^t } \circ \epsilon^t
+
+        Args:
+            mode: the mode of the operation, which may contain the batching information.
+            w: the weight value.
+            dl_to_dh: the derivative of the loss with respect to the hidden
+                states, i.e., $\frac{ \partial L^t } { \partial h^t }$.
+            dh_to_dw: the derivative of the hidden states with respect to the weight operation,
+                i.e., the eligibility trace $\frac{ \partial h^t } { \partial W^t } \approx \epsilon^t$.
 
         """
         raise NotImplementedError
 
 
+X = bst.typing.ArrayLike
+W = bst.typing.PyTree
+Y = bst.typing.ArrayLike
+
+
 class GeneralETraceOp(StandardETraceOp):
     """
-    The general operator for computing the eligibility trace updates.
-
-    This operator can be applied to any operation, but does not guarantee the
-    computational efficiency.
+    The general operator for computing the eligibility trace updates, which can be applied to any :py:class:`ETraceOp`,
+    but does not guarantee the computational efficiency.
     """
 
     def __init__(
         self,
-        op: Callable,
+        op: Callable[[X, W], Y],
         xinfo: jax.ShapeDtypeStruct,
         is_diagonal: bool = False
     ):
@@ -122,15 +146,21 @@ class GeneralETraceOp(StandardETraceOp):
         diag_jac: List[jax.Array],
         ph_to_pwx: jax.Array,
         ph_to_pwy: Optional[jax.Array],
-    ) -> WeightTree:
+    ):
         """
+        This is the general method for computing the eligibility trace updates, which
+        can be applied to any :py:class:`ETraceOp`, but does not guarantee the computational efficiency.
+
         See the :meth:`StandardETraceOp.etrace_update` for more details.
         """
 
         assert isinstance(dh_to_dw, (list, tuple)), f'The dh_to_dw must be a list of pytrees. Got {type(dh_to_dw)}'
         assert isinstance(diag_jac, (list, tuple)), f'The diag_jac must be a list of jax.Array. Got {type(diag_jac)}'
-        assert len(dh_to_dw) == len(diag_jac), (f'The length of dh_to_dw and diag_jac must be the same. '
-                                                f'Got {len(dh_to_dw)} and {len(diag_jac)}')
+        assert len(dh_to_dw) == len(diag_jac), (
+            f'The length of dh_to_dw and diag_jac must be the same. '
+            f'Got {len(dh_to_dw)} and {len(diag_jac)}'
+        )
+
         #
         # Step 1:
         #
@@ -142,16 +172,23 @@ class GeneralETraceOp(StandardETraceOp):
             #
             # convert the diagonal hidden-to-hidden Jacobian to the
             # dimension of weights
-            dg_weight = self.dy_to_weight(mode,
-                                          w,
-                                          self.op,
-                                          self.xinfo,
-                                          diag)
+            dg_weight = self.dy_to_weight(
+                mode,
+                w,
+                self.op,
+                self.xinfo,
+                diag
+            )
+
             #
             # compute the element-wise multiplication of:
             #      diagonal * \epsilon (dh_to_dw)
             diag_mul_dw = jax.tree.map(u.math.multiply, dg_weight, dw)
-            final_dw = diag_mul_dw if final_dw is None else jax.tree.map(u.math.add, final_dw, diag_mul_dw)
+            final_dw = (
+                diag_mul_dw
+                if final_dw is None else
+                jax.tree.map(u.math.add, final_dw, diag_mul_dw)
+            )
 
         #
         # Step 2:
@@ -160,11 +197,13 @@ class GeneralETraceOp(StandardETraceOp):
         #        dϵ^t = D_h ⊙ dϵ^t-1 + df^t, where D_h is the hidden-to-hidden Jacobian diagonal matrix.
         #
         if ph_to_pwy is not None:
-            current_etrace = self.dx_dy_to_weight(mode,
-                                                  w,
-                                                  self.op,
-                                                  ph_to_pwx,
-                                                  ph_to_pwy)
+            current_etrace = self.dx_dy_to_weight(
+                mode,
+                w,
+                self.op,
+                ph_to_pwx,
+                ph_to_pwy
+            )
             final_dw = jax.tree.map(u.math.add, final_dw, current_etrace)
         return final_dw
 
@@ -176,15 +215,20 @@ class GeneralETraceOp(StandardETraceOp):
         dh_to_dw: PyTree
     ):
         """
+        This is the general method for computing the gradient of the loss with respect to the weight operation.
+        It can be applied to any :py:class:`ETraceOp`, but does not guarantee the computational efficiency.
+
         See the :meth:`StandardETraceOp.hidden_to_etrace` for more details.
         """
 
         # compute: dL/dW = (dL/dH) \circ (dH / dW)
-        dg_weight = self.dy_to_weight(mode,
-                                      w,
-                                      self.op,
-                                      self.xinfo,
-                                      dl_to_dh)
+        dg_weight = self.dy_to_weight(
+            mode,
+            w,
+            self.op,
+            self.xinfo,
+            dl_to_dh
+        )
         return jax.tree.map(u.math.multiply, dg_weight, dh_to_dw)
 
     @staticmethod
@@ -211,13 +255,13 @@ class GeneralETraceOp(StandardETraceOp):
         # transform
         def fn4vjp(dh, x):
             primals, f_vjp = jax.vjp(partial(op, x), weight_vals)
-            if isinstance(primals, u.Quantity) and isinstance(dh, u.Quantity):
-                assert primals.unit.has_same_dim(dh.unit), (f'The unit of the primal and the derivative must '
-                                                            f'be the same. But we got {primals.unit} and {dh.unit}')
-            elif isinstance(primals, u.Quantity):
-                dh = u.Quantity(dh, unit=primals.unit)
-            elif isinstance(dh, u.Quantity):
-                raise ValueError(f'The primal must be a quantity. Got {type(primals)}')
+            if isinstance(dh, (tuple, list)):
+                assert isinstance(primals, (tuple, list))
+                dh = (
+                    u.maybe_decimal(u.get_magnitude(dh[0]) * u.get_unit(primals[0])),
+                )
+            else:
+                dh = u.maybe_decimal(u.get_magnitude(dh) * u.get_unit(primals))
             return f_vjp(dh)[0]
 
         # fun = lambda dh, x: jax.vjp(partial(op, x), weight_vals)[1](dh)[0]
@@ -249,12 +293,15 @@ class GeneralETraceOp(StandardETraceOp):
         def fn4vjp(dx, dy):
             primals, f_vjp = jax.vjp(partial(op, dx), weight_vals)
             if isinstance(primals, u.Quantity) and isinstance(dy, u.Quantity):
-                assert primals.unit.has_same_dim(dy.unit), (f'The unit of the primal and the derivative must '
-                                                            f'be the same. But we got {primals.unit} and {dy.unit}')
+                assert primals.unit.has_same_dim(dy.unit), (
+                    f'The unit of the primal and the derivative must '
+                    f'be the same. But we got {primals.unit} and {dy.unit}'
+                )
             elif isinstance(primals, u.Quantity):
                 dy = u.Quantity(dy, unit=primals.unit)
             elif isinstance(dy, u.Quantity):
                 raise ValueError(f'The primal must be a quantity. Got {type(primals)}')
+            # dy = u.math.asarray(dy, dtype=primals.dtype)
             return f_vjp(dy)[0]
 
         # fun = lambda dx, dy: jax.vjp(partial(op, dx), weight_vals)[1](dy)[0]
@@ -262,25 +309,17 @@ class GeneralETraceOp(StandardETraceOp):
             # TODO:
             #    assuming the batch size is the first dimension
             dg_weight = jax.vmap(fn4vjp)(u.math.expand_dims(dg_x, axis=1),
-                                      u.math.expand_dims(dg_y, axis=1))
+                                         u.math.expand_dims(dg_y, axis=1))
         else:
             dg_weight = fn4vjp(dg_x, dg_y)
         return dg_weight
 
 
-def binary_op(op, x, y):
-    if isinstance(x, u.Quantity) and isinstance(y, u.Quantity):
-        return op(x, y)
-    if isinstance(x, u.Quantity):
-        return u.Quantity(op(x.magnitude, y), unit=x.unit)
-    if isinstance(y, u.Quantity):
-        return u.Quantity(op(x, y.magnitude), unit=y.unit)
-    return op(x, y)
-
-
 class MatMulETraceOp(StandardETraceOp):
     """
-    The standard matrix multiplication operator for the eligibility trace.
+    The standard matrix multiplication operator for the eligibility trace updates.
+
+    This operator is much more efficient than the :py:class:`GeneralETraceOp` for the matrix multiplication operation.
 
     """
 
@@ -292,24 +331,34 @@ class MatMulETraceOp(StandardETraceOp):
         super().__init__(self._operation, is_diagonal=is_diagonal)
         self.weight_mask = weight_mask
 
-    def _format_weight(self, weights) -> Tuple[Tuple[jax.Array, Optional[jax.Array]], Callable]:
-        if isinstance(weights, dict):
-            weights = (weights['weight'], weights.get('bias', None))
-            unflatten = lambda w, b: {'weight': (w), 'bias': b} if (b is not None) else {'weight': w}
-        elif isinstance(weights, (tuple, list)):
-            weights = (weights[0], weights[1] if len(weights) > 1 else None)
-            unflatten = lambda w, b: (w, b) if (b is not None) else (w,)
-        elif isinstance(weights, jax.Array):
-            weights = (weights, None)
-            unflatten = lambda w, b: w if (b is None) else (w, b)
+    def _format_weight(
+        self,
+        weights,
+        keep_unit: bool = True
+    ) -> Tuple[Tuple[jax.Array, Optional[jax.Array]], Callable]:
+        weights = (weights['weight'], weights.get('bias', None))
+
+        if keep_unit:
+            unflatten = lambda weight, bias: (
+                {'weight': weight, } if bias is None else
+                {'weight': weight, 'bias': bias}
+            )
         else:
-            raise ValueError(f'Invalid weight type: {type(weights)}')
-        # weights = jax.tree.map(_get_mantissa, weights, is_leaf=_is_quantity)
-        # units = jax.tree.map(_get_unit, weights, is_leaf=_is_quantity)
+            w_unit = u.get_unit(weights[0])
+            b_unit = u.get_unit(weights[1])
+
+            def unflatten(weight, bias):
+                weight = u.maybe_decimal(weight * w_unit)
+                bias = None if bias is None else u.maybe_decimal(bias * b_unit)
+                if bias is None:
+                    return {'weight': weight}
+                return {'weight': weight, 'bias': bias}
+
+            weights = tuple([u.get_magnitude(w) for w in weights])
         return weights, unflatten
 
     def _operation(self, x, w):
-        (weight, bias), _ = self._format_weight(w)
+        (weight, bias), _ = self._format_weight(w, keep_unit=True)
         if self.weight_mask is not None:
             weight = weight * self.weight_mask
         if bias is None:
@@ -327,6 +376,8 @@ class MatMulETraceOp(StandardETraceOp):
         ph_to_pwy: Optional[jax.Array],
     ):
         """
+        This is the standard method for computing the eligibility trace updates for the matrix multiplication operation.
+
         See the :meth:`StandardETraceOp.etrace_update` for more details.
         """
 
@@ -338,14 +389,23 @@ class MatMulETraceOp(StandardETraceOp):
 
         assert isinstance(dh_to_dw, (list, tuple)), f'The dh_to_dw must be a list of pytrees. Got {type(dh_to_dw)}'
         assert isinstance(diag_jac, (list, tuple)), f'The diag_jac must be a list of jax.Array. Got {type(diag_jac)}'
-        assert len(dh_to_dw) == len(diag_jac), (f'The length of dh_to_dw and diag_jac must be the same. '
-                                                f'Got {len(dh_to_dw)} and {len(diag_jac)}')
+        assert len(dh_to_dw) == len(diag_jac), (
+            f'The length of dh_to_dw and diag_jac must be the same. '
+            f'Got {len(dh_to_dw)} and {len(diag_jac)}'
+        )
 
-        diag_mul_dhdw = [self.hidden_to_etrace(mode, w, dh, dw)
-                         for dh, dw in zip(diag_jac, dh_to_dw)]
+        # diag_jac = remove_units(diag_jac)
+        # dh_to_dw = remove_units(dh_to_dw)
+        ph_to_pwx = remove_units(ph_to_pwx)
+        ph_to_pwy = remove_units(ph_to_pwy)
+
+        diag_mul_dhdw = [
+            self.hidden_to_etrace(mode, w, dh, dw)
+            for dh, dw in zip(diag_jac, dh_to_dw)
+        ]
         diag_mul_dhdw = jax.tree.map(lambda *xs: reduce(u.math.add, xs), *diag_mul_dhdw)
 
-        (dh_to_dweight, dh_to_dbias), unflatten = self._format_weight(diag_mul_dhdw)
+        (dh_to_dweight, dh_to_dbias), unflatten = self._format_weight(diag_mul_dhdw, keep_unit=False)
         if ph_to_pwy is not None:
             if mode.has(bst.mixin.Batching):
                 # dh_to_dweight: (batch_size, input_size, hidden_size,)
@@ -353,19 +413,18 @@ class MatMulETraceOp(StandardETraceOp):
                 # ph_to_pwx: (batch_size, input_size,)
                 # ph_to_pwy: (batch_size, hidden_size,)
                 # dh_to_dweight = dh_to_dweight + u.math.einsum('bi,bh->bih', ph_to_pwx, ph_to_pwy)
-                dh_to_dweight = binary_op(jax.numpy.add, dh_to_dweight,
-                                          u.math.einsum('bi,bh->bih', ph_to_pwx, ph_to_pwy))
+                dh_to_dweight = dh_to_dweight + u.math.einsum('bi,bh->bih', ph_to_pwx, ph_to_pwy)
                 if dh_to_dbias is not None:
                     # dh_to_dbias = dh_to_dbias + ph_to_pwy
-                    dh_to_dbias = binary_op(jax.numpy.add, dh_to_dbias, ph_to_pwy)
+                    dh_to_dbias = dh_to_dbias + ph_to_pwy
             else:
                 # dh_to_dweight: (input_size, hidden_size,)
                 # dh_to_dbias: (hidden_size,)
                 # ph_to_pwx: (input_size,)
                 # ph_to_pwy: (hidden_size,)
-                dh_to_dweight = binary_op(jax.numpy.add, dh_to_dweight, u.math.outer(ph_to_pwx, ph_to_pwy))
+                dh_to_dweight = dh_to_dweight + u.math.outer(ph_to_pwx, ph_to_pwy)
                 if dh_to_dbias is not None:
-                    dh_to_dbias = binary_op(jax.numpy.add, dh_to_dbias, ph_to_pwy)
+                    dh_to_dbias = dh_to_dbias + ph_to_pwy
         return unflatten(dh_to_dweight, dh_to_dbias)
 
     def hidden_to_etrace(
@@ -376,6 +435,9 @@ class MatMulETraceOp(StandardETraceOp):
         dh_to_dw: PyTree
     ):
         """
+        This is the standard method for computing the gradient of the loss with respect to the weight operation
+        for the matrix multiplication operation.
+
         See the :meth:`StandardETraceOp.hidden_to_etrace` for more details.
         """
 
@@ -384,6 +446,8 @@ class MatMulETraceOp(StandardETraceOp):
         # 3. dh_to_dw: the derivative of the hidden with respect to the weight
 
         (dh_to_dweight, dh_to_dbias), unflatten = self._format_weight(dh_to_dw)
+        dl_to_dh = remove_units(dl_to_dh)
+
         if mode.has(bst.mixin.Batching):
             # dl_to_dh: (batch_size, hidden_size,)
             # dh_to_dw: (batch_size, input_size, hidden_size,)
@@ -397,6 +461,97 @@ class MatMulETraceOp(StandardETraceOp):
             if dh_to_dbias is not None:
                 dh_to_dbias = dh_to_dbias * dl_to_dh
         return unflatten(dh_to_dweight, dh_to_dbias)
+
+
+class ElementWiseOp(StandardETraceOp):
+    """
+    The standard element-wise operator for the eligibility trace updates.
+
+    This operator is much more efficient than the :py:class:`GeneralETraceOp` for the element-wise operation.
+
+    """
+
+    def __init__(self, op: Callable[[jax.Array], jax.Array]):
+        self.true_op = op
+        super().__init__(lambda x, w: op(w), is_diagonal=True)
+
+    def etrace_update(
+        self,
+        mode: bst.mixin.Mode,
+        w: jax.Array,
+        dh_to_dw: List[jax.Array],
+        diag_jac: List[jax.Array],
+        ph_to_pwx: None,
+        ph_to_pwy: jax.Array,
+    ) -> jax.Array:
+        """
+        This is the standard method for computing the eligibility trace updates for the matrix multiplication operation.
+
+        See the :meth:`StandardETraceOp.etrace_update` for more details.
+        """
+
+        # 1. w: the wight value, a pytree
+        # 2. dh_to_dw: derivative of hidden to weight, the number equals to the number of hidden states
+        # 3. diag_jac: the diagonal Jacobian of the hidden states, the number equals to the number of hidden states
+        # 4. ph_to_pwx: the partial derivative of the hidden with respect to the weight input
+        # 5. ph_to_pwy: the partial derivative of the hidden with respect to the weight output
+
+        assert isinstance(dh_to_dw, (list, tuple)), (
+            f'The dh_to_dw must be a list of Array. Got {type(dh_to_dw)}'
+        )
+        assert isinstance(diag_jac, (list, tuple)), (
+            f'The diag_jac must be a list of jax.Array. Got {type(diag_jac)}'
+        )
+        assert len(dh_to_dw) == len(diag_jac), (
+            f'The length of dh_to_dw and diag_jac must be the same. '
+            f'Got {len(dh_to_dw)} and {len(diag_jac)}'
+        )
+
+        diag_mul_dhdw = [self.hidden_to_etrace(mode, w, dh, dw)
+                         for dh, dw in zip(diag_jac, dh_to_dw)]
+        diag_mul_dhdw = reduce(u.math.add, diag_mul_dhdw)
+
+        if mode.has(bst.mixin.Batching):
+            # ph_to_pwy: (batch_size, hidden_size,)
+            # ph_to_pw: (batch_size, hidden_size,)
+            ph_to_pw = jax.vmap(lambda g: (jax.vjp(self.true_op, w)[1](g)))(ph_to_pwy)
+            # diag_mul_dhdw: (batch_size, hidden_size,)
+            dh_to_dweight = diag_mul_dhdw + ph_to_pw[0]
+        else:
+            # ph_to_pwy: (hidden_size,)
+            # ph_to_pw: (hidden_size,)
+            ph_to_pw = jax.vjp(self.true_op, w)[1](ph_to_pwy)
+            # diag_mul_dhdw: (hidden_size,)
+            dh_to_dweight = diag_mul_dhdw + ph_to_pw[0]
+        return dh_to_dweight
+
+    def hidden_to_etrace(
+        self,
+        mode: bst.mixin.Mode,
+        w: jax.Array,
+        dl_to_dh: jax.Array,
+        dh_to_dw: jax.Array
+    ) -> jax.Array:
+        """
+        This is the standard method for computing the gradient of the loss with respect to the weight operation
+        for the matrix multiplication operation.
+
+        See the :meth:`StandardETraceOp.hidden_to_etrace` for more details.
+        """
+
+        # 1. w: the wight value
+        # 2. dl_to_dh: the derivative of the loss with respect to the hidden
+        # 3. dh_to_dw: the derivative of the hidden with respect to the weight
+
+        if mode.has(bst.mixin.Batching):
+            # dl_to_dh: (batch_size, hidden_size,)
+            # dh_to_dw: (batch_size, hidden_size,)
+            dh_to_dweight = dl_to_dh * dh_to_dw
+        else:
+            # dl_to_dh: (hidden_size,)
+            # dh_to_dw: (hidden_size,)
+            dh_to_dweight = dl_to_dh * dh_to_dw
+        return dh_to_dweight
 
 # class AbsMatMulETraceOp(MatMulETraceOp):
 #   """

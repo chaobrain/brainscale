@@ -17,7 +17,7 @@
 
 
 import brainstate as bst
-import braintools as bts
+import braintools
 import jax
 import matplotlib.pyplot as plt
 import numpy as np
@@ -120,47 +120,44 @@ class OnlineTrainer(Trainer):
 
         # 初始化在线学习模型
         # 此处，我们需要使用 mode 来指定使用数据集是具有 batch 维度的
-        model = brainscale.DiagParamDimAlgorithm(self.target, vjp_time=self.vjp_time, mode=bst.mixin.Batching())
+        model = brainscale.DiagParamDimAlgorithm(self.target, mode=bst.mixin.Batching())
 
         # 使用一个样例数据编译在线学习eligibility trace
         model.compile_graph(inputs[0])
 
-        def _etrace_loss(i, inp, tar):
+        def _etrace_loss(inp, tar):
             # call the model
-            out = model(inp, running_index=i)
+            out = model(inp)
 
             # calculate the loss
-            loss = bts.metric.softmax_cross_entropy_with_integer_labels(out, tar).mean()
+            loss = braintools.metric.softmax_cross_entropy_with_integer_labels(out, tar).mean()
             return loss, out
 
         def _etrace_grad(prev_grads, x):
-            i, inp, tar = x
+            inp, tar = x
             # 计算当前时刻的梯度
             f_grad = bst.augment.grad(_etrace_loss, weights, has_aux=True, return_value=True)
-            cur_grads, local_loss, out = f_grad(i, inp, tar)
+            cur_grads, local_loss, out = f_grad(inp, tar)
             # 累计梯度
             next_grads = jax.tree.map(lambda a, b: a + b, prev_grads, cur_grads)
             # 返回累计后的梯度和损失函数值
             return next_grads, (out, local_loss)
 
-        def _etrace_train(indices_, inputs_):
+        def _etrace_train(inputs_):
             # 初始化梯度
             grads = jax.tree.map(lambda a: jax.numpy.zeros_like(a), {k: v.value for k, v in weights.items()})
             # 沿着时间轴计算和累积梯度
-            grads, (outs, losses) = bst.compile.scan(_etrace_grad, grads, (indices_, inputs_, target))
+            grads, (outs, losses) = bst.compile.scan(_etrace_grad, grads, (inputs_, target))
             # 更新梯度
             self.opt.update(grads)
             return losses.mean()
 
-        # running indices
-        indices = np.arange(inputs.shape[0])
-
         # 在T时刻之前，模型更新其状态和eligibility trace
         n_sim = self.n_seq + 10
-        bst.compile.for_loop(lambda i, inp: model(inp, running_index=i), indices[:n_sim], inputs[:n_sim])
+        bst.compile.for_loop(lambda inp: model(inp), inputs[:n_sim])
 
         # 在T时刻之后，模型开始在线学习
-        r = _etrace_train(indices[n_sim:], inputs[n_sim:])
+        r = _etrace_train(inputs[n_sim:])
         return r
 
 
@@ -175,7 +172,7 @@ class BPTTTrainer(Trainer):
 
         def _run_step_train(inp, tar):
             out = self.target(inp)
-            loss = bts.metric.softmax_cross_entropy_with_integer_labels(out, tar).mean()
+            loss = braintools.metric.softmax_cross_entropy_with_integer_labels(out, tar).mean()
             return out, loss
 
         def _bptt_grad_step():

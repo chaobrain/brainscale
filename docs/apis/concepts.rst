@@ -8,8 +8,8 @@ Online Learning Concepts
    :depth: 1
 
 
-Model Definition
-----------------
+ETrace Model Definition
+-----------------------
 
 
 .. autosummary::
@@ -38,17 +38,14 @@ ETrace Operations
     StandardETraceOp
     GeneralETraceOp
     MatMulETraceOp
-    stop_param_gradients
 
 
-Model Compilation
------------------
+Others
+-------
 
 .. autosummary::
    :toctree: generated/
    :nosignatures:
-   :template: classtemplate.rst
 
-    ETraceGraph
-    build_etrace_graph
+   stop_param_gradients
 
