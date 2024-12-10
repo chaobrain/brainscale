@@ -2070,10 +2070,10 @@ class DiagHybridDimAlgorithm(DiagETraceAlgorithmForVJP):
     """
 
     # the spatial gradients of the weights
-    etrace_xs: Dict[WeightXVar, bst.State]
+    etrace_xs: Dict[ETraceX_Key, bst.State]
 
     # the spatial gradients of the hidden states
-    etrace_dfs: Dict[Tuple[WeightYVar, HiddenOutVar], bst.State]
+    etrace_dfs: Dict[ETraceDF_Key, bst.State]
 
     # the mapping from the etrace x to the weight operations
     etrace_xs_to_weights = Dict[ETraceX_Key, List[Path]]
@@ -2200,15 +2200,15 @@ class DiagHybridDimAlgorithm(DiagETraceAlgorithmForVJP):
                 # get the weight_op df
                 wy_var = relation.y
                 for group in relation.hidden_groups:
-                    group: HiddenGroup
-                    for hidden_var in group.hidden_outvars:
-                        etrace_dfs[(wy_var, hidden_var)] = self.etrace_dfs[(wy_var, hidden_var)].value
+                    group: HiddenGroupV2
+                    for hid_path in group.hidden_paths:
+                        etrace_dfs[(wy_var, hid_path)] = self.etrace_dfs[(wy_var, hid_path)].value
 
             # get the batched weight gradients
             for group in relation.hidden_groups:
-                group: HiddenGroup
-                for hidden_outvar in group.hidden_outvars:
-                    key = (weight_id, relation.y, hidden_outvar)
+                group: HiddenGroupV2
+                for hid_path in group.hidden_paths:
+                    key = (relation.path, relation.y, hid_path)
                     etrace_bws[key] = self.etrace_bwg[key].value
 
         if not find_this_weight:
@@ -2257,8 +2257,6 @@ class DiagHybridDimAlgorithm(DiagETraceAlgorithmForVJP):
             weight_vals=weight_vals,
             hidden_param_op_relations=on2_weight_hidden_relations,
             mode=self.mode,
-            state_id_to_path=self.graph.state_id_to_path,
-            hidden_outvar_to_hidden=self.compiled.hidden_outvar_to_hidden
         )
 
         new_bwg = jax.lax.scan(
@@ -2319,8 +2317,6 @@ class DiagHybridDimAlgorithm(DiagETraceAlgorithmForVJP):
             weight_vals,
             running_index,
             self.decay,
-            self.state_id_to_path,
-            self.compiled.hidden_outvar_to_hidden
         )
 
         # update the etrace weight gradients by the O(n^2) algorithm
@@ -2331,8 +2327,6 @@ class DiagHybridDimAlgorithm(DiagETraceAlgorithmForVJP):
             on2_weight_hidden_relations,
             weight_vals,
             self.mode,
-            self.graph.state_id_to_path,
-            self.compiled.hidden_outvar_to_hidden
         )
 
         # update the non-etrace weight gradients
