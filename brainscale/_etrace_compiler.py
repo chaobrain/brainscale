@@ -32,6 +32,7 @@
 #   [2024-11-26] version 0.0.3, a complete new revision for better model debugging.
 #   [2024-12-05] change the ETraceWeight to NonETraceWeight if the hidden states are not found;
 #                remove the connected hidden states when y=x@w is not shape broadcastable with the hidden states.
+#   [2024-12-09] small updates, related to the key items in "CompiledGraph"
 #
 # ==============================================================================
 
@@ -1618,7 +1619,7 @@ class CompiledGraph(NamedTuple):
 
     The following fields are included:
 
-    - jaxpr_augment: the jaxpr that return necessary intermediate variables
+    - augmented_jaxpr: the jaxpr that return necessary intermediate variables
     - jaxpr_perturb_hidden: the jaxpr the add hidden perturbation
     - stateful_fn_states: the states of the stateful function
     - stateful_fn_outtree: the output tree of the stateful function
@@ -1633,7 +1634,7 @@ class CompiledGraph(NamedTuple):
     - num_out: the number of outputs
 
     """
-    jaxpr_augment: jax.core.ClosedJaxpr  # the jaxpr that return necessary intermediate variables
+    augmented_jaxpr: jax.core.ClosedJaxpr  # the jaxpr that return necessary intermediate variables
     jaxpr_perturb_hidden: jax.core.ClosedJaxpr  # the jaxpr the add hidden perturbation
     stateful_fn_states: Sequence[bst.State]
     stateful_fn_outtree: jax.tree_util.PyTreeDef
@@ -1887,7 +1888,7 @@ def compile_graph(
     cache_key = stateful_model.get_arg_cache_key(*model_args, **model_kwargs)
 
     return CompiledGraph(
-        jaxpr_augment=augmented_jaxpr,
+        augmented_jaxpr=augmented_jaxpr,
         jaxpr_perturb_hidden=jaxpr_with_hidden_perturb,
         stateful_fn_states=stateful_model.get_states(cache_key),
         stateful_fn_outtree=stateful_model.get_out_treedef(cache_key),

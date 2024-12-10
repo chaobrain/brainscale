@@ -110,7 +110,7 @@ class Residuals:
 
 
 class ETraceGraph:
-    r"""
+    """
     The eligibility trace graph, tracking the relationship between the etrace weights
     :py:class:`ETraceParam`, the etrace variables :py:class:`ETraceState`, and the etrace
     operations :py:class:`ETraceOp`.
@@ -146,7 +146,7 @@ class ETraceGraph:
 
     @property
     def graph(self) -> CompiledGraph:
-        """
+        r"""
         The compiled graph for the model.
 
         It is the most important data structure for the eligibility trace graph.
@@ -160,11 +160,19 @@ class ETraceGraph:
         - ``hid2hid_jaxvars``: List[jax.core.Var]  # the hidden to hidden vars
         - ``num_out``: int  # the number of function returns
 
+
+        Hidden states information: input `jax.core.Var` to `ETraceState`, and output `jax.core.Var` to `ETraceState`.
+
         - ``hidden_invar_to_hidden``: Dict[jax.core.Var, ETraceState]
         - ``hidden_outvar_to_hidden``: Dict[jax.core.Var, ETraceState]
 
+
+        Intermediate variable relationship: input `jax.core.Var` to `jax.core.Var`,
+        and output `jax.core.Var` to `jax.core.Var`.
+
         - ``hidden_outvar_to_invar``: Dict[jax.core.Var, jax.core.Var]
         - ``hidden_invar_to_outvar``: Dict[jax.core.Var, jax.core.Var]
+
 
         The most important data structure for the graph, which implementing
         the relationship between the etrace weights and the etrace states.
@@ -188,7 +196,7 @@ class ETraceGraph:
 
 
         The revised jaxpr with hidden state perturbations is essential for computing
-        the learning signal \partial L / \partial h, where L is the loss and h is the hidden state.
+        the learning signal :math:`\partial L / \partial h`, where :math:`L` is the loss and h is the hidden state.
         It also returns necessary variables. Note, this jaxpr is only needed when the "vjp_time" is "t".
 
         - ``jaxpr_with_hidden_perturb``: jax.core.ClosedJaxpr = None
@@ -235,8 +243,8 @@ class ETraceGraph:
 
         # self.augmented_jaxpr,
         # self.jaxpr_with_hidden_perturb,  # maybe None if vjp_time_ahead is not 0
-        # self.jaxpr_states,
-        # self.jaxpr_outtree,
+        # self.stateful_fn_states,
+        # self.stateful_fn_outtree,
         # self.out_hidden_jaxvars,
         # self.out_wx_jaxvars,
         # self.out_all_jaxvars,
@@ -264,9 +272,9 @@ class ETraceGraph:
         msg += '\n\n'
 
         # etrace weights
+        etratce_weight_paths = set()
         if len(self.graph.hidden_param_op_relations):
             msg += 'The weight parameters which are associated with the hidden states are:\n\n'
-            etratce_weight_paths = set()
             for i, hp_relation in enumerate(self.graph.hidden_param_op_relations):
                 etratce_weight_paths.add(hp_relation.path)
                 group = [group_mapping[id(group)] for group in hp_relation.hidden_groups]
@@ -296,13 +304,15 @@ class ETraceGraph:
         """
 
         # state checking
-        old_state_vals = [st.value for st in self.jaxpr_states]
+        old_state_vals = [st.value for st in self.graph.stateful_fn_states]
 
         # parameters
         args = jax.tree.flatten((args, old_state_vals))[0]
 
         # calling the function
-        jaxpr_outs = jax.core.eval_jaxpr(self.augmented_jaxpr.jaxpr, self.augmented_jaxpr.consts, *args)
+        jaxpr_outs = jax.core.eval_jaxpr(self.graph.augmented_jaxpr.jaxpr,
+                                         self.graph.augmented_jaxpr.consts,
+                                         *args)
 
         # intermediate values
         #
@@ -311,15 +321,17 @@ class ETraceGraph:
         temps = {
             v: r for v, r in
             zip(
-                self.out_all_jaxvars[self.num_out:],
-                jaxpr_outs[self.num_out:]
+                self.graph.out_all_jaxvars[self.graph.num_out:],
+                jaxpr_outs[self.graph.num_out:]
             )
         }
 
         #
         # recovery outputs of ``stateful_model``
-        state_outs = [temps[v] for v in self.out_state_jaxvars]
-        out, new_state_vals = self.jaxpr_outtree.unflatten(jaxpr_outs[:self.num_out] + state_outs)
+        state_outs = [temps[v] for v in self.graph.out_state_jaxvars]
+        out, new_state_vals = self.graph.stateful_fn_outtree.unflatten(
+            jaxpr_outs[:self.graph.num_out] + state_outs
+        )
 
         # state value assignment
         assert len(old_state_vals) == len(new_state_vals), 'State length mismatch.'
@@ -329,7 +341,7 @@ class ETraceGraph:
         #
         hidden_vals = dict()
         oth_state_vals = dict()
-        for st, st_val in zip(self.jaxpr_states, new_state_vals):
+        for st, st_val in zip(self.graph.stateful_fn_states, new_state_vals):
             if isinstance(st, ETraceState):
                 hidden_vals[self.state_id_to_path[id(st)]] = st_val
             elif isinstance(st, bst.ParamState):
@@ -354,11 +366,11 @@ class ETraceGraph:
         intermediate_values = jax.lax.stop_gradient(intermediate_values)
 
         # the weight x
-        xs = {v: intermediate_values[v] for v in self.out_wx_jaxvars}
+        xs = {v: intermediate_values[v] for v in self.graph.out_wx_jaxvars}
 
         # the weight df
         dfs = dict()
-        for relation in self.hidden_param_op_relations:
+        for relation in self.graph.hidden_param_op_relations:
             consts = [intermediate_values[var] for var in relation.jaxpr_y2hid.constvars]
             invars = [intermediate_values[var] for var in relation.jaxpr_y2hid.invars]  # weight y
             assert len(invars) == 1, 'The weight y should be unique.'
@@ -387,13 +399,16 @@ class ETraceGraph:
 
             # get the df we want
             for i, hidden_var in enumerate(relation.jaxpr_y2hid.outvars):  # hidden states
-                hidden_path = self.state_id_to_path[id(self.hidden_outvar_to_hidden[hidden_var])]
-                dfs[(relation.y, hidden_path)] = tangents[i]
+                hidden_path = self.graph.hid_outvar_to_path[hidden_var]
+                key = (relation.y, hidden_path)
+                if key in dfs:
+                    raise ValueError(f'The key should not exist. {key}')
+                dfs[key] = tangents[i]
 
         # all x and df values
         return jax.lax.stop_gradient(xs), jax.lax.stop_gradient(dfs)
 
-    def _compute_hidden2hidden_jacobian(
+    def _compute_hid2hid_jacobian(
         self,
         intermediate_values: dict
     ) -> Dict[HidHidJac_Key, jax.Array]:
@@ -401,8 +416,7 @@ class ETraceGraph:
         intermediate_values = jax.lax.stop_gradient(intermediate_values)
 
         hid2hid_jacobian = dict()
-
-        for transition in self.hidden_outvar_to_transition.values():
+        for hid_path, transition in self.graph.hid_path_to_transition.items():
             transition: HiddenTransition
 
             #
@@ -422,11 +436,10 @@ class ETraceGraph:
             _, jvp_grads = jax.jvp(fun, (primals,), (tangents,))  # produce the new hidden, and the JVP gradients
 
             # store the gradients
-            hid_path1 = self.state_id_to_path[id(self.hidden_invar_to_hidden[transition.hidden_invar])]
-            for outvar_t, grad_data in zip(transition.connected_hidden_outvars, jvp_grads):
-                hid_path2 = self.state_id_to_path[id(self.hidden_outvar_to_hidden[outvar_t])]
+            hid_path1 = transition.hidden_path
+            for hid_path2, grad_data in zip(transition.connected_hidden_paths, jvp_grads):
                 key = (hid_path1, hid_path2)
-                assert key not in hid2hid_jacobian, 'The key should not exist.'
+                assert key not in hid2hid_jacobian, f'The key should not exist. {key}'
                 hid2hid_jacobian[key] = grad_data
 
         return jax.lax.stop_gradient(hid2hid_jacobian)
@@ -457,10 +470,15 @@ class ETraceGraph:
         """
         # --- compile the model --- #
         if not self.multi_step:
-            assert self.jaxpr_with_hidden_perturb is not None, ('The jaxpr_with_hidden_perturb should not be None '
-                                                                'when the vjp_time_ahead is 0.')
-        assert self.augmented_jaxpr is not None, ('The augmented_jaxpr should not be None '
-                                                  'when the vjp_time_ahead > 0.')
+            assert self.graph.jaxpr_perturb_hidden is not None, (
+                'The jaxpr_with_hidden_perturb should not be None '
+                'when the vjp_time_ahead is 0.'
+            )
+
+        assert self.graph.augmented_jaxpr is not None, (
+            'The augmented_jaxpr should not be None '
+            'when the vjp_time_ahead > 0.'
+        )
 
         (
             etrace_param_states,
@@ -505,7 +523,7 @@ class ETraceGraph:
                 hid2weight_jac = self._compute_hid2weight_jacobian(temps)
 
                 # compute the hidden-to-hidden Jacobian
-                hid2hid_jac = self._compute_hidden2hidden_jacobian(temps)
+                hid2hid_jac = self._compute_hid2hid_jacobian(temps)
 
                 return (_hidden_vals, _oth_state_vals), (out, hid2weight_jac, hid2hid_jac)
 
@@ -572,7 +590,7 @@ class ETraceGraph:
         if not self.multi_step:
             etrace_weight_vals = dict()
             hidden_perturbs = [u.math.zeros(v.aval.shape, v.aval.dtype)
-                               for v in self.out_hidden_jaxvars]
+                               for v in self.graph.out_hidden_jaxvars]
             etrace_weight_vals_restore = {path: st.value for path, st in etrace_param_states.items()}
         else:
             etrace_weight_vals = {path: st.value for path, st in etrace_param_states.items()}
@@ -598,49 +616,53 @@ class ETraceGraph:
             assign_dict_state_values(other_states, oth_states, write=False)
 
             # get state values by the "stateful_model", to preserve the order of states
-            old_state_vals = [st.value for st in self.jaxpr_states]
+            old_state_vals = [st.value for st in self.graph.stateful_fn_states]
 
             if not self.multi_step:
-                assert self.jaxpr_with_hidden_perturb is not None, ('The jaxpr_with_hidden_perturb should not be None '
-                                                                    'when the vjp_time_ahead is 0.')
+                assert self.graph.jaxpr_perturb_hidden is not None, (
+                    'The jaxpr_with_hidden_perturb should not be None '
+                    'when the vjp_time_ahead is 0.'
+                )
                 jaxpr_outs = jax.core.eval_jaxpr(
-                    self.jaxpr_with_hidden_perturb.jaxpr,
-                    self.jaxpr_with_hidden_perturb.consts,
+                    self.graph.jaxpr_perturb_hidden.jaxpr,
+                    self.graph.jaxpr_perturb_hidden.consts,
                     *jax.tree.leaves((inputs, old_state_vals, perturbs))
                 )
 
             else:
-                assert self.augmented_jaxpr is not None, ('The augmented_jaxpr should not be None '
-                                                          'when the vjp_time_ahead > 0.')
+                assert self.graph.augmented_jaxpr is not None, (
+                    'The augmented_jaxpr should not be None '
+                    'when the vjp_time_ahead > 0.'
+                )
                 # calling the function
                 jaxpr_outs = jax.core.eval_jaxpr(
-                    self.augmented_jaxpr.jaxpr,
-                    self.augmented_jaxpr.consts,
+                    self.graph.augmented_jaxpr.jaxpr,
+                    self.graph.augmented_jaxpr.consts,
                     *jax.tree.leaves((inputs, old_state_vals))
                 )
 
             # --- intermediate values --- #
             temps = {
                 v: r
-                for v, r in zip(self.out_all_jaxvars[self.num_out:],
-                                jaxpr_outs[self.num_out:])
+                for v, r in zip(self.graph.out_all_jaxvars[self.graph.num_out:],
+                                jaxpr_outs[self.graph.num_out:])
             }
 
             # --- outputs  --- #
-            state_outs = [temps[v] for v in self.out_state_jaxvars]
-            out, new_state_vals = self.jaxpr_outtree.unflatten(jaxpr_outs[:self.num_out] + state_outs)
+            state_outs = [temps[v] for v in self.graph.out_state_jaxvars]
+            out, new_state_vals = self.graph.stateful_fn_outtree.unflatten(jaxpr_outs[:self.graph.num_out] + state_outs)
 
             # --- compute the hidden-to-weight Jacobian --- #
             hid2weight_jac = self._compute_hid2weight_jacobian(temps)
 
             # --- compute the hidden-to-hidden Jacobian --- #
-            hid2hid_jac = self._compute_hidden2hidden_jacobian(temps)
+            hid2hid_jac = self._compute_hid2hid_jacobian(temps)
 
             # ---- compute new state values ---- #
             # get new state values, do not return the weight values, since they are not changed
             new_state_vals = {
                 self.state_id_to_path[id(st)]: st_val
-                for st, st_val in zip(self.jaxpr_states, new_state_vals)
+                for st, st_val in zip(self.graph.stateful_fn_states, new_state_vals)
             }
             (
                 _,  # drop weights, since they are not changed
