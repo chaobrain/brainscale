@@ -2088,7 +2088,7 @@ class DiagHybridDimAlgorithm(DiagETraceAlgorithmForVJP):
         self,
         model: Callable,
         decay_or_rank: float | int,
-        mode: Optional[bst.mixin.Mode],
+        mode: Optional[bst.mixin.Mode] = None,
         name: Optional[str] = None,
     ):
         super().__init__(model, name=name)
