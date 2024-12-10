@@ -675,7 +675,7 @@ class LRUCell(bst.nn.Module):
 
         # theta parameter
         theta_log = u.math.log(max_phase * bst.random.uniform(size=d_hidden))
-        self.theta_log = ElementWiseParamOp(theta_log, op=lambda p: u.math.exp(p))
+        self.theta_log = ElementWiseParamOp(theta_log, op=u.math.exp)
 
         # nu parameter
         nu_log = u.math.log(
@@ -690,7 +690,7 @@ class LRUCell(bst.nn.Module):
         # gamma parameter
         diag_lambda = u.math.exp(-u.math.exp(nu_log) + 1j * u.math.exp(theta_log))
         gamma_log = u.math.log(u.math.sqrt(1 - u.math.abs(diag_lambda) ** 2))
-        self.gamma_log = ElementWiseParamOp(gamma_log, op=lambda p: u.math.exp(p))
+        self.gamma_log = ElementWiseParamOp(gamma_log, op=u.math.exp)
 
         # Glorot initialized Input/Output projection matrices
         self.B_re = Linear(d_model, d_hidden, w_init=glorot_init, b_init=None)

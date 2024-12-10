@@ -32,6 +32,7 @@ __all__ = [
     'StandardETraceOp',
     'GeneralETraceOp',
     'MatMulETraceOp',
+    'ElementWiseOp',
 ]
 
 
@@ -454,6 +455,97 @@ class MatMulETraceOp(StandardETraceOp):
             if dh_to_dbias is not None:
                 dh_to_dbias = dh_to_dbias * dl_to_dh
         return unflatten(dh_to_dweight, dh_to_dbias)
+
+
+class ElementWiseOp(StandardETraceOp):
+    """
+    The standard element-wise operator for the eligibility trace updates.
+
+    This operator is much more efficient than the :py:class:`GeneralETraceOp` for the element-wise operation.
+
+    """
+
+    def __init__(self, op: Callable[[jax.Array], jax.Array]):
+        self.true_op = op
+        super().__init__(lambda x, w: op(w), is_diagonal=True)
+
+    def etrace_update(
+        self,
+        mode: bst.mixin.Mode,
+        w: jax.Array,
+        dh_to_dw: List[jax.Array],
+        diag_jac: List[jax.Array],
+        ph_to_pwx: None,
+        ph_to_pwy: jax.Array,
+    ) -> jax.Array:
+        """
+        This is the standard method for computing the eligibility trace updates for the matrix multiplication operation.
+
+        See the :meth:`StandardETraceOp.etrace_update` for more details.
+        """
+
+        # 1. w: the wight value, a pytree
+        # 2. dh_to_dw: derivative of hidden to weight, the number equals to the number of hidden states
+        # 3. diag_jac: the diagonal Jacobian of the hidden states, the number equals to the number of hidden states
+        # 4. ph_to_pwx: the partial derivative of the hidden with respect to the weight input
+        # 5. ph_to_pwy: the partial derivative of the hidden with respect to the weight output
+
+        assert isinstance(dh_to_dw, (list, tuple)), (
+            f'The dh_to_dw must be a list of Array. Got {type(dh_to_dw)}'
+        )
+        assert isinstance(diag_jac, (list, tuple)), (
+            f'The diag_jac must be a list of jax.Array. Got {type(diag_jac)}'
+        )
+        assert len(dh_to_dw) == len(diag_jac), (
+            f'The length of dh_to_dw and diag_jac must be the same. '
+            f'Got {len(dh_to_dw)} and {len(diag_jac)}'
+        )
+
+        diag_mul_dhdw = [self.hidden_to_etrace(mode, w, dh, dw)
+                         for dh, dw in zip(diag_jac, dh_to_dw)]
+        diag_mul_dhdw = reduce(u.math.add, diag_mul_dhdw)
+
+        if mode.has(bst.mixin.Batching):
+            # ph_to_pwy: (batch_size, hidden_size,)
+            # ph_to_pw: (batch_size, hidden_size,)
+            ph_to_pw = jax.vmap(lambda g: (jax.vjp(self.true_op, w)[1]((g,))))(ph_to_pwy)
+            # diag_mul_dhdw: (batch_size, hidden_size,)
+            dh_to_dweight = binary_op(jax.numpy.add, diag_mul_dhdw, ph_to_pw)
+        else:
+            # ph_to_pwy: (hidden_size,)
+            # ph_to_pw: (hidden_size,)
+            ph_to_pw = jax.vjp(self.true_op, w)[1]((ph_to_pwy,))
+            # diag_mul_dhdw: (hidden_size,)
+            dh_to_dweight = binary_op(jax.numpy.add, diag_mul_dhdw, ph_to_pw)
+        return dh_to_dweight
+
+    def hidden_to_etrace(
+        self,
+        mode: bst.mixin.Mode,
+        w: jax.Array,
+        dl_to_dh: jax.Array,
+        dh_to_dw: jax.Array
+    ) -> jax.Array:
+        """
+        This is the standard method for computing the gradient of the loss with respect to the weight operation
+        for the matrix multiplication operation.
+
+        See the :meth:`StandardETraceOp.hidden_to_etrace` for more details.
+        """
+
+        # 1. w: the wight value
+        # 2. dl_to_dh: the derivative of the loss with respect to the hidden
+        # 3. dh_to_dw: the derivative of the hidden with respect to the weight
+
+        if mode.has(bst.mixin.Batching):
+            # dl_to_dh: (batch_size, hidden_size,)
+            # dh_to_dw: (batch_size, hidden_size,)
+            dh_to_dweight = dl_to_dh * dh_to_dw
+        else:
+            # dl_to_dh: (hidden_size,)
+            # dh_to_dw: (hidden_size,)
+            dh_to_dweight = dl_to_dh * dh_to_dw
+        return dh_to_dweight
 
 # class AbsMatMulETraceOp(MatMulETraceOp):
 #   """

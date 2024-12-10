@@ -14,6 +14,7 @@ Online Learning Algorithms
    :template: classtemplate.rst
 
     ETraceAlgorithm
+    DiagETraceAlgorithmForVJP
     DiagIODimAlgorithm
     DiagParamDimAlgorithm
     DiagHybridDimAlgorithm

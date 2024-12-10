@@ -1832,7 +1832,8 @@ def compile_graph(
     out_wy2hid_jaxvars = list(
         set(
             [v for relation in hidden_param_op_relations
-             for v in (relation.jaxpr_y2hid.invars + relation.jaxpr_y2hid.constvars)]
+             for v in (relation.jaxpr_y2hid.invars +
+                       relation.jaxpr_y2hid.constvars)]
         )
     )
 

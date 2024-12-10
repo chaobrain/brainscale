@@ -30,11 +30,13 @@ import brainunit as u
 import jax.core
 
 from ._etrace_compiler import (WeightOpHiddenRelation,
-                               HiddenGroup)
+                               HiddenGroup,
+                               CompiledGraph, )
 from ._etrace_concepts import (assign_state_values_v2,
                                split_states_v2,
                                ETraceState,
                                ETraceParamOp,
+                               ElementWiseParamOp,
                                _ETraceGrad)
 from ._etrace_graph import (ETraceGraph)
 from ._etrace_operators import (StandardETraceOp,
@@ -238,6 +240,10 @@ class ETraceAlgorithm(bst.nn.Module):
         # The flag to indicate whether the etrace algorithm has been compiled
         self.is_compiled = False
 
+    @property
+    def compiled(self) -> CompiledGraph:
+        return self.graph.compiled
+
     def compile_graph(self, *args, multi_step: bool = False) -> None:
         r"""
         Compile the eligibility trace graph of the relationship between etrace weights, states and operators.
@@ -384,8 +390,9 @@ class DiagETraceAlgorithmForVJP(ETraceAlgorithm):
         super().__init__(*args, **kwargs)
 
         # the update rule
-        self._true_update_fun = jax.custom_vjp(self._update)
-        self._true_update_fun.defvjp(fwd=self._update_fwd, bwd=self._update_bwd)
+        self._true_update_fun = jax.custom_vjp(self._update_fn)
+        self._true_update_fun.defvjp(fwd=self._update_fn_fwd,
+                                     bwd=self._update_fn_bwd)
 
     def _assert_compiled(self):
         if not self.is_compiled:
@@ -467,9 +474,9 @@ class DiagETraceAlgorithmForVJP(ETraceAlgorithm):
         self.running_index.value = jax.lax.stop_gradient(jax.numpy.where(running_index >= 0, running_index, 0))
         return out if self.graph.multi_step else jax.tree.map(lambda x: x[0], out)
 
-    def _update(
+    def _update_fn(
         self,
-        inputs,
+        args,
         weight_vals: WeightVals,
         hidden_vals: HiddenVals,
         oth_state_vals: StateVals,
@@ -509,7 +516,7 @@ class DiagETraceAlgorithmForVJP(ETraceAlgorithm):
             oth_state_vals,
             hid2weight_jac_multi_steps,
             hid2hid_jac_multi_steps
-        ) = self.graph.solve_h2w_h2h_jacobian(*inputs)
+        ) = self.graph.solve_h2w_h2h_jacobian(*args)
 
         # eligibility trace update
         #
@@ -527,7 +534,7 @@ class DiagETraceAlgorithmForVJP(ETraceAlgorithm):
         # returns
         return out, hidden_vals, oth_state_vals, etrace_vals
 
-    def _update_fwd(
+    def _update_fn_fwd(
         self,
         args,
         weight_vals: WeightVals,
@@ -616,7 +623,7 @@ class DiagETraceAlgorithmForVJP(ETraceAlgorithm):
         )
         return fwd_out, fwd_res
 
-    def _update_bwd(
+    def _update_fn_bwd(
         self,
         fwd_res,
         grads,
@@ -707,20 +714,24 @@ class DiagETraceAlgorithmForVJP(ETraceAlgorithm):
             # TODO: the correspondence between the hidden states and the gradients
             #        should be checked.
             #
-            assert len(self.graph.out_hidden_jaxvars) == len(dl_to_dh_at_t)
-
+            assert len(self.compiled.out_hidden_jaxvars) == len(dl_to_dh_at_t)
+            for hid_var, dg in zip(self.compiled.out_hidden_jaxvars, dl_to_dh_at_t):
+                assert hid_var.aval.shape == dg.shape, (
+                    'The shape of the hidden states and its gradients should be the same. '
+                )
             dl_to_dh_at_t_or_t_minus_1 = {
-                self.graph.state_id_to_path[id(self.graph.hidden_outvar_to_hidden[hid_var])]: dg
+                self.compiled.hid_outvar_to_path[hid_var]: dg
                 for hid_var, dg in
-                zip(self.graph.out_hidden_jaxvars, dl_to_dh_at_t)
+                zip(self.compiled.out_hidden_jaxvars, dl_to_dh_at_t)
             }
             assert len(dg_etrace_params) == 0  # gradients all etrace weights are updated by the RTRL algorithm
 
         else:
 
             assert len(dg_last_hiddens) == len(self.hidden_states)
-            assert set(dg_last_hiddens.keys()) == set(self.hidden_states.keys()), \
+            assert set(dg_last_hiddens.keys()) == set(self.hidden_states.keys()), (
                 f'The hidden states should be the same. '
+            )
             dl_to_dh_at_t_or_t_minus_1 = dg_last_hiddens
 
         #
@@ -853,10 +864,11 @@ def _init_IO_dim_state(
     # we need to initialize the eligibility trace states for the weight x and the df.
 
     # "relation.x" may be repeatedly used in the graph
-    if relation.x not in self.etrace_xs:
-        shape = relation.x.aval.shape
-        dtype = relation.x.aval.dtype
-        self.etrace_xs[relation.x] = bst.ShortTermState(u.math.zeros(shape, dtype))
+    if not isinstance(relation.weight, ElementWiseParamOp):
+        if relation.x not in self.etrace_xs:
+            shape = relation.x.aval.shape
+            dtype = relation.x.aval.dtype
+            self.etrace_xs[relation.x] = bst.ShortTermState(u.math.zeros(shape, dtype))
 
     # relation.x maybe repeatedly used to feed into the weight operation for transforming the hidden states
     # therefore we record the target paths of the weight x
@@ -1022,8 +1034,7 @@ def _solve_IO_dim_weight_gradients(
         #
         #   dw = (dL/dH \circ df) \otimes x
         #
-        for i, hid_var in enumerate(relation.hidden_vars):
-            path = state_id_to_path[id(hidden_outvar_to_hidden[hid_var])]
+        for i, path in enumerate(relation.hidden_paths):
             df = dfs[(relation.y, path)] / correction_factor  # the hidden gradients
             df_hid = df * dG_hiddens[path]  # the hidden gradients
             #
@@ -1126,7 +1137,7 @@ class DiagTruncatedAlgorithm(DiagETraceAlgorithmForVJP):
         self.running_index = bst.ShortTermState(0)
         self.etrace_xs = dict()
         self.etrace_dfs = dict()
-        for relation in self.graph.hidden_param_op_relations:
+        for relation in self.compiled.hidden_param_op_relations:
             # For the relation
             #
             #   h1, h2, ... = f(x, w)
@@ -1264,7 +1275,7 @@ class DiagTruncatedAlgorithm(DiagETraceAlgorithmForVJP):
         for xkey in hist_xs.keys():
             new_etrace_xs[xkey] = u.math.concatenate((hist_xs[xkey][1:], u.math.expand_dims(xs[xkey], 0)), axis=0)
 
-        for hwo_relation in self.graph.hidden_param_op_relations:
+        for hwo_relation in self.compiled.hidden_param_op_relations:
             hwo_relation: WeightOpHiddenRelation
 
             for group in hwo_relation.hidden_groups:
@@ -1448,7 +1459,7 @@ class DiagIODimAlgorithm(DiagETraceAlgorithmForVJP):
         self.etrace_xs = dict()
         self.etrace_dfs = dict()
         self.etrace_xs_to_weights = defaultdict(list)
-        for relation in self.graph.hidden_param_op_relations:
+        for relation in self.compiled.hidden_param_op_relations:
             _init_IO_dim_state(self, relation)
 
     def reset_state(self, batch_size: int = None, **kwargs):
@@ -1477,7 +1488,7 @@ class DiagIODimAlgorithm(DiagETraceAlgorithmForVJP):
         etrace_xs = dict()
         etrace_dfs = dict()
         find_this_weight = False
-        for relation in self.graph.hidden_param_op_relations:
+        for relation in self.compiled.hidden_param_op_relations:
             relation: WeightOpHiddenRelation
             if id(relation.weight) != weight_id:
                 continue
@@ -1553,7 +1564,7 @@ class DiagIODimAlgorithm(DiagETraceAlgorithmForVJP):
         scan_fn = partial(
             _update_IO_dim_etrace_scan_fn,
             state_id_to_path=self.graph.state_id_to_path,
-            hid_weight_op_relations=self.graph.hidden_param_op_relations,
+            hid_weight_op_relations=self.compiled.hidden_param_op_relations,
             decay=self.decay,
         )
 
@@ -1583,12 +1594,12 @@ class DiagIODimAlgorithm(DiagETraceAlgorithmForVJP):
             etrace_h2w_at_t,
             dG_weights,
             dl_to_dh_at_t,
-            self.graph.hidden_param_op_relations,
+            self.compiled.hidden_param_op_relations,
             weight_vals,
             running_index,
             self.decay,
             self.state_id_to_path,
-            self.graph.hidden_outvar_to_hidden
+            self.compiled.hidden_outvar_to_hidden
         )
 
         # update the non-etrace parameters
@@ -1869,7 +1880,7 @@ class DiagParamDimAlgorithm(DiagETraceAlgorithmForVJP):
         # The states of batched weight gradients
         self.running_index = bst.ShortTermState(0)
         self.etrace_bwg = dict()
-        for relation in self.graph.hidden_param_op_relations:
+        for relation in self.compiled.hidden_param_op_relations:
             _init_param_dim_state(self, relation)
 
     def reset_state(self, batch_size: int = None, **kwargs):
@@ -1895,7 +1906,7 @@ class DiagParamDimAlgorithm(DiagETraceAlgorithmForVJP):
 
         find_this_weight = False
         etraces = dict()
-        for relation in self.graph.hidden_param_op_relations:
+        for relation in self.compiled.hidden_param_op_relations:
             relation: WeightOpHiddenRelation
             if id(relation.weight) != weight_id:
                 continue
@@ -1937,10 +1948,10 @@ class DiagParamDimAlgorithm(DiagETraceAlgorithmForVJP):
         scan_fn = partial(
             _update_param_dim_etrace_scan_fn,
             weight_vals=weight_vals,
-            hidden_param_op_relations=self.graph.hidden_param_op_relations,
+            hidden_param_op_relations=self.compiled.hidden_param_op_relations,
             mode=self.mode,
             state_id_to_path=self.graph.state_id_to_path,
-            hidden_outvar_to_hidden=self.graph.hidden_outvar_to_hidden
+            hidden_outvar_to_hidden=self.compiled.hidden_outvar_to_hidden
         )
 
         new_etrace = jax.lax.scan(
@@ -1972,11 +1983,11 @@ class DiagParamDimAlgorithm(DiagETraceAlgorithmForVJP):
             etrace_h2w_at_t,
             dG_weights,
             dl_to_dh_at_t,
-            self.graph.hidden_param_op_relations,
+            self.compiled.hidden_param_op_relations,
             weight_vals,
             self.mode,
             self.graph.state_id_to_path,
-            self.graph.hidden_outvar_to_hidden
+            self.compiled.hidden_outvar_to_hidden
         )
 
         # update the non-etrace weight gradients
@@ -2093,7 +2104,7 @@ class DiagHybridDimAlgorithm(DiagETraceAlgorithmForVJP):
         self.etrace_bwg = dict()
         self.etrace_xs_to_weights = defaultdict(list)
 
-        for relation in self.graph.hidden_param_op_relations:
+        for relation in self.compiled.hidden_param_op_relations:
             if isinstance(relation.weight, ETraceParamOp):
                 if relation.weight.gradient == _ETraceGrad.full:
                     #
@@ -2161,7 +2172,7 @@ class DiagHybridDimAlgorithm(DiagETraceAlgorithmForVJP):
         etrace_dfs = dict()
         etrace_bws = dict()
         find_this_weight = False
-        for relation in self.graph.hidden_param_op_relations:
+        for relation in self.compiled.hidden_param_op_relations:
             relation: WeightOpHiddenRelation
             if id(relation.weight) != weight_id:
                 continue
@@ -2221,7 +2232,7 @@ class DiagHybridDimAlgorithm(DiagETraceAlgorithmForVJP):
         # ---- O(n^2) etrace gradients update ---- #
         on_weight_hidden_relations = []
         on2_weight_hidden_relations = []
-        for relation in self.graph.hidden_param_op_relations:
+        for relation in self.compiled.hidden_param_op_relations:
             if _is_weight_need_full_grad(relation, self.mode):
                 on2_weight_hidden_relations.append(relation)
             else:
@@ -2233,7 +2244,7 @@ class DiagHybridDimAlgorithm(DiagETraceAlgorithmForVJP):
             hidden_param_op_relations=on2_weight_hidden_relations,
             mode=self.mode,
             state_id_to_path=self.graph.state_id_to_path,
-            hidden_outvar_to_hidden=self.graph.hidden_outvar_to_hidden
+            hidden_outvar_to_hidden=self.compiled.hidden_outvar_to_hidden
         )
 
         new_bwg = jax.lax.scan(
@@ -2247,7 +2258,7 @@ class DiagHybridDimAlgorithm(DiagETraceAlgorithmForVJP):
         scan_fn_on = partial(
             _update_IO_dim_etrace_scan_fn,
             state_id_to_path=self.graph.state_id_to_path,
-            hid_weight_op_relations=self.graph.hidden_param_op_relations,
+            hid_weight_op_relations=self.compiled.hidden_param_op_relations,
             decay=self.decay,
         )
         new_xs, new_dfs = jax.lax.scan(
@@ -2279,7 +2290,7 @@ class DiagHybridDimAlgorithm(DiagETraceAlgorithmForVJP):
         # weight-hidden relations
         on_weight_hidden_relations = []
         on2_weight_hidden_relations = []
-        for relation in self.graph.hidden_param_op_relations:
+        for relation in self.compiled.hidden_param_op_relations:
             if _is_weight_need_full_grad(relation, self.mode):
                 on2_weight_hidden_relations.append(relation)
             else:
@@ -2295,7 +2306,7 @@ class DiagHybridDimAlgorithm(DiagETraceAlgorithmForVJP):
             running_index,
             self.decay,
             self.state_id_to_path,
-            self.graph.hidden_outvar_to_hidden
+            self.compiled.hidden_outvar_to_hidden
         )
 
         # update the etrace weight gradients by the O(n^2) algorithm
@@ -2307,7 +2318,7 @@ class DiagHybridDimAlgorithm(DiagETraceAlgorithmForVJP):
             weight_vals,
             self.mode,
             self.graph.state_id_to_path,
-            self.graph.hidden_outvar_to_hidden
+            self.compiled.hidden_outvar_to_hidden
         )
 
         # update the non-etrace weight gradients

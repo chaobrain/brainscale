@@ -220,7 +220,8 @@ class ElementWiseParamOp(ETraceParamOp):
         weight: PyTree,
         op: Callable[[WeightVals], jax.Array],
     ):
-        super().__init__(weight, lambda x, w: op(w), grad=_ETraceGrad.full, is_diagonal=True)
+        from ._etrace_operators import ElementWiseOp
+        super().__init__(weight, ElementWiseOp(op), grad=_ETraceGrad.full, is_diagonal=True)
 
     def execute(self) -> jax.Array:
         ones = u.math.zeros(1)
