@@ -22,6 +22,13 @@ from typing import Sequence
 
 import brainstate as bst
 
+
+__all__ = [
+    'CompilationError',
+    'NotSupportedError',
+]
+
+
 git_issue_addr = 'https://github.com/chaobrain/brainscale/issues'
 
 

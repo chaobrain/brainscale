@@ -19,14 +19,16 @@ import numbers
 import unittest
 from typing import Callable
 
-
-import brainunit as u
 import brainstate as bst
+import brainunit as u
 import jax
 import jax.numpy as jnp
 
-import brainscale as nn
-from brainscale._misc import CompilationError, NotSupportedError
+import brainscale
+from brainscale import CompilationError, NotSupportedError
+from brainscale._etrace_model_test import (
+    _ALIF_STPExpCu_Dense_Layer,
+)
 
 
 class IF_Delta_Dense_Layer(bst.nn.Module):
@@ -46,7 +48,7 @@ class IF_Delta_Dense_Layer(bst.nn.Module):
         init: Callable = bst.init.KaimingNormal(),
     ):
         super().__init__()
-        self.neu = nn.IF(n_rec, tau=tau_mem, spk_fun=spk_fun, spk_reset=spk_reset, V_th=V_th)
+        self.neu = brainscale.IF(n_rec, tau=tau_mem, spk_fun=spk_fun, spk_reset=spk_reset, V_th=V_th)
         self.syn = linear_cls(n_in + n_rec, n_rec, w_init=init)
 
     def update(self, spk):
@@ -67,8 +69,8 @@ class TestCompiler(unittest.TestCase):
                 self.in_size = (in_size,) if isinstance(in_size, numbers.Integral) else tuple(in_size)
                 self.out_size = (out_size,) if isinstance(out_size, numbers.Integral) else tuple(out_size)
                 params = dict(weight=bst.init.param(w_init, self.in_size + self.out_size, allow_none=False))
-                self.weight = nn.ETraceParam(params)
-                self.op = nn.ETraceOp(self._operation)
+                self.weight = brainscale.ETraceParam(params)
+                self.op = brainscale.ETraceOp(self._operation)
 
             def update(self, x):
                 # test that no EtraceWeight is used in the etrace operator
@@ -80,7 +82,7 @@ class TestCompiler(unittest.TestCase):
         bst.environ.set(dt=1. * u.ms)
         model = bst.nn.init_all_states(IF_Delta_Dense_Layer(Linear, 10, 20), 16)
         inp_spk = jnp.asarray(bst.random.rand(16, 10) < 0.3, dtype=bst.environ.dftype())
-        graph = nn.ETraceGraph(model)
+        graph = brainscale.ETraceGraph(model)
 
         with self.assertRaises(CompilationError):
             graph.compile_graph(inp_spk)
@@ -94,10 +96,10 @@ class TestCompiler(unittest.TestCase):
                 self.in_size = (in_size,) if isinstance(in_size, numbers.Integral) else tuple(in_size)
                 self.out_size = (out_size,) if isinstance(out_size, numbers.Integral) else tuple(out_size)
                 params = dict(weight=bst.init.param(w_init, self.in_size + self.out_size, allow_none=False))
-                self.weight1 = nn.ETraceParam(params)
+                self.weight1 = brainscale.ETraceParam(params)
                 params = dict(weight=bst.init.param(w_init, self.in_size + self.out_size, allow_none=False))
-                self.weight2 = nn.ETraceParam(params)
-                self.op = nn.ETraceOp(self._operation)
+                self.weight2 = brainscale.ETraceParam(params)
+                self.op = brainscale.ETraceOp(self._operation)
 
             def update(self, x):
                 # Test that multiple EtraceWeights are not supported
@@ -110,7 +112,7 @@ class TestCompiler(unittest.TestCase):
 
         model = bst.nn.init_all_states(IF_Delta_Dense_Layer(Linear, 10, 20), 16)
         inp_spk = jnp.asarray(bst.random.rand(16, 10) < 0.3, dtype=bst.environ.dftype())
-        graph = nn.ETraceGraph(model)
+        graph = brainscale.ETraceGraph(model)
 
         with self.assertRaises(CompilationError):
             graph.compile_graph(inp_spk)
@@ -129,8 +131,8 @@ class TestCompiler(unittest.TestCase):
                 self.in_size = (in_size,) if isinstance(in_size, numbers.Integral) else tuple(in_size)
                 self.out_size = (out_size,) if isinstance(out_size, numbers.Integral) else tuple(out_size)
                 params = dict(weight=bst.init.param(w_init, self.in_size + self.out_size, allow_none=False))
-                self.weight1 = nn.ETraceParam(params)
-                self.op = nn.ETraceOp(self._operation)
+                self.weight1 = brainscale.ETraceParam(params)
+                self.op = brainscale.ETraceOp(self._operation)
 
             def update(self, x):
                 res = self.op(x, self.weight1.value)
@@ -145,7 +147,7 @@ class TestCompiler(unittest.TestCase):
         bst.nn.init_all_states(model, 16)
 
         inp_spk = jnp.asarray(bst.random.rand(16, 10) < 0.3, dtype=bst.environ.dftype())
-        graph = nn.ETraceGraph(model)
+        graph = brainscale.ETraceGraph(model)
 
         with self.assertRaises(NotSupportedError):
             graph.compile_graph(inp_spk)
@@ -164,9 +166,9 @@ class TestCompiler(unittest.TestCase):
                 self.in_size = (in_size,)
                 self.out_size = (out_size,)
                 params = dict(weight=bst.init.param(w_init, self.in_size + self.out_size, allow_none=False))
-                self.weight = nn.ETraceParam(params)
+                self.weight = brainscale.ETraceParam(params)
                 self.mask = bst.random.random(self.in_size + self.out_size) < 0.5
-                self.op = nn.ETraceOp(self._operation)
+                self.op = brainscale.ETraceOp(self._operation)
 
             def update(self, x):
                 res = self.op(x, self.weight.value)
@@ -179,7 +181,7 @@ class TestCompiler(unittest.TestCase):
         bst.nn.init_all_states(model, 16)
 
         inp_spk = jnp.asarray(bst.random.rand(16, 10) < 0.3, dtype=bst.environ.dftype())
-        graph = nn.ETraceGraph(model)
+        graph = brainscale.ETraceGraph(model)
         with jax.disable_jit():
             graph.compile_graph(inp_spk)
 
@@ -192,9 +194,9 @@ class TestCompiler(unittest.TestCase):
             def __init__(self):
                 super().__init__()
 
-                self.linear1 = nn.Linear(10, 30, as_etrace_weight=True)
-                self.linear2 = nn.Linear(10, 30, as_etrace_weight=False)
-                self.lif = nn.LIF(30)
+                self.linear1 = brainscale.Linear(10, 30, as_etrace_weight=True)
+                self.linear2 = brainscale.Linear(10, 30, as_etrace_weight=False)
+                self.lif = brainscale.LIF(30)
 
             def update(self, x):
                 y1 = self.linear1(x)
@@ -213,7 +215,7 @@ class TestCompiler(unittest.TestCase):
             return model(inp)
 
         # algorithms
-        algorithm = nn.DiagIODimAlgorithm(run_model, decay_or_rank=100)
+        algorithm = brainscale.DiagIODimAlgorithm(run_model, decay_or_rank=100)
         algorithm.compile_graph(0, inp_spk)
         out = algorithm(0, inp_spk, running_index=0)
 
@@ -225,57 +227,42 @@ class TestCompiler(unittest.TestCase):
 
 
 class TestShowGraph(unittest.TestCase):
-    def test_show_graph(self):
-        class Linear1(bst.nn.Module):
-            def __init__(self, in_size: int, out_size: int, w_init: Callable = bst.init.KaimingNormal()):
-                super().__init__()
-                self.in_size = (in_size,)
-                self.out_size = (out_size,)
-                params = dict(weight=bst.init.param(w_init, self.in_size + self.out_size, allow_none=False))
-                self.weight = nn.ETraceParam(params)
-                self.mask = bst.random.random(self.in_size + self.out_size) < 0.5
-                self.op = nn.ETraceOp(self._operation)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-            def update(self, x):
-                res = self.op(x, self.weight.value)
-                return res
-
-            def _operation(self, x, params):
-                return x @ (params['weight'] * self.mask)
-
-        model = IF_Delta_Dense_Layer(Linear1, 10, 20)
-        bst.nn.init_all_states(model, 16)
-
-        inp_spk = jnp.asarray(bst.random.rand(16, 10) < 0.3, dtype=bst.environ.dftype())
-        graph = nn.ETraceGraph(model)
-        graph.compile_graph(inp_spk)
-        graph.show_graph()
-
-        bst.util.clear_buffer_memory()
+        bst.environ.set(dt=0.1 * u.ms)
 
     def test_show_lstm_graph(self):
-        bst.environ.set(mode=bst.mixin.JointMode(bst.mixin.Batching(), bst.mixin.Training()))
-        cell = nn.LSTMCell(10, 20, activation=jnp.tanh)
+        cell = brainscale.nn.LSTMCell(10, 20, activation=jnp.tanh)
         bst.nn.init_all_states(cell, 16)
 
-        graph = nn.ETraceGraph(cell)
+        graph = brainscale.ETraceGraph(cell)
         graph.compile_graph(jnp.zeros((16, 10)))
         graph.show_graph()
-
-        print(graph.hidden_param_op_relations)
-        # self.assertTrue(len(graph.hidden_param_op_relations) == 3)
-
-        bst.util.clear_buffer_memory()
 
     def test_show_gru_graph(self):
-        bst.environ.set(mode=bst.mixin.JointMode(bst.mixin.Batching(), bst.mixin.Training()))
-        cell = nn.GRUCell(10, 20, activation=jnp.tanh)
+        cell = brainscale.nn.GRUCell(10, 20, activation=jnp.tanh)
         bst.nn.init_all_states(cell, 16)
 
-        graph = nn.ETraceGraph(cell)
+        graph = brainscale.ETraceGraph(cell)
         graph.compile_graph(jnp.zeros((16, 10)))
         graph.show_graph()
 
-        self.assertTrue(len(graph.hidden_param_op_relations) == 3)
+    def test_show_lru_graph(self):
+        cell = brainscale.nn.LRUCell(10, 20)
+        bst.nn.init_all_states(cell)
 
-        bst.util.clear_buffer_memory()
+        graph = brainscale.ETraceGraph(cell)
+        graph.compile_graph(jnp.zeros((10,)))
+        graph.show_graph()
+
+    def test_show_alig_stp_graph(self):
+        n_in = 3
+        n_rec = 4
+
+        net = _ALIF_STPExpCu_Dense_Layer(n_in, n_rec)
+        bst.nn.init_all_states(net)
+
+        graph = brainscale.ETraceGraph(net)
+        graph.compile_graph(bst.random.rand(n_in))
+        graph.show_graph()

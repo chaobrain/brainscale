@@ -29,14 +29,14 @@ import brainstate as bst
 import brainunit as u
 import jax.core
 
+from ._etrace_compiler import (WeightOpHiddenRelation,
+                               HiddenGroup)
 from ._etrace_concepts import (assign_state_values_v2,
                                split_states_v2,
                                ETraceState,
                                ETraceParamOp,
                                _ETraceGrad)
-from ._etrace_graph import (ETraceGraph,
-                            WeightOpHiddenRelation,
-                            HiddenGroup)
+from ._etrace_graph import (ETraceGraph)
 from ._etrace_operators import (StandardETraceOp,
                                 GeneralETraceOp)
 from ._typing import (PyTree,

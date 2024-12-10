@@ -27,6 +27,8 @@ from brainscale._etrace_concepts import *
 from brainscale._etrace_concepts import __all__ as concepts_all
 from brainscale._etrace_operators import *
 from brainscale._etrace_operators import __all__ as operators_all
+from brainscale._misc import *
+from brainscale._misc import __all__ as misc_all
 from . import nn
 
 __all__ = (
@@ -36,6 +38,7 @@ __all__ = (
     + etrace_compiler_all
     + etrace_compiler
     + operators_all
+    + misc_all
 )
 
 del (
@@ -44,6 +47,7 @@ del (
     etrace_compiler_all,
     etrace_compiler,
     operators_all,
+    misc_all,
 )
 
 # Added 2024-10-27

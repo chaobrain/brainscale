@@ -38,7 +38,7 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import (Dict, Sequence, Tuple)
+from typing import (Dict, Tuple)
 
 import brainstate as bst
 import brainunit as u
@@ -46,17 +46,13 @@ import jax.core
 from jax.extend import linear_util as lu
 from jax.interpreters import partial_eval as pe
 
-from ._etrace_compiler import (WeightOpHiddenRelation,
-                               HiddenGroup,
-                               HiddenTransition,
+from ._etrace_compiler import (HiddenTransition,
                                compile_graph,
-                               indent_code,
-                               _summarize_source_info, )
+                               CompiledGraph)
 from ._etrace_concepts import (ETraceState,
                                assign_dict_state_values,
                                dict_split_state_values,
                                split_dict_states_v2)
-from ._jaxpr_to_source_code import jaxpr_to_python_code
 from ._typing import (PyTree,
                       TempData,
                       Outputs,
@@ -64,7 +60,6 @@ from ._typing import (PyTree,
                       StateVals,
                       ETraceX_Key,
                       ETraceDF_Key,
-                      Path,
                       HidHidJac_Key,
                       Hid2WeightJacobian,
                       Hid2HidJacobian)
@@ -134,52 +129,6 @@ class ETraceGraph:
     """
     __module__ = 'brainscale'
 
-    # # [ Attributes for the graph ]
-    # out_all_jaxvars: List[jax.core.Var]  # all outvars except the function returns
-    # out_state_jaxvars: List[jax.core.Var]  # the state vars
-    # out_wx_jaxvars: List[jax.core.Var]  # the weight x
-    # hid2hid_jaxvars: List[jax.core.Var]  # the hidden to hidden vars
-    # num_out: int  # the number of function returns
-    #
-    # # hidden invar/outvar to hidden itself
-    # hidden_invar_to_hidden: Dict[jax.core.Var, ETraceState]
-    # hidden_outvar_to_hidden: Dict[jax.core.Var, ETraceState]
-    #
-    # # hidden outvar-to-invar, and invar-to-outvar
-    # hidden_outvar_to_invar: Dict[jax.core.Var, jax.core.Var]
-    # hidden_invar_to_outvar: Dict[jax.core.Var, jax.core.Var]
-
-    # [ KEY ]
-    #
-    # 1. The most important data structure for the graph, which implementing
-    #    the relationship between the etrace weights and the etrace states.
-    #
-    hidden_param_op_relations: Tuple[WeightOpHiddenRelation, ...]
-
-    #
-    # 2. The relationship between the hidden states, and state transitions.
-    #
-    hidden_groups: Sequence[HiddenGroup]
-    hidden_to_group: Dict[Path, HiddenGroup]  # Path is the hidden state path
-    hidden_to_transition: Dict[Path, HiddenTransition]  # Path is the hidden state path
-
-    #
-    # The augmented jaxpr is nearly identical to the original jaxpr, except that
-    # that it will return all necessary variables, for example, the intermediate
-    # variables, the hidden states, the weight x, the y-to-hidden variables, and
-    # the hidden-hidden transition variables.
-    #
-    augmented_jaxpr: jax.core.ClosedJaxpr = None
-
-    #
-    # The revised jaxpr with hidden state perturbations is essential for computing
-    # the learning signal \partial L / \partial h, where L is the loss and h is the hidden state.
-    #
-    # It also returns necessary variables.
-    # Note, this jaxpr is only needed when the "vjp_time" is "t".
-    #
-    jaxpr_with_hidden_perturb: jax.core.ClosedJaxpr = None
-
     def __init__(self, model: bst.nn.Module):
         if not isinstance(model, bst.nn.Module):
             raise TypeError(
@@ -190,7 +139,65 @@ class ETraceGraph:
         # The original model
         self.model = model
 
+        # "multi_step" attribute
         self.multi_step = False
+
+        self._compiled_graph = None
+
+    @property
+    def graph(self) -> CompiledGraph:
+        """
+        The compiled graph for the model.
+
+        It is the most important data structure for the eligibility trace graph.
+        The instance of :py:class:`CompiledGraph`.
+
+        It contains the following attributes:
+
+        - ``out_all_jaxvars``: List[jax.core.Var]  # all outvars except the function returns
+        - ``out_state_jaxvars``: List[jax.core.Var]  # the state vars
+        - ``out_wx_jaxvars``: List[jax.core.Var]  # the weight x
+        - ``hid2hid_jaxvars``: List[jax.core.Var]  # the hidden to hidden vars
+        - ``num_out``: int  # the number of function returns
+
+        - ``hidden_invar_to_hidden``: Dict[jax.core.Var, ETraceState]
+        - ``hidden_outvar_to_hidden``: Dict[jax.core.Var, ETraceState]
+
+        - ``hidden_outvar_to_invar``: Dict[jax.core.Var, jax.core.Var]
+        - ``hidden_invar_to_outvar``: Dict[jax.core.Var, jax.core.Var]
+
+        The most important data structure for the graph, which implementing
+        the relationship between the etrace weights and the etrace states.
+
+        - ``hidden_param_op_relations``: Tuple[WeightOpHiddenRelation, ...]
+
+
+        The relationship between the hidden states, and state transitions.
+
+        - ``hidden_groups``: Sequence[HiddenGroup]
+        - ``hidden_to_group``: Dict[Path, HiddenGroup]  # Path is the hidden state path
+        - ``hidden_to_transition``: Dict[Path, HiddenTransition]  # Path is the hidden state path
+
+
+        The augmented jaxpr is nearly identical to the original jaxpr, except that
+        that it will return all necessary variables, for example, the intermediate
+        variables, the hidden states, the weight x, the y-to-hidden variables, and
+        the hidden-hidden transition variables.
+
+        - ``augmented_jaxpr``: jax.core.ClosedJaxpr = None
+
+
+        The revised jaxpr with hidden state perturbations is essential for computing
+        the learning signal \partial L / \partial h, where L is the loss and h is the hidden state.
+        It also returns necessary variables. Note, this jaxpr is only needed when the "vjp_time" is "t".
+
+        - ``jaxpr_with_hidden_perturb``: jax.core.ClosedJaxpr = None
+
+
+        """
+        if self._compiled_graph is None:
+            raise ValueError('The graph is not compiled yet. Please call ".compile_graph()" first.')
+        return self._compiled_graph
 
     def compile_graph(
         self,
@@ -226,76 +233,59 @@ class ETraceGraph:
             for path, state in self.states.items()
         }
 
-        (
-            self.augmented_jaxpr,
-            self.jaxpr_with_hidden_perturb,  # maybe None if vjp_time_ahead is not 0
-            self.jaxpr_states,
-            self.jaxpr_outtree,
-            self.out_hidden_jaxvars,
-            self.out_wx_jaxvars,
-            self.out_all_jaxvars,
-            self.out_state_jaxvars,
-            self.num_out,
-            self.hidden_outvar_to_hidden,
-            self.hidden_invar_to_hidden,
-            self.hidden_outvar_to_transition,
-            self.hidden_param_op_relations,
-        ) = compile_graph(
-            self.model,
-            multi_step,
-            *args
-        )
+        # self.augmented_jaxpr,
+        # self.jaxpr_with_hidden_perturb,  # maybe None if vjp_time_ahead is not 0
+        # self.jaxpr_states,
+        # self.jaxpr_outtree,
+        # self.out_hidden_jaxvars,
+        # self.out_wx_jaxvars,
+        # self.out_all_jaxvars,
+        # self.out_state_jaxvars,
+        # self.num_out,
+        # self.hidden_outvar_to_hidden,
+        # self.hidden_invar_to_hidden,
+        # self.hidden_outvar_to_transition,
+        # self.hidden_param_op_relations,
 
-    def show_graph(self, start_frame=1, n_frame=3):
+        self._compiled_graph = compile_graph(self.model, multi_step, *args)
+
+    def show_graph(self):
         """
         Showing the graph about the relationship between weight, operator, and hidden states.
         """
-        if self.augmented_jaxpr is None:
-            raise ValueError(f'Please compile the graph first by calling ".{self.compile_graph.__name__}()" function.')
 
-        for i, hpo_relation in enumerate(self.hidden_param_op_relations):
-            msg = '===' * 40 + '\n'
-            msg += f'For weight {i}: {hpo_relation.weight}\n\n'
-            msg += '1. It is defined at: \n'
-            source = indent_code(
-                _summarize_source_info(hpo_relation.weight.source_info,
-                                       start_frame=start_frame,
-                                       num_frames=n_frame),
-                indent=3
-            )
-            msg += f'{source}\n\n'
-            msg += '2. The associated hidden states are:\n'
-            for hid_var in hpo_relation.hidden_vars:
-                hidden: ETraceState = self.hidden_outvar_to_hidden[hid_var]
-                msg += f'   {hidden}, which is defined in\n'
-                source = indent_code(
-                    _summarize_source_info(hidden.source_info,
-                                           start_frame=start_frame,
-                                           num_frames=n_frame),
-                    indent=6
-                )
-                msg += f'{source}\n'
-            msg += '\n'
-            msg += '3. The associated etrace operator [ y^t = x^t @ w ] is:\n\n'
-            msg += indent_code(
-                jaxpr_to_python_code(hpo_relation.op_jaxpr, fn_name='weight_to_hidden_operation'),
-                indent=3
-            )
+        # hidden group
+        msg = '===' * 40 + '\n'
+        msg += 'The hidden groups are:\n\n'
+        group_mapping = dict()
+        for i, group in enumerate(self.graph.hidden_groups):
+            msg += f'   Group {i}: {group.hidden_paths}\n'
+            group_mapping[id(group)] = i
+        msg += '\n\n'
+
+        # etrace weights
+        if len(self.graph.hidden_param_op_relations):
+            msg += 'The weight parameters which are associated with the hidden states are:\n\n'
+            etratce_weight_paths = set()
+            for i, hp_relation in enumerate(self.graph.hidden_param_op_relations):
+                etratce_weight_paths.add(hp_relation.path)
+                group = [group_mapping[id(group)] for group in hp_relation.hidden_groups]
+                if len(group) == 1:
+                    msg += f'   Weight {i}: {hp_relation.path}  is associated with hidden group {group[0]}\n'
+                else:
+                    msg += f'   Weight {i}: {hp_relation.path}  is associated with hidden groups {group}\n'
             msg += '\n\n'
-            msg += '4. The associated hidden states [ h^t = g(h^t-1) ] have the following relationships:\n\n'
-            for group in hpo_relation.hidden_groups:
-                msg += f'   The hidden states are: {group.hidden_states}:\n\n'
-                for hidden_outvar in group.hidden_outvars:
-                    transition = self.hidden_outvar_to_transition[hidden_outvar]
-                    msg += f'   {hidden_outvar} ==> {transition.connected_hidden_outvars}:\n\n'
-                    msg += indent_code(
-                        jaxpr_to_python_code(transition.jaxpr, fn_name='hidden_to_hidden_transition'),
-                        indent=6
-                    )
-                    msg += '\n\n'
+
+        # non etrace weights
+        non_etratce_weight_paths = set(self.states.filter(bst.ParamState).keys())
+        non_etratce_weight_paths = non_etratce_weight_paths.difference(etratce_weight_paths)
+        if len(non_etratce_weight_paths):
+            msg += 'The non-etrace weight parameters are:\n\n'
+            for i, path in enumerate(non_etratce_weight_paths):
+                msg += f'   Weight {i}: {path}\n'
             msg += '\n\n'
-            msg += '---' * 40 + '\n\n'
-            print(msg)
+
+        print(msg)
 
     def _jaxpr_compute_model(
         self,
