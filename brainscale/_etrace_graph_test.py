@@ -27,7 +27,7 @@ import jax.numpy as jnp
 import brainscale
 from brainscale import CompilationError, NotSupportedError
 from brainscale._etrace_model_test import (
-    _ALIF_STPExpCu_Dense_Layer,
+    ALIF_STPExpCu_Dense_Layer,
 )
 
 
@@ -260,7 +260,7 @@ class TestShowGraph(unittest.TestCase):
         n_in = 3
         n_rec = 4
 
-        net = _ALIF_STPExpCu_Dense_Layer(n_in, n_rec)
+        net = ALIF_STPExpCu_Dense_Layer(n_in, n_rec)
         bst.nn.init_all_states(net)
 
         graph = brainscale.ETraceGraph(net)

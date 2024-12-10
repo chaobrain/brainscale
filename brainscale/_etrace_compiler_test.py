@@ -22,16 +22,16 @@ import brainunit as u
 
 import brainscale
 from brainscale._etrace_model_test import (
-    _IF_Delta_Dense_Layer,
-    _LIF_ExpCo_Dense_Layer,
-    _ALIF_ExpCo_Dense_Layer,
-    _LIF_ExpCu_Dense_Layer,
-    _LIF_STDExpCu_Dense_Layer,
-    _LIF_STPExpCu_Dense_Layer,
-    _ALIF_ExpCu_Dense_Layer,
-    _ALIF_Delta_Dense_Layer,
-    _ALIF_STDExpCu_Dense_Layer,
-    _ALIF_STPExpCu_Dense_Layer,
+    IF_Delta_Dense_Layer,
+    LIF_ExpCo_Dense_Layer,
+    ALIF_ExpCo_Dense_Layer,
+    LIF_ExpCu_Dense_Layer,
+    LIF_STDExpCu_Dense_Layer,
+    LIF_STPExpCu_Dense_Layer,
+    ALIF_ExpCu_Dense_Layer,
+    ALIF_Delta_Dense_Layer,
+    ALIF_STDExpCu_Dense_Layer,
+    ALIF_STPExpCu_Dense_Layer,
 )
 
 pprint
@@ -209,7 +209,7 @@ class TestCompileGraphSNN(unittest.TestCase):
         n_in = 3
         n_rec = 4
 
-        net = _IF_Delta_Dense_Layer(n_in, n_rec)
+        net = IF_Delta_Dense_Layer(n_in, n_rec)
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
@@ -222,7 +222,7 @@ class TestCompileGraphSNN(unittest.TestCase):
         n_in = 3
         n_rec = 4
 
-        net = _LIF_ExpCo_Dense_Layer(n_in, n_rec)
+        net = LIF_ExpCo_Dense_Layer(n_in, n_rec)
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
@@ -234,7 +234,7 @@ class TestCompileGraphSNN(unittest.TestCase):
         n_in = 3
         n_rec = 4
 
-        net = _ALIF_ExpCo_Dense_Layer(n_in, n_rec)
+        net = ALIF_ExpCo_Dense_Layer(n_in, n_rec)
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
@@ -246,7 +246,7 @@ class TestCompileGraphSNN(unittest.TestCase):
         n_in = 3
         n_rec = 4
 
-        net = _LIF_ExpCu_Dense_Layer(n_in, n_rec)
+        net = LIF_ExpCu_Dense_Layer(n_in, n_rec)
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
@@ -258,7 +258,7 @@ class TestCompileGraphSNN(unittest.TestCase):
         n_in = 3
         n_rec = 4
 
-        net = _LIF_STDExpCu_Dense_Layer(n_in, n_rec)
+        net = LIF_STDExpCu_Dense_Layer(n_in, n_rec)
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
@@ -270,7 +270,7 @@ class TestCompileGraphSNN(unittest.TestCase):
         n_in = 3
         n_rec = 4
 
-        net = _LIF_STPExpCu_Dense_Layer(n_in, n_rec)
+        net = LIF_STPExpCu_Dense_Layer(n_in, n_rec)
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
@@ -282,7 +282,7 @@ class TestCompileGraphSNN(unittest.TestCase):
         n_in = 3
         n_rec = 4
 
-        net = _ALIF_ExpCu_Dense_Layer(n_in, n_rec)
+        net = ALIF_ExpCu_Dense_Layer(n_in, n_rec)
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
@@ -294,7 +294,7 @@ class TestCompileGraphSNN(unittest.TestCase):
         n_in = 3
         n_rec = 4
 
-        net = _ALIF_Delta_Dense_Layer(n_in, n_rec)
+        net = ALIF_Delta_Dense_Layer(n_in, n_rec)
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
@@ -306,7 +306,7 @@ class TestCompileGraphSNN(unittest.TestCase):
         n_in = 3
         n_rec = 4
 
-        net = _ALIF_STDExpCu_Dense_Layer(n_in, n_rec)
+        net = ALIF_STDExpCu_Dense_Layer(n_in, n_rec)
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
@@ -318,7 +318,7 @@ class TestCompileGraphSNN(unittest.TestCase):
         n_in = 3
         n_rec = 4
 
-        net = _ALIF_STPExpCu_Dense_Layer(n_in, n_rec)
+        net = ALIF_STPExpCu_Dense_Layer(n_in, n_rec)
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)

@@ -21,7 +21,7 @@ import jax.numpy as jnp
 import brainscale
 
 
-class _IF_Delta_Dense_Layer(bst.nn.Module):
+class IF_Delta_Dense_Layer(bst.nn.Module):
     def __init__(
         self, n_in, n_rec, tau_mem=5. * u.ms, V_th=1. * u.mV, spk_reset: str = 'soft',
         rec_init=bst.init.KaimingNormal(), ff_init=bst.init.KaimingNormal()
@@ -123,7 +123,7 @@ class _ExpCo_Dense_Layer(bst.nn.Module):
         return self.neu.get_spike()
 
 
-class _LIF_ExpCo_Dense_Layer(_ExpCo_Dense_Layer):
+class LIF_ExpCo_Dense_Layer(_ExpCo_Dense_Layer):
     """
     The RTRL layer with LIF neurons and dense connected exponential conductance-based synapses.
     """
@@ -138,7 +138,7 @@ class _LIF_ExpCo_Dense_Layer(_ExpCo_Dense_Layer):
                          rec_init=rec_init, ff_init=ff_init, neu=neu)
 
 
-class _ALIF_ExpCo_Dense_Layer(_ExpCo_Dense_Layer):
+class ALIF_ExpCo_Dense_Layer(_ExpCo_Dense_Layer):
     """
     The RTRL layer with ALIF neurons and dense connected exponential conductance-based synapses.
     """
@@ -160,7 +160,7 @@ class _ALIF_ExpCo_Dense_Layer(_ExpCo_Dense_Layer):
         )
 
 
-class _LIF_ExpCu_Dense_Layer(bst.nn.Module):
+class LIF_ExpCu_Dense_Layer(bst.nn.Module):
     """
     The RTRL layer with LIF neurons and dense connected exponential current synapses.
     """
@@ -191,7 +191,7 @@ class _LIF_ExpCu_Dense_Layer(bst.nn.Module):
         return self.neu.get_spike()
 
 
-class _LIF_STDExpCu_Dense_Layer(bst.nn.Module):
+class LIF_STDExpCu_Dense_Layer(bst.nn.Module):
     """
     The RTRL layer with LIF neurons and dense connected STD-based exponential current synapses.
     """
@@ -234,7 +234,7 @@ class _LIF_STDExpCu_Dense_Layer(bst.nn.Module):
         return self.neu.get_spike()
 
 
-class _LIF_STPExpCu_Dense_Layer(bst.nn.Module):
+class LIF_STPExpCu_Dense_Layer(bst.nn.Module):
     def __init__(
         self,
         n_in, n_rec, inp_stp=False,
@@ -272,7 +272,7 @@ class _LIF_STPExpCu_Dense_Layer(bst.nn.Module):
         return self.neu.get_spike()
 
 
-class _ALIF_ExpCu_Dense_Layer(bst.nn.Module):
+class ALIF_ExpCu_Dense_Layer(bst.nn.Module):
     """
     The RTRL layer with LIF neurons and dense connected exponential current synapses.
     """
@@ -309,7 +309,7 @@ class _ALIF_ExpCu_Dense_Layer(bst.nn.Module):
         return self.neu.get_spike()
 
 
-class _ALIF_Delta_Dense_Layer(bst.nn.Module):
+class ALIF_Delta_Dense_Layer(bst.nn.Module):
     """
     The RTRL layer with LIF neurons and dense connected delta synapses.
     """
@@ -340,7 +340,7 @@ class _ALIF_Delta_Dense_Layer(bst.nn.Module):
         return self.neu.get_spike()
 
 
-class _ALIF_STDExpCu_Dense_Layer(bst.nn.Module):
+class ALIF_STDExpCu_Dense_Layer(bst.nn.Module):
     """
     The RTRL layer with LIF neurons and dense connected STD-based exponential current synapses.
     """
@@ -383,7 +383,7 @@ class _ALIF_STDExpCu_Dense_Layer(bst.nn.Module):
         return self.neu.get_spike()
 
 
-class _ALIF_STPExpCu_Dense_Layer(bst.nn.Module):
+class ALIF_STPExpCu_Dense_Layer(bst.nn.Module):
     def __init__(
         self,
         n_in, n_rec, inp_stp=False,
