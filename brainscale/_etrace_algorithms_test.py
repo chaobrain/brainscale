@@ -13,179 +13,357 @@
 # limitations under the License.
 # ==============================================================================
 
+import os
+
+os.environ['JAX_TRACEBACK_FILTERING'] = 'off'
 
 import unittest
 from functools import partial, reduce
-from typing import Callable
 
-import brainunit as u
 import brainstate as bst
+import brainunit as u
 import jax
 import jax.numpy as jnp
-from brainstate import init
 
-import brainscale as nn
+from pprint import pprint
+import brainscale
+from brainscale._etrace_model_test import (
+    IF_Delta_Dense_Layer,
+    LIF_ExpCo_Dense_Layer,
+    ALIF_ExpCo_Dense_Layer,
+    LIF_ExpCu_Dense_Layer,
+    LIF_STDExpCu_Dense_Layer,
+    LIF_STPExpCu_Dense_Layer,
+    ALIF_ExpCu_Dense_Layer,
+    ALIF_Delta_Dense_Layer,
+    ALIF_STDExpCu_Dense_Layer,
+    ALIF_STPExpCu_Dense_Layer,
+)
 
 
-class _IF_Delta_Dense_Layer(bst.nn.Module):
-    def __init__(
-        self,
-        n_in,
-        n_rec,
-        tau_mem: bst.typing.ArrayLike = 5. * u.ms,
-        V_th: bst.typing.ArrayLike = 1. * u.mV,
-        spk_reset: str = 'soft',
-        rec_init=init.KaimingNormal(),
-        ff_init=init.KaimingNormal()
-    ):
-        super().__init__()
-        self.neu = nn.IF(n_rec, tau=tau_mem, spk_reset=spk_reset, V_th=V_th)
-        w_init = u.math.concatenate([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0)
-        self.syn = nn.Linear(n_in + n_rec, n_rec, w_init=w_init)
+class TestDiagOn(unittest.TestCase):
 
-    def update(self, spk):
-        spk = u.math.concatenate([spk, self.neu.get_spike()], axis=-1)
-        return self.neu(self.syn(spk))
+    def test_rnn_no_bptt(self):
+        for cls in [
+            brainscale.nn.GRUCell,
+            brainscale.nn.LSTMCell,
+            brainscale.nn.LRUCell,
+            brainscale.nn.MGUCell,
+            brainscale.nn.MinimalRNNCell,
+        ]:
+            n_in = 4
+            n_rec = 5
+            n_seq = 10
+            model = cls(n_in, n_rec)
+            model = bst.nn.init_all_states(model)
+
+            inputs = bst.random.randn(n_seq, n_in)
+            algorithm = brainscale.DiagIODimAlgorithm(model, decay_or_rank=0.9)
+            algorithm.compile_graph(inputs[0])
+
+            outs = bst.compile.for_loop(algorithm, inputs)
+            print(outs.shape)
+
+            @bst.compile.jit
+            def grad_no_bptt(inp):
+                return bst.augment.grad(
+                    lambda inp: algorithm(inp).sum(),
+                    model.states(bst.ParamState)
+                )(inp)
+
+            grads = grad_no_bptt(inputs[0])
+            grads = grad_no_bptt(inputs[1])
+            pprint(grads)
+
+    def test_rnn_has_bptt(self):
+        for cls in [
+            brainscale.nn.GRUCell,
+            brainscale.nn.LSTMCell,
+            brainscale.nn.LRUCell,
+            brainscale.nn.MGUCell,
+            brainscale.nn.MinimalRNNCell,
+        ]:
+            n_in = 4
+            n_rec = 5
+            n_seq = 10
+            model = cls(n_in, n_rec)
+            model = bst.nn.init_all_states(model)
+
+            inputs = bst.random.randn(n_seq, n_in)
+            algorithm = brainscale.DiagIODimAlgorithm(model, decay_or_rank=0.9)
+            algorithm.compile_graph(inputs[0], multi_step=True)
+
+            outs = algorithm(inputs, multi_step=True)
+            print(outs.shape)
+
+            @bst.compile.jit
+            def grad_no_bptt(inp):
+                return bst.augment.grad(
+                    lambda inp: algorithm(inp, multi_step=True).sum(),
+                    model.states(bst.ParamState)
+                )(inp)
+
+            grads = grad_no_bptt(inputs[:1])
+            pprint(grads)
+            print()
+            grads = grad_no_bptt(inputs[1:2])
+            pprint(grads)
+
+    def test_snn_no_bptt(self):
+        bst.environ.set(dt=0.1 * u.ms)
+
+        for cls in [
+            IF_Delta_Dense_Layer,
+            LIF_ExpCo_Dense_Layer,
+            ALIF_ExpCo_Dense_Layer,
+            LIF_ExpCu_Dense_Layer,
+            LIF_STDExpCu_Dense_Layer,
+            LIF_STPExpCu_Dense_Layer,
+            ALIF_ExpCu_Dense_Layer,
+            ALIF_Delta_Dense_Layer,
+            ALIF_STDExpCu_Dense_Layer,
+            ALIF_STPExpCu_Dense_Layer,
+        ]:
+            print(cls)
+
+            n_in = 4
+            n_rec = 5
+            n_seq = 10
+            model = cls(n_in, n_rec)
+            model = bst.nn.init_all_states(model)
+
+            inputs = bst.random.randn(n_seq, n_in)
+            algorithm = brainscale.DiagIODimAlgorithm(model, decay_or_rank=0.9)
+            algorithm.compile_graph(inputs[0])
+
+            outs = bst.compile.for_loop(algorithm, inputs)
+            print(outs.shape)
+
+            @bst.compile.jit
+            def grad_no_bptt(inp):
+                return bst.augment.grad(
+                    lambda inp: algorithm(inp).sum(),
+                    model.states(bst.ParamState)
+                )(inp)
+
+            grads = grad_no_bptt(inputs[0])
+            grads = grad_no_bptt(inputs[1])
+            pprint(grads)
+
+    def test_snn_has_bptt(self):
+        bst.environ.set(dt=0.1 * u.ms)
+
+        for cls in [
+            IF_Delta_Dense_Layer,
+            LIF_ExpCo_Dense_Layer,
+            ALIF_ExpCo_Dense_Layer,
+            LIF_ExpCu_Dense_Layer,
+            LIF_STDExpCu_Dense_Layer,
+            LIF_STPExpCu_Dense_Layer,
+            ALIF_ExpCu_Dense_Layer,
+            ALIF_Delta_Dense_Layer,
+            ALIF_STDExpCu_Dense_Layer,
+            ALIF_STPExpCu_Dense_Layer,
+        ]:
+            print(cls)
+
+            n_in = 4
+            n_rec = 5
+            n_seq = 10
+            model = cls(n_in, n_rec)
+            model = bst.nn.init_all_states(model)
+
+            inputs = bst.random.randn(n_seq, n_in)
+            algorithm = brainscale.DiagIODimAlgorithm(model, decay_or_rank=0.9)
+            algorithm.compile_graph(inputs[0], multi_step=True)
+
+            outs = algorithm(inputs, multi_step=True)
+            print(outs.shape)
+
+            @bst.compile.jit
+            def grad_no_bptt(inp):
+                return bst.augment.grad(
+                    lambda inp: algorithm(inp, multi_step=True).sum(),
+                    model.states(bst.ParamState)
+                )(inp)
+
+            grads = grad_no_bptt(inputs[:1])
+            pprint(grads)
+            print()
+            grads = grad_no_bptt(inputs[1:2])
+            pprint(grads)
 
 
 class TestDiagOn2(unittest.TestCase):
 
-    def test_if_delta_etrace_update_On2(self):
-
-        bst.environ.set(dt=1. * u.ms)
-
-        for mode in [
-            bst.mixin.Batching(),
-            bst.mixin.Training(),
-            bst.mixin.JointMode(bst.mixin.Batching(), bst.mixin.Training()),
+    def test_rnn_no_bptt(self):
+        for cls in [
+            brainscale.nn.GRUCell,
+            brainscale.nn.LSTMCell,
+            brainscale.nn.LRUCell,
+            brainscale.nn.MGUCell,
+            brainscale.nn.MinimalRNNCell,
         ]:
-            n_in, n_rec = 4, 10
-            snn = _IF_Delta_Dense_Layer(n_in, n_rec)
-            snn = bst.nn.init_all_states(snn)
-            algorithm = nn.DiagParamDimAlgorithm(snn, mode)
+            n_in = 4
+            n_rec = 5
+            n_seq = 10
+            model = cls(n_in, n_rec)
+            model = bst.nn.init_all_states(model)
 
-    def test_non_batched_On2_algorithm(self):
-        bst.environ.set(dt=1. * u.ms)
+            inputs = bst.random.randn(n_seq, n_in)
+            algorithm = brainscale.DiagParamDimAlgorithm(model)
+            algorithm.compile_graph(inputs[0])
 
-        n_in, n_rec = 4, 10
-        snn = _IF_Delta_Dense_Layer(n_in, n_rec)
-        snn = bst.nn.init_all_states(snn)
+            outs = bst.compile.for_loop(algorithm, inputs)
+            print(outs.shape)
 
-        nt = 100
-        inputs = jnp.asarray(bst.random.rand(nt, n_in) < 0.2, dtype=bst.environ.dftype())
+            @bst.compile.jit
+            def grad_no_bptt(inp):
+                return bst.augment.grad(
+                    lambda inp: algorithm(inp).sum(),
+                    model.states(bst.ParamState)
+                )(inp)
 
-        algorithm = nn.DiagParamDimAlgorithm(snn, mode=bst.mixin.Mode())
-        algorithm.compile_graph(inputs[0])
+            grads = grad_no_bptt(inputs[0])
+            grads = grad_no_bptt(inputs[1])
+            pprint(grads)
 
-        def run_snn(inp_spk):
-            # with bst.environ.context(t=i * bst.environ.get_dt()):
-            out = algorithm(inp_spk)
-            return out
+    def test_rnn_has_bptt(self):
+        for cls in [
+            brainscale.nn.GRUCell,
+            brainscale.nn.LSTMCell,
+            brainscale.nn.LRUCell,
+            brainscale.nn.MGUCell,
+            brainscale.nn.MinimalRNNCell,
+        ]:
+            n_in = 4
+            n_rec = 5
+            n_seq = 10
+            model = cls(n_in, n_rec)
+            model = bst.nn.init_all_states(model)
 
-        outs = bst.compile.for_loop(run_snn, inputs)
-        print(outs.shape)
-        self.assertEqual(outs.shape, (nt, n_rec))
+            inputs = bst.random.randn(n_seq, n_in)
+            algorithm = brainscale.DiagParamDimAlgorithm(model)
+            algorithm.compile_graph(inputs[0], multi_step=True)
 
-    def test_batched_On2_algorithm(self):
-        bst.environ.set(dt=1. * u.ms)
+            outs = algorithm(inputs, multi_step=True)
+            print(outs.shape)
 
-        n_batch = 16
-        n_in, n_rec = 4, 10
-        snn = _IF_Delta_Dense_Layer(n_in, n_rec)
-        snn = bst.nn.init_all_states(snn, n_batch)
+            @bst.compile.jit
+            def grad_no_bptt(inp):
+                return bst.augment.grad(
+                    lambda inp: algorithm(inp, multi_step=True).sum(),
+                    model.states(bst.ParamState)
+                )(inp)
 
-        algorithm = nn.DiagParamDimAlgorithm(snn, mode=bst.mixin.JointMode(bst.mixin.Training(),
-                                                                           bst.mixin.Batching()))
-        algorithm.compile_graph(jax.ShapeDtypeStruct((n_batch, n_in), bst.environ.dftype()))
+            grads = grad_no_bptt(inputs[:1])
+            pprint(grads)
+            print()
+            grads = grad_no_bptt(inputs[1:2])
+            pprint(grads)
 
-        def run_snn(i, inp_spk):
-            with bst.environ.context(i=i, t=i * bst.environ.get_dt()):
-                out = algorithm.update(inp_spk)
-            return out
+    def test_snn_no_bptt(self):
+        bst.environ.set(dt=0.1 * u.ms)
 
-        nt = 100
-        inputs = jnp.asarray(bst.random.rand(nt, n_batch, n_in) < 0.2, dtype=bst.environ.dftype())
-        outs = bst.compile.for_loop(run_snn, jnp.arange(nt), inputs)
-        print(outs.shape)
-        self.assertEqual(outs.shape, (nt, n_batch, n_rec))
+        for cls in [
+            IF_Delta_Dense_Layer,
+            LIF_ExpCo_Dense_Layer,
+            ALIF_ExpCo_Dense_Layer,
+            LIF_ExpCu_Dense_Layer,
+            LIF_STDExpCu_Dense_Layer,
+            LIF_STPExpCu_Dense_Layer,
+            ALIF_ExpCu_Dense_Layer,
+            ALIF_Delta_Dense_Layer,
+            ALIF_STDExpCu_Dense_Layer,
+            ALIF_STPExpCu_Dense_Layer,
+        ]:
+            print(cls)
 
+            n_in = 4
+            n_rec = 5
+            n_seq = 10
+            model = cls(n_in, n_rec)
+            model = bst.nn.init_all_states(model)
 
-class _LIF_STDExpCu_Dense_Layer(bst.nn.Module):
-    """
-    The RTRL layer with LIF neurons and dense connected STD-based exponential current synapses.
-    """
+            param_states = model.states(bst.ParamState).to_dict_values()
 
-    def __init__(
-        self, n_in, n_rec, inp_std=False, tau_mem=5., tau_syn=10., V_th=1., tau_std=500.,
-        spk_fun: Callable = bst.surrogate.ReluGrad(),
-        spk_reset: str = 'soft',
-        rec_init: Callable = init.KaimingNormal(),
-        ff_init: Callable = init.KaimingNormal()
-    ):
-        super().__init__()
-        self.neu = nn.LIF(n_rec, tau=tau_mem, spk_fun=spk_fun, spk_reset=spk_reset, V_th=V_th)
-        self.std = nn.STD(n_rec, tau=tau_std, U=0.1)
-        if inp_std:
-            self.std_inp = nn.STD(n_in, tau=tau_std, U=0.1)
-        else:
-            self.std_inp = None
+            inputs = bst.random.randn(n_seq, n_in)
+            algorithm = brainscale.DiagParamDimAlgorithm(model)
+            algorithm.compile_graph(inputs[0])
 
-        self.syn = bst.nn.AlignPostProj(
-            comm=nn.Linear(n_in + n_rec, n_rec, jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0)),
-            syn=nn.Expon.desc(size=n_rec, tau=tau_syn),
-            out=bst.nn.CUBA.desc(),
-            post=self.neu
-        )
+            outs = bst.compile.for_loop(algorithm, inputs)
+            print(outs.shape)
 
-    def update(self, inp_spk):
-        if self.std_inp is not None:
-            inp_spk = self.std_inp(inp_spk) * inp_spk
-        last_spk = self.neu.get_spike()
-        inp = jnp.concat([inp_spk, last_spk * self.std(last_spk)], axis=-1)
-        self.syn(inp)
-        self.neu()
-        return self.neu.get_spike()
+            @bst.compile.jit
+            def grad_no_bptt(inp):
+                return bst.augment.grad(
+                    lambda inp: algorithm(inp).sum(),
+                    model.states(bst.ParamState)
+                )(inp)
 
+            grads = grad_no_bptt(inputs[0])
+            grads = grad_no_bptt(inputs[1])
+            pprint(grads)
 
-class _LIF_STPExpCu_Dense_Layer(bst.nn.Module):
-    def __init__(
-        self,
-        n_in, n_rec, inp_stp=False, tau_mem=5., tau_syn=10., V_th=1.,
-        spk_fun: Callable = bst.surrogate.ReluGrad(),
-        spk_reset: str = 'soft',
-        rec_init: Callable = init.KaimingNormal(),
-        ff_init: Callable = init.KaimingNormal()
-    ):
-        super().__init__()
-        self.inp_stp = inp_stp
-        self.neu = nn.LIF(n_rec, tau=tau_mem, spk_fun=spk_fun, spk_reset=spk_reset, V_th=V_th)
-        self.stp = nn.STP(n_rec, tau_f=500., tau_d=100.)
-        if inp_stp:
-            self.stp_inp = nn.STP(n_in, tau_f=500., tau_d=100.)
+            for k in grads:
+                assert u.get_unit(param_states[k]) == u.get_unit(grads[k])
 
-        self.syn = bst.nn.AlignPostProj(
-            comm=nn.Linear(n_in + n_rec, n_rec, jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])])),
-            syn=nn.Expon.desc(size=n_rec, tau=tau_syn),
-            out=bst.nn.CUBA.desc(),
-            post=self.neu
-        )
+    def test_snn_has_bptt(self):
+        bst.environ.set(dt=0.1 * u.ms)
 
-    def update(self, inp_spk):
-        if self.inp_stp:
-            inp_spk = self.stp_inp(inp_spk) * inp_spk
-        last_spk = self.neu.get_spike()
-        inp = jnp.concat([inp_spk, last_spk * self.stp(last_spk)], axis=-1)
-        self.syn(inp)
-        self.neu()
-        return self.neu.get_spike()
+        for cls in [
+            IF_Delta_Dense_Layer,
+            LIF_ExpCo_Dense_Layer,
+            ALIF_ExpCo_Dense_Layer,
+            LIF_ExpCu_Dense_Layer,
+            LIF_STDExpCu_Dense_Layer,
+            LIF_STPExpCu_Dense_Layer,
+            ALIF_ExpCu_Dense_Layer,
+            ALIF_Delta_Dense_Layer,
+            ALIF_STDExpCu_Dense_Layer,
+            ALIF_STPExpCu_Dense_Layer,
+        ]:
+            print(cls)
+
+            n_in = 4
+            n_rec = 5
+            n_seq = 10
+            model = cls(n_in, n_rec)
+            model = bst.nn.init_all_states(model)
+
+            param_states = model.states(bst.ParamState).to_dict_values()
+
+            inputs = bst.random.randn(n_seq, n_in)
+            algorithm = brainscale.DiagParamDimAlgorithm(model)
+            algorithm.compile_graph(inputs[0], multi_step=True)
+
+            outs = algorithm(inputs, multi_step=True)
+            print(outs.shape)
+
+            @bst.compile.jit
+            def grad_no_bptt(inp):
+                return bst.augment.grad(
+                    lambda inp: algorithm(inp, multi_step=True).sum(),
+                    model.states(bst.ParamState)
+                )(inp)
+
+            grads = grad_no_bptt(inputs[:1])
+            pprint(grads)
+            print()
+            grads = grad_no_bptt(inputs[1:2])
+            pprint(grads)
+
+            for k in grads:
+                assert u.get_unit(param_states[k]) == u.get_unit(grads[k])
+
 
 
 class TestDiagGrad(unittest.TestCase):
     def _hidden_to_hidden(self, model, other_vals, pre_hidden_vals, inputs, out_hidden: str = None):
-        etrace_vars, other_states = model.states().split(nn.ETraceState)
+        etrace_vars, other_states = model.states().split(brainscale.ETraceState)
         etrace_vars.assign_values(pre_hidden_vals)
         other_states.assign_values(other_vals)
-        with nn.stop_param_gradients():
+        with brainscale.stop_param_gradients():
             model(inputs)
         if out_hidden is not None:
             return etrace_vars[out_hidden].value
@@ -195,7 +373,7 @@ class TestDiagGrad(unittest.TestCase):
     def _whether_collective_and_independent_are_same(self, model: bst.nn.Module, inputs):
         states = model.states()
         state_vals = states.to_dict_values()
-        etrace_vars, other_states = states.split(nn.ETraceState)
+        etrace_vars, other_states = states.split(brainscale.ETraceState)
         etrace_grads = jax.tree.map(bst.random.randn_like, etrace_vars.to_dict_values())
 
         # collective solve
@@ -220,8 +398,8 @@ class TestDiagGrad(unittest.TestCase):
         bst.environ.set(i=0, t=0.)
 
         n_batch, n_in, n_rec = 16, 4, 10
-        std_model = _LIF_STDExpCu_Dense_Layer(n_in, n_rec, inp_std=False)
-        stp_model = _LIF_STPExpCu_Dense_Layer(n_in, n_rec, inp_stp=False)
+        std_model = LIF_STDExpCu_Dense_Layer(n_in, n_rec, inp_std=False)
+        stp_model = LIF_STPExpCu_Dense_Layer(n_in, n_rec, inp_stp=False)
 
         bst.nn.init_all_states(std_model, n_batch)
         std_model.neu.V.value = bst.random.uniform(-1., 1.5, std_model.neu.V.value.shape)

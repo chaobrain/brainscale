@@ -66,11 +66,12 @@ dG_Hidden = Sequence[PyTree]  # gradients of hidden states
 dG_State = Sequence[PyTree]  # gradients of other states
 
 ETraceX_Key = jax.core.Var
+ETraceY_Key = jax.core.Var
 ETraceDF_Key = Tuple[jax.core.Var, Path]
 
 _WeightPath = Path
 _HiddenPath = Path
-ETraceWG_Key = Tuple[_WeightPath, ETraceX_Key, _HiddenPath]
+ETraceWG_Key = Tuple[_WeightPath, ETraceY_Key, _HiddenPath]
 
 HidHidJac_Key = Tuple[Path, Path]
 

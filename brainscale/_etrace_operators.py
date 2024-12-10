@@ -24,6 +24,7 @@ import jax
 import jax.core
 
 from ._etrace_concepts import ETraceOp
+from ._misc import remove_units
 from ._typing import PyTree
 
 WeightTree = Any
@@ -254,16 +255,13 @@ class GeneralETraceOp(StandardETraceOp):
         # transform
         def fn4vjp(dh, x):
             primals, f_vjp = jax.vjp(partial(op, x), weight_vals)
-            if isinstance(primals, u.Quantity) and isinstance(dh, u.Quantity):
-                assert primals.unit.has_same_dim(dh.unit), (
-                    f'The unit of the primal and the derivative must '
-                    f'be the same. But we got {primals.unit} and {dh.unit}'
+            if isinstance(dh, (tuple, list)):
+                assert isinstance(primals, (tuple, list))
+                dh = (
+                    u.maybe_decimal(u.get_magnitude(dh[0]) * u.get_unit(primals[0])),
                 )
-            elif isinstance(primals, u.Quantity):
-                dh = u.Quantity(dh, unit=primals.unit)
-            elif isinstance(dh, u.Quantity):
-                raise ValueError(f'The primal must be a quantity. Got {type(primals)}')
-            # dh = u.math.asarray(dh, dtype=primals.dtype)
+            else:
+                dh = u.maybe_decimal(u.get_magnitude(dh) * u.get_unit(primals))
             return f_vjp(dh)[0]
 
         # fun = lambda dh, x: jax.vjp(partial(op, x), weight_vals)[1](dh)[0]
@@ -317,16 +315,6 @@ class GeneralETraceOp(StandardETraceOp):
         return dg_weight
 
 
-def binary_op(op, x, y):
-    if isinstance(x, u.Quantity) and isinstance(y, u.Quantity):
-        return op(x, y)
-    if isinstance(x, u.Quantity):
-        return u.Quantity(op(x.magnitude, y), unit=x.unit)
-    if isinstance(y, u.Quantity):
-        return u.Quantity(op(x, y.magnitude), unit=y.unit)
-    return op(x, y)
-
-
 class MatMulETraceOp(StandardETraceOp):
     """
     The standard matrix multiplication operator for the eligibility trace updates.
@@ -343,24 +331,34 @@ class MatMulETraceOp(StandardETraceOp):
         super().__init__(self._operation, is_diagonal=is_diagonal)
         self.weight_mask = weight_mask
 
-    def _format_weight(self, weights) -> Tuple[Tuple[jax.Array, Optional[jax.Array]], Callable]:
-        if isinstance(weights, dict):
-            weights = (weights['weight'], weights.get('bias', None))
-            unflatten = lambda w, b: {'weight': (w), 'bias': b} if (b is not None) else {'weight': w}
-        elif isinstance(weights, (tuple, list)):
-            weights = (weights[0], weights[1] if len(weights) > 1 else None)
-            unflatten = lambda w, b: (w, b) if (b is not None) else (w,)
-        elif isinstance(weights, jax.Array):
-            weights = (weights, None)
-            unflatten = lambda w, b: w if (b is None) else (w, b)
+    def _format_weight(
+        self,
+        weights,
+        keep_unit: bool = True
+    ) -> Tuple[Tuple[jax.Array, Optional[jax.Array]], Callable]:
+        weights = (weights['weight'], weights.get('bias', None))
+
+        if keep_unit:
+            unflatten = lambda weight, bias: (
+                {'weight': weight, } if bias is None else
+                {'weight': weight, 'bias': bias}
+            )
         else:
-            raise ValueError(f'Invalid weight type: {type(weights)}')
-        # weights = jax.tree.map(_get_mantissa, weights, is_leaf=_is_quantity)
-        # units = jax.tree.map(_get_unit, weights, is_leaf=_is_quantity)
+            w_unit = u.get_unit(weights[0])
+            b_unit = u.get_unit(weights[1])
+
+            def unflatten(weight, bias):
+                weight = u.maybe_decimal(weight * w_unit)
+                bias = None if bias is None else u.maybe_decimal(bias * b_unit)
+                if bias is None:
+                    return {'weight': weight}
+                return {'weight': weight, 'bias': bias}
+
+            weights = tuple([u.get_magnitude(w) for w in weights])
         return weights, unflatten
 
     def _operation(self, x, w):
-        (weight, bias), _ = self._format_weight(w)
+        (weight, bias), _ = self._format_weight(w, keep_unit=True)
         if self.weight_mask is not None:
             weight = weight * self.weight_mask
         if bias is None:
@@ -396,11 +394,18 @@ class MatMulETraceOp(StandardETraceOp):
             f'Got {len(dh_to_dw)} and {len(diag_jac)}'
         )
 
-        diag_mul_dhdw = [self.hidden_to_etrace(mode, w, dh, dw)
-                         for dh, dw in zip(diag_jac, dh_to_dw)]
+        # diag_jac = remove_units(diag_jac)
+        # dh_to_dw = remove_units(dh_to_dw)
+        ph_to_pwx = remove_units(ph_to_pwx)
+        ph_to_pwy = remove_units(ph_to_pwy)
+
+        diag_mul_dhdw = [
+            self.hidden_to_etrace(mode, w, dh, dw)
+            for dh, dw in zip(diag_jac, dh_to_dw)
+        ]
         diag_mul_dhdw = jax.tree.map(lambda *xs: reduce(u.math.add, xs), *diag_mul_dhdw)
 
-        (dh_to_dweight, dh_to_dbias), unflatten = self._format_weight(diag_mul_dhdw)
+        (dh_to_dweight, dh_to_dbias), unflatten = self._format_weight(diag_mul_dhdw, keep_unit=False)
         if ph_to_pwy is not None:
             if mode.has(bst.mixin.Batching):
                 # dh_to_dweight: (batch_size, input_size, hidden_size,)
@@ -408,19 +413,18 @@ class MatMulETraceOp(StandardETraceOp):
                 # ph_to_pwx: (batch_size, input_size,)
                 # ph_to_pwy: (batch_size, hidden_size,)
                 # dh_to_dweight = dh_to_dweight + u.math.einsum('bi,bh->bih', ph_to_pwx, ph_to_pwy)
-                dh_to_dweight = binary_op(jax.numpy.add, dh_to_dweight,
-                                          u.math.einsum('bi,bh->bih', ph_to_pwx, ph_to_pwy))
+                dh_to_dweight = dh_to_dweight + u.math.einsum('bi,bh->bih', ph_to_pwx, ph_to_pwy)
                 if dh_to_dbias is not None:
                     # dh_to_dbias = dh_to_dbias + ph_to_pwy
-                    dh_to_dbias = binary_op(jax.numpy.add, dh_to_dbias, ph_to_pwy)
+                    dh_to_dbias = dh_to_dbias + ph_to_pwy
             else:
                 # dh_to_dweight: (input_size, hidden_size,)
                 # dh_to_dbias: (hidden_size,)
                 # ph_to_pwx: (input_size,)
                 # ph_to_pwy: (hidden_size,)
-                dh_to_dweight = binary_op(jax.numpy.add, dh_to_dweight, u.math.outer(ph_to_pwx, ph_to_pwy))
+                dh_to_dweight = dh_to_dweight + u.math.outer(ph_to_pwx, ph_to_pwy)
                 if dh_to_dbias is not None:
-                    dh_to_dbias = binary_op(jax.numpy.add, dh_to_dbias, ph_to_pwy)
+                    dh_to_dbias = dh_to_dbias + ph_to_pwy
         return unflatten(dh_to_dweight, dh_to_dbias)
 
     def hidden_to_etrace(
@@ -442,6 +446,8 @@ class MatMulETraceOp(StandardETraceOp):
         # 3. dh_to_dw: the derivative of the hidden with respect to the weight
 
         (dh_to_dweight, dh_to_dbias), unflatten = self._format_weight(dh_to_dw)
+        dl_to_dh = remove_units(dl_to_dh)
+
         if mode.has(bst.mixin.Batching):
             # dl_to_dh: (batch_size, hidden_size,)
             # dh_to_dw: (batch_size, input_size, hidden_size,)
@@ -508,15 +514,15 @@ class ElementWiseOp(StandardETraceOp):
         if mode.has(bst.mixin.Batching):
             # ph_to_pwy: (batch_size, hidden_size,)
             # ph_to_pw: (batch_size, hidden_size,)
-            ph_to_pw = jax.vmap(lambda g: (jax.vjp(self.true_op, w)[1]((g,))))(ph_to_pwy)
+            ph_to_pw = jax.vmap(lambda g: (jax.vjp(self.true_op, w)[1](g)))(ph_to_pwy)
             # diag_mul_dhdw: (batch_size, hidden_size,)
-            dh_to_dweight = binary_op(jax.numpy.add, diag_mul_dhdw, ph_to_pw)
+            dh_to_dweight = diag_mul_dhdw + ph_to_pw[0]
         else:
             # ph_to_pwy: (hidden_size,)
             # ph_to_pw: (hidden_size,)
-            ph_to_pw = jax.vjp(self.true_op, w)[1]((ph_to_pwy,))
+            ph_to_pw = jax.vjp(self.true_op, w)[1](ph_to_pwy)
             # diag_mul_dhdw: (hidden_size,)
-            dh_to_dweight = binary_op(jax.numpy.add, diag_mul_dhdw, ph_to_pw)
+            dh_to_dweight = diag_mul_dhdw + ph_to_pw[0]
         return dh_to_dweight
 
     def hidden_to_etrace(

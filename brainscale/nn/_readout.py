@@ -62,7 +62,7 @@ class LeakyRateReadout(nn.Module):
 
         # weights
         weight = init.param(w_init, (self.in_size[0], self.out_size[0]))
-        self.weight_op = ETraceParamOp(weight, MatMulETraceOp())
+        self.weight_op = ETraceParamOp({'weight': weight}, MatMulETraceOp())
 
     def init_state(self, batch_size=None, **kwargs):
         self.r = ETraceState(init.param(self.r_initializer, self.out_size, batch_size))
@@ -102,7 +102,7 @@ class LeakySpikeReadout(nn.LeakySpikeReadout):
 
         # weights
         weight = init.param(w_init, (self.in_size[0], self.out_size[0]))
-        self.weight_op = ETraceParamOp(weight, MatMulETraceOp())
+        self.weight_op = ETraceParamOp({'weight': weight}, MatMulETraceOp())
 
     def init_state(self, batch_size, **kwargs):
         self.V = ETraceState(init.param(self.V_initializer, self.varshape, batch_size))

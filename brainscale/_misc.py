@@ -20,6 +20,7 @@ import warnings
 from enum import Enum
 from typing import Sequence
 
+import brainunit as u
 import brainstate as bst
 
 
@@ -27,6 +28,25 @@ __all__ = [
     'CompilationError',
     'NotSupportedError',
 ]
+
+import jax.tree
+
+
+def _dimensionless(x):
+    if isinstance(x, u.Quantity):
+        return x.mantissa
+    else:
+        return x
+
+
+def remove_units(xs):
+    return jax.tree.map(
+        _dimensionless,
+        xs,
+        is_leaf=u.math.is_quantity
+    )
+
+
 
 
 git_issue_addr = 'https://github.com/chaobrain/brainscale/issues'
