@@ -397,6 +397,9 @@ class DiagETraceAlgorithmForVJP(ETraceAlgorithm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        # the running index
+        self.running_index = bst.LongTermState(0)
+
         # the update rule
         self._true_update_fun = jax.custom_vjp(self._update_fn)
         self._true_update_fun.defvjp(fwd=self._update_fn_fwd,
@@ -1155,7 +1158,6 @@ class DiagTruncatedAlgorithm(DiagETraceAlgorithmForVJP):
         # The states of weight spatial gradients:
         #   1. x
         #   2. df
-        self.running_index = bst.ShortTermState(0)
         self.etrace_xs = dict()
         self.etrace_dfs = dict()
         for relation in self.compiled.hidden_param_op_relations:
@@ -1476,7 +1478,6 @@ class DiagIODimAlgorithm(DiagETraceAlgorithmForVJP):
         # The states of weight spatial gradients:
         #   1. x
         #   2. df
-        self.running_index = bst.ShortTermState(0)
         self.etrace_xs = dict()
         self.etrace_dfs = dict()
         self.etrace_xs_to_weights = defaultdict(list)
@@ -1897,7 +1898,6 @@ class DiagParamDimAlgorithm(DiagETraceAlgorithmForVJP):
         `.compile_graph()` for the details.
         """
         # The states of batched weight gradients
-        self.running_index = bst.ShortTermState(0)
         self.etrace_bwg = dict()
         for relation in self.compiled.hidden_param_op_relations:
             _init_param_dim_state(self, relation)
@@ -2112,7 +2112,6 @@ class DiagHybridDimAlgorithm(DiagETraceAlgorithmForVJP):
         #   2. df
         #   3. batched weight gradients
         #
-        self.running_index = bst.ShortTermState(0)
         self.etrace_xs = dict()
         self.etrace_dfs = dict()
         self.etrace_bwg = dict()

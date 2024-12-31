@@ -33,7 +33,8 @@ __all__ = [
     'LSTMCell',
     'URLSTMCell',
     'MinimalRNNCell',
-    'MinimalRNNv2Cell',
+    'MiniGRU',
+    'MiniLSTM',
     'LRUCell',
 ]
 
@@ -545,12 +546,12 @@ class MinimalRNNCell(nn.RNNCell):
 
     def update(self, x):
         z = self.phi(x)
-        u_ = functional.sigmoid(self.W_u(u.math.concatenate([z, self.h.value], axis=-1)))
-        self.h.value = u_ * self.h.value + (1 - u_) * z
+        f = functional.sigmoid(self.W_u(u.math.concatenate([z, self.h.value], axis=-1)))
+        self.h.value = f * self.h.value + (1 - f) * z
         return self.h.value
 
 
-class MinimalRNNv2Cell(nn.RNNCell):
+class MiniGRU(nn.RNNCell):
     r"""
     Minimal RNN Cell, implemented as in
     `MinimalRNN: Toward More Interpretable and Trainable Recurrent Neural Networks <https://arxiv.org/abs/1711.06788>`_
@@ -608,10 +609,10 @@ class MinimalRNNv2Cell(nn.RNNCell):
         self.in_size = in_size
 
         # functions
-        self.phi = Linear(self.in_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
+        self.W_x = Linear(self.in_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
 
         # weights
-        self.W_u = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
+        self.W_z = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
 
     def init_state(self, batch_size: int = None, **kwargs):
         self.h = ETraceState(init.param(self._state_initializer, self.out_size, batch_size))
@@ -620,8 +621,86 @@ class MinimalRNNv2Cell(nn.RNNCell):
         self.h.value = init.param(self._state_initializer, self.out_size, batch_size)
 
     def update(self, x):
-        u_ = functional.sigmoid(self.W_u(u.math.concatenate([x, self.h.value], axis=-1)))
-        self.h.value = u_ * self.h.value + (1 - u_) * self.phi(x)
+        z = functional.sigmoid(self.W_z(u.math.concatenate([x, self.h.value], axis=-1)))
+        self.h.value = (1 - z) * self.h.value + z * self.W_x(x)
+        return self.h.value
+
+
+class MiniLSTM(nn.RNNCell):
+    r"""
+    Minimal RNN Cell, implemented as in
+    `MinimalRNN: Toward More Interpretable and Trainable Recurrent Neural Networks <https://arxiv.org/abs/1711.06788>`_
+
+    Model
+    -----
+
+    At each step $t$, the model first maps its input $\mathbf{x}_t$ to a
+    latent space through
+    $$\mathbf{z}_t=\Phi(\mathbf{x}_t)$$
+    $\Phi(\cdot)$ here can be any highly flexible functions such  as neural networks.
+    Default, we take $\Phi(\cdot)$ as a fully connected layer with tanh activation. That
+    is,  $\Phi ( \mathbf{x} _t) = \tanh ( \mathbf{W} _x\mathbf{x} _t+ \mathbf{b} _z) .$
+
+    Given the latent representation $\mathbf{z}_t$ of the input, MinimalRNN then updates its states simply as:
+
+    $$\mathbf{h}_t=\mathbf{u}_t\odot\mathbf{h}_{t-1}+(\mathbf{1}-\mathbf{u}_t)\odot\mathbf{z}_t$$
+
+    where $\mathbf{u}_t=\sigma(\mathbf{U}_h\mathbf{h}_{t-1}+\mathbf{U}_z\mathbf{z}_t+\mathbf{b}_u)$ is the update
+    gate.
+
+
+    Parameters
+    ----------
+    in_size: bst.typing.Size
+        The number of input units.
+    out_size: bst.typing.Size
+        The number of hidden units.
+    w_init: callable, ArrayLike
+        The input weight initializer.
+    b_init: callable, ArrayLike
+        The bias weight initializer.
+    state_init: callable, ArrayLike
+        The state initializer.
+    name: optional, str
+        The name of the module.
+
+    """
+    __module__ = 'brainscale.nn'
+
+    def __init__(
+        self,
+        in_size: bst.typing.Size,
+        out_size: bst.typing.Size,
+        w_init: Union[ArrayLike, Callable] = init.Orthogonal(),
+        b_init: Union[ArrayLike, Callable] = init.ZeroInit(),
+        state_init: Union[ArrayLike, Callable] = init.ZeroInit(),
+        name: str = None,
+    ):
+        super().__init__(name=name)
+
+        # parameters
+        self._state_initializer = state_init
+        self.out_size = out_size
+        self.in_size = in_size
+
+        # functions
+        self.W_x = Linear(self.in_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
+
+        # weights
+        self.W_f = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
+        self.W_i = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
+
+    def init_state(self, batch_size: int = None, **kwargs):
+        self.h = ETraceState(init.param(self._state_initializer, self.out_size, batch_size))
+
+    def reset_state(self, batch_size: int = None, **kwargs):
+        self.h.value = init.param(self._state_initializer, self.out_size, batch_size)
+
+    def update(self, x):
+        xh = u.math.concatenate([x, self.h.value], axis=-1)
+        f = functional.sigmoid(self.W_f(xh))
+        i = functional.sigmoid(self.W_i(xh))
+        self.h.value = f * self.h.value + i * self.W_x(x)
         return self.h.value
 
 

@@ -54,7 +54,7 @@ from ._etrace_concepts import (is_etrace_op,
                                ETraceParam,
                                ETraceState)
 from ._etrace_concepts import sequence_split_state_values
-from ._jaxpr_to_source_code import jaxpr_to_python_code
+from ._etrace_debug_jaxpr2code import jaxpr_to_python_code
 from ._misc import (git_issue_addr,
                     NotSupportedError,
                     CompilationError)
