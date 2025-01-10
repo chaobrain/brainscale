@@ -23,11 +23,12 @@ from __future__ import annotations
 
 from collections import defaultdict
 from functools import partial
-from typing import Dict, Tuple, Any, Callable, List, Protocol, Optional, Sequence, Hashable
+from typing import Dict, Tuple, Any, List, Protocol, Optional, Sequence, Hashable
 
 import brainstate as bst
 import brainunit as u
 import jax.core
+import jax.numpy as jnp
 
 from ._etrace_compiler import (WeightOpHiddenRelation,
                                HiddenGroup,
@@ -40,8 +41,10 @@ from ._etrace_concepts import (assign_state_values_v2,
                                ElementWiseParamOp,
                                _ETraceGrad)
 from ._etrace_graph import (ETraceGraph)
+from ._etrace_input_data import has_multistep_data
 from ._etrace_operators import (StandardETraceOp,
                                 GeneralETraceOp)
+from ._misc import remove_units
 from ._typing import (PyTree,
                       Outputs,
                       WeightID,
@@ -62,7 +65,6 @@ from ._typing import (PyTree,
                       dG_Weight,
                       dG_Hidden,
                       dG_State)
-from ._misc import remove_units
 
 __all__ = [
     'ETraceAlgorithm',
@@ -71,7 +73,6 @@ __all__ = [
     'DiagParamDimAlgorithm',  # the diagonally approximated algorithm with the parameter dimension complexity
     'DiagHybridDimAlgorithm',  # the diagonally approximated algorithm with hybrid complexity (either I/O or parameter)
 ]
-
 
 
 def _format_decay_and_rank(decay_or_rank) -> Tuple[float, int]:
@@ -191,6 +192,12 @@ class ETraceAlgorithm(bst.nn.Module):
         The model function, which receives the input arguments and returns the model output.
     name: str, optional
         The name of the etrace algorithm.
+     vjp_method: bool
+        The time to compute the loss-to-hidden Jacobian.
+
+        - ``0``: the current time step: $\frac{\partial L^t}{\partial h^t}$.  Memory is
+        - ``1``: the last time step: $\frac{\partial L^{t-1}}{\partial h^{t-1}}$.
+        - ``k``: the t-k time step: $\frac{\partial L^{t-k}}{\partial h^{t-k}}$.
 
     Attributes:
     -----------
@@ -231,17 +238,22 @@ class ETraceAlgorithm(bst.nn.Module):
         self,
         model: bst.nn.Module,
         name: Optional[str] = None,
+        vjp_method: str = 'single-step'
     ):
         super().__init__(name=name)
 
+        # the VJP method
+        assert vjp_method in ('single-step', 'multi-step'), (
+            'The VJP method should be either "single-step" or "multi-step". '
+            f'While we got {vjp_method}. '
+        )
+        self.vjp_method = vjp_method
+
+        # the model and graph
         if not isinstance(model, bst.nn.Module):
             raise ValueError(f'The model should be a brainstate.nn.Module, this can help us to '
                              f'better obtain the program structure. But we got {type(model)}.')
-
-        # The model and graph
-        if not callable(model):
-            raise ValueError(f'The model should be a callable function. But we got {model}.')
-        self.graph = ETraceGraph(model)
+        self.graph = ETraceGraph(model, vjp_method=vjp_method)
 
         # The flag to indicate whether the etrace algorithm has been compiled
         self.is_compiled = False
@@ -250,7 +262,7 @@ class ETraceAlgorithm(bst.nn.Module):
     def compiled(self) -> CompiledGraph:
         return self.graph.compiled
 
-    def compile_graph(self, *args, multi_step: bool = False) -> None:
+    def compile_graph(self, *args) -> None:
         r"""
         Compile the eligibility trace graph of the relationship between etrace weights, states and operators.
 
@@ -261,12 +273,6 @@ class ETraceAlgorithm(bst.nn.Module):
 
         Args:
             *args: the input arguments.
-            multi_step: bool, whether to compile the graph for the multi-step training.
-                The time to compute the loss-to-hidden Jacobian.
-
-                - ``0``: the current time step: $\frac{\partial L^t}{\partial h^t}$.  Memory is
-                - ``1``: the last time step: $\frac{\partial L^{t-1}}{\partial h^{t-1}}$.
-                - ``k``: the t-k time step: $\frac{\partial L^{t-k}}{\partial h^{t-k}}$.
         """
 
         if not self.is_compiled:
@@ -289,7 +295,7 @@ class ETraceAlgorithm(bst.nn.Module):
             ) = bst.graph.states(self.graph.model, bst.ParamState, ETraceState, ...)
 
             # --- the model etrace graph -- #
-            self.graph.compile_graph(*args, multi_step=multi_step)
+            self.graph.compile_graph(*args)
 
             # --- the initialization of the states --- #
             self.init_etrace_state(*args)
@@ -311,20 +317,11 @@ class ETraceAlgorithm(bst.nn.Module):
         """
         return self.graph.show_graph()
 
-    def __call__(self, *args, multi_step: bool = False) -> Any:
-        r"""
-        Update the model and the eligibility trace states.
-
-        multi_step: bool
-            The time to compute the loss-to-hidden Jacobian.
-
-            - ``0``: the current time step: $\frac{\partial L^t}{\partial h^t}$.  Memory is
-            - ``1``: the last time step: $\frac{\partial L^{t-1}}{\partial h^{t-1}}$.
-            - ``k``: the t-k time step: $\frac{\partial L^{t-k}}{\partial h^{t-k}}$.
+    def __call__(self, *args) -> Any:
         """
-        assert self.graph.multi_step == multi_step, (
-            f'The multi_step should be the same as the compiled graph. Got {self.graph.multi_step} != {multi_step}'
-        )
+        Update the model and the eligibility trace states.
+        """
+
         return self.update(*args)
 
     def update(self, *args) -> Any:
@@ -394,16 +391,23 @@ class DiagETraceAlgorithmForVJP(ETraceAlgorithm):
 
     __module__ = 'brainscale'
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(
+        self,
+        model: bst.nn.Module,
+        name: Optional[str] = None,
+        vjp_method: str = 'single-step'
+    ):
+        super().__init__(model=model, name=name, vjp_method=vjp_method)
 
         # the running index
         self.running_index = bst.LongTermState(0)
 
         # the update rule
         self._true_update_fun = jax.custom_vjp(self._update_fn)
-        self._true_update_fun.defvjp(fwd=self._update_fn_fwd,
-                                     bwd=self._update_fn_bwd)
+        self._true_update_fun.defvjp(
+            fwd=self._update_fn_fwd,
+            bwd=self._update_fn_bwd
+        )
 
     def _assert_compiled(self):
         if not self.is_compiled:
@@ -426,6 +430,21 @@ class DiagETraceAlgorithmForVJP(ETraceAlgorithm):
         #
         # ----------------------------------------------------------------------------------------------
 
+        #
+        # This function need to process the following multiple cases:
+        #
+        # 1. if vjp_method = 'single-step', input = SingleStepData, then output is single step
+        #
+        # 2. if vjp_method = 'single-step', input = MultiStepData, then output is multiple step data
+        #
+        # 3. if vjp_method = 'multi-step', input = SingleStepData, then output is single step
+        #
+        # 4. if vjp_method = 'multi-step', input = MultiStepData, then output is multiple step data
+        #
+
+        input_is_multi_step = has_multistep_data(*args)
+
+        # check the compilation
         self._assert_compiled()
 
         # state values
@@ -449,6 +468,8 @@ class DiagETraceAlgorithmForVJP(ETraceAlgorithm):
         # [KEY] The key here is that we change the object-oriented attributes as the function arguments.
         #       Therefore, the function arguments are the states of the current time step, and the function
         #       returns the states of the next time step.
+        #
+        # out: is always multiple step
         (
             out,
             hidden_vals,
@@ -466,6 +487,8 @@ class DiagETraceAlgorithmForVJP(ETraceAlgorithm):
         # assign/restore the weight values back
         #
         # [KEY] assuming the weight values are not changed
+        #       This is a key assumption in the RTRL algorithm.
+        #       This is very important for the implementation.
         assign_state_values_v2(self.param_states, weight_vals, write=False)
 
         # assign the new hidden and state values
@@ -482,8 +505,14 @@ class DiagETraceAlgorithmForVJP(ETraceAlgorithm):
 
         # update the running index
         running_index = self.running_index.value + 1
-        self.running_index.value = jax.lax.stop_gradient(jax.numpy.where(running_index >= 0, running_index, 0))
-        return out if self.graph.multi_step else jax.tree.map(lambda x: x[0], out)
+        self.running_index.value = jax.lax.stop_gradient(jnp.where(running_index >= 0, running_index, 0))
+
+        # return the model output
+        return (
+            jax.tree.map(lambda x: x[0], out)
+            if input_is_multi_step else
+            out
+        )
 
     def _update_fn(
         self,
@@ -585,11 +614,13 @@ class DiagETraceAlgorithmForVJP(ETraceAlgorithm):
         # ----------------------------------------------------------------------------------------------
 
         # check the inputs
-        if self.graph.multi_step:
-            arg_lengths = [jax.numpy.shape(v)[0] for v in jax.tree.leaves(args)]
+        if self.graph.is_multi_step:
+            arg_lengths = [jnp.shape(v)[0] for v in jax.tree.leaves(args)]
             if len(set(arg_lengths)) != 1:
-                raise ValueError(f'The input arguments should have the same length. '
-                                 f'While we got {arg_lengths}. ')
+                raise ValueError(
+                    f'The input arguments should have the same length. '
+                    f'While we got {arg_lengths}. '
+                )
 
         # state value assignment
         assign_state_values_v2(self.param_states, weight_vals, write=False)
@@ -626,7 +657,7 @@ class DiagETraceAlgorithmForVJP(ETraceAlgorithm):
             residuals,
             (
                 old_etrace_vals
-                if self.graph.multi_step else
+                if self.graph.is_multi_step else
                 new_etrace_vals
             ),
             weight_vals,
@@ -720,7 +751,7 @@ class DiagETraceAlgorithmForVJP(ETraceAlgorithm):
             dl_to_dh_at_t
         ) = jax.tree.unflatten(in_tree, cts_out)
 
-        if not self.graph.multi_step:
+        if not self.graph.is_multi_step:
 
             # TODO: the correspondence between the hidden states and the gradients
             #        should be checked.
@@ -766,7 +797,7 @@ class DiagETraceAlgorithmForVJP(ETraceAlgorithm):
         dg_running_index = None
 
         return (
-            dg_args if self.graph.multi_step else jax.tree.map(lambda x: x[0], dg_args),
+            dg_args if self.graph.is_multi_step else jax.tree.map(lambda x: x[0], dg_args),
             dg_weights,
             dg_last_hiddens,
             dg_oth_states,
@@ -1137,11 +1168,12 @@ class DiagTruncatedAlgorithm(DiagETraceAlgorithmForVJP):
 
     def __init__(
         self,
-        model: Callable,
+        model: bst.nn.Module,
         n_truncation: int,
         name: Optional[str] = None,
+        vjp_method: str = 'single-step',
     ):
-        super().__init__(model, name=name, )
+        super().__init__(model, name=name, vjp_method=vjp_method)
 
         # the learning parameters
         assert isinstance(n_truncation, int), 'The truncation length should be an integer. '
@@ -1456,12 +1488,13 @@ class DiagIODimAlgorithm(DiagETraceAlgorithmForVJP):
 
     def __init__(
         self,
-        model: Callable,
+        model: bst.nn.Module,
         decay_or_rank: float | int,
         mode: Optional[bst.mixin.Mode] = None,
         name: Optional[str] = None,
+        vjp_method: str = 'single-step'
     ):
-        super().__init__(model, name=name, )
+        super().__init__(model, name=name, vjp_method=vjp_method)
 
         # computing mode
         self.mode = bst.mixin.Mode() if mode is None else mode
@@ -1488,6 +1521,7 @@ class DiagIODimAlgorithm(DiagETraceAlgorithmForVJP):
         """
         Reset the eligibility trace states.
         """
+        self.running_index.value = 0
         _reset_state_in_a_dict(self.etrace_xs, batch_size)
         _reset_state_in_a_dict(self.etrace_dfs, batch_size)
 
@@ -1883,11 +1917,12 @@ class DiagParamDimAlgorithm(DiagETraceAlgorithmForVJP):
 
     def __init__(
         self,
-        model: Callable,
+        model: bst.nn.Module,
         mode: Optional[bst.mixin.Mode] = None,
         name: Optional[str] = None,
+        vjp_method: str = 'single-step'
     ):
-        super().__init__(model, name=name)
+        super().__init__(model, name=name, vjp_method=vjp_method)
         self.mode = bst.mixin.Mode() if mode is None else mode
 
     def init_etrace_state(self, *args, **kwargs):
@@ -1906,6 +1941,7 @@ class DiagParamDimAlgorithm(DiagETraceAlgorithmForVJP):
         """
         Reset the eligibility trace states.
         """
+        self.running_index.value = 0
         _reset_state_in_a_dict(self.etrace_bwg, batch_size)
 
     def get_etrace_of(self, weight: bst.ParamState | Path) -> Dict:
@@ -2086,12 +2122,13 @@ class DiagHybridDimAlgorithm(DiagETraceAlgorithmForVJP):
 
     def __init__(
         self,
-        model: Callable,
+        model: bst.nn.Module,
         decay_or_rank: float | int,
         mode: Optional[bst.mixin.Mode] = None,
         name: Optional[str] = None,
+        vjp_method: str = 'single-step'
     ):
-        super().__init__(model, name=name)
+        super().__init__(model, name=name, vjp_method=vjp_method)
 
         # computing mode
         self.mode = bst.mixin.Mode() if mode is None else mode
@@ -2160,6 +2197,7 @@ class DiagHybridDimAlgorithm(DiagETraceAlgorithmForVJP):
         """
         Reset the eligibility trace states.
         """
+        self.running_index.value = 0
         _reset_state_in_a_dict(self.etrace_xs, batch_size)
         _reset_state_in_a_dict(self.etrace_dfs, batch_size)
         _reset_state_in_a_dict(self.etrace_bwg, batch_size)
