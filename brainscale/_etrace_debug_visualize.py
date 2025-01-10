@@ -19,6 +19,7 @@ import typing
 from typing import Tuple, Union, List
 
 import jax
+import jax.extend as jex
 
 pydot_is_installed = importlib.util.find_spec("pydot") is not None
 
@@ -810,8 +811,8 @@ if pydot_is_installed:
     def get_while_branch(
         jaxpr: jax.core.Jaxpr,
         parent_id: str,
-        parent_args: List[jax.core.Var],
-        parent_outvars: List[jax.core.Var],
+        parent_args: List[jex.core.Var],
+        parent_outvars: List[jex.core.Var],
         label: str,
         n: int,
         show_avals: bool,
@@ -1071,7 +1072,7 @@ if pydot_is_installed:
 
     def get_arg_node(
         arg_id: str,
-        var: Union[jax.core.Var, jax.core.Literal],
+        var: Union[jex.core.Var, jax.core.Literal],
         show_avals: bool,
         is_literal: bool,
     ) -> pydot.Node:
@@ -1104,7 +1105,7 @@ if pydot_is_installed:
 
     def get_const_node(
         arg_id: str,
-        var: Union[jax.core.Var, jax.core.Literal],
+        var: Union[jex.core.Var, jax.core.Literal],
         show_avals: bool,
     ) -> pydot.Node:
         """
@@ -1130,7 +1131,7 @@ if pydot_is_installed:
         )
 
 
-    def get_var_node(var_id: str, var: jax.core.Var, show_avals: bool) -> pydot.Node:
+    def get_var_node(var_id: str, var: jex.core.Var, show_avals: bool) -> pydot.Node:
         """
         Get a pydot node representing a variable internal to a function
 
@@ -1154,7 +1155,7 @@ if pydot_is_installed:
         )
 
 
-    def get_out_node(out_id: str, var: jax.core.Var, show_avals: bool) -> pydot.Node:
+    def get_out_node(out_id: str, var: jex.core.Var, show_avals: bool) -> pydot.Node:
         """
         Get a pydot node representing the outputs of a function
 
@@ -1204,9 +1205,9 @@ if pydot_is_installed:
     def get_arguments(
         graph_id: str,
         parent_id: str,
-        graph_consts: List[jax.core.Var],
-        graph_invars: List[jax.core.Var],
-        parent_invars: List[jax.core.Var],
+        graph_consts: List[jex.core.Var],
+        graph_invars: List[jex.core.Var],
+        parent_invars: List[jex.core.Var],
         show_avals: bool,
     ) -> Tuple[pydot.Subgraph, List[pydot.Edge]]:
         """
@@ -1260,8 +1261,8 @@ if pydot_is_installed:
     def get_scan_arguments(
         graph_id: str,
         parent_id: str,
-        graph_invars: List[jax.core.Var],
-        parent_invars: List[jax.core.Var],
+        graph_invars: List[jex.core.Var],
+        parent_invars: List[jex.core.Var],
         n_const: int,
         n_carry: int,
         show_avals: bool,
@@ -1344,9 +1345,9 @@ if pydot_is_installed:
     def get_outputs(
         graph_id: str,
         parent_id: str,
-        graph_invars: List[jax.core.Var],
-        graph_outvars: List[jax.core.Var],
-        parent_outvars: List[jax.core.Var],
+        graph_invars: List[jex.core.Var],
+        graph_outvars: List[jex.core.Var],
+        parent_outvars: List[jex.core.Var],
         show_avals: bool,
     ) -> Tuple[
         pydot.Subgraph,
@@ -1414,9 +1415,9 @@ if pydot_is_installed:
     def get_scan_outputs(
         graph_id: str,
         parent_id: str,
-        graph_invars: List[jax.core.Var],
-        graph_outvars: List[jax.core.Var],
-        parent_outvars: List[jax.core.Var],
+        graph_invars: List[jex.core.Var],
+        graph_outvars: List[jex.core.Var],
+        parent_outvars: List[jex.core.Var],
         n_carry: int,
         show_avals: bool,
     ) -> Tuple[
@@ -1497,7 +1498,7 @@ if pydot_is_installed:
 
 
     def get_node_label(
-        v: Union[jax.core.Var, jax.core.Literal],
+        v: Union[jex.core.Var, jax.core.Literal],
         show_avals: bool
     ) -> str:
         """

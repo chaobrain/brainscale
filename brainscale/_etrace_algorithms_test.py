@@ -90,16 +90,16 @@ class TestDiagOn(unittest.TestCase):
             model = bst.nn.init_all_states(model)
 
             inputs = bst.random.randn(n_seq, n_in)
-            algorithm = brainscale.DiagIODimAlgorithm(model, decay_or_rank=0.9)
-            algorithm.compile_graph(inputs[0], multi_step=True)
+            algorithm = brainscale.DiagIODimAlgorithm(model, decay_or_rank=0.9, vjp_method='multi-step')
+            algorithm.compile_graph(inputs[0])
 
-            outs = algorithm(inputs, multi_step=True)
+            outs = algorithm(brainscale.MultiStepData(inputs))
             print(outs.shape)
 
             @bst.compile.jit
             def grad_no_bptt(inp):
                 return bst.augment.grad(
-                    lambda inp: algorithm(inp, multi_step=True).sum(),
+                    lambda inp: algorithm(brainscale.MultiStepData(inp)).sum(),
                     model.states(bst.ParamState)
                 )(inp)
 
@@ -174,16 +174,16 @@ class TestDiagOn(unittest.TestCase):
             model = bst.nn.init_all_states(model)
 
             inputs = bst.random.randn(n_seq, n_in)
-            algorithm = brainscale.DiagIODimAlgorithm(model, decay_or_rank=0.9)
-            algorithm.compile_graph(inputs[0], multi_step=True)
+            algorithm = brainscale.DiagIODimAlgorithm(model, decay_or_rank=0.9, vjp_method='multi-step')
+            algorithm.compile_graph(inputs[0])
 
-            outs = algorithm(inputs, multi_step=True)
+            outs = algorithm(brainscale.MultiStepData(inputs))
             print(outs.shape)
 
             @bst.compile.jit
             def grad_no_bptt(inp):
                 return bst.augment.grad(
-                    lambda inp: algorithm(inp, multi_step=True).sum(),
+                    lambda inp: algorithm(brainscale.MultiStepData(inp)).sum(),
                     model.states(bst.ParamState)
                 )(inp)
 
@@ -243,16 +243,16 @@ class TestDiagOn2(unittest.TestCase):
             model = bst.nn.init_all_states(model)
 
             inputs = bst.random.randn(n_seq, n_in)
-            algorithm = brainscale.DiagParamDimAlgorithm(model)
-            algorithm.compile_graph(inputs[0], multi_step=True)
+            algorithm = brainscale.DiagParamDimAlgorithm(model, vjp_method='multi-step')
+            algorithm.compile_graph(inputs[0])
 
-            outs = algorithm(inputs, multi_step=True)
+            outs = algorithm(brainscale.MultiStepData(inputs))
             print(outs.shape)
 
             @bst.compile.jit
             def grad_no_bptt(inp):
                 return bst.augment.grad(
-                    lambda inp: algorithm(inp, multi_step=True).sum(),
+                    lambda inp: algorithm(brainscale.MultiStepData(inp)).sum(),
                     model.states(bst.ParamState)
                 )(inp)
 
@@ -334,16 +334,16 @@ class TestDiagOn2(unittest.TestCase):
             param_states = model.states(bst.ParamState).to_dict_values()
 
             inputs = bst.random.randn(n_seq, n_in)
-            algorithm = brainscale.DiagParamDimAlgorithm(model)
-            algorithm.compile_graph(inputs[0], multi_step=True)
+            algorithm = brainscale.DiagParamDimAlgorithm(model, vjp_method='multi-step')
+            algorithm.compile_graph(inputs[0])
 
-            outs = algorithm(inputs, multi_step=True)
+            outs = algorithm(brainscale.MultiStepData(inputs))
             print(outs.shape)
 
             @bst.compile.jit
             def grad_no_bptt(inp):
                 return bst.augment.grad(
-                    lambda inp: algorithm(inp, multi_step=True).sum(),
+                    lambda inp: algorithm(brainscale.MultiStepData(inp)).sum(),
                     model.states(bst.ParamState)
                 )(inp)
 

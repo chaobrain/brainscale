@@ -18,13 +18,12 @@
 from __future__ import annotations
 
 import brainstate as bst
-from brainstate import init
 
 from brainscale._etrace_concepts import ETraceState
 
 __all__ = [
     # synapse models
-    'Expon', 'STP', 'STD',
+    'Expon', 'Alpha', 'DualExpon', 'STP', 'STD',
 ]
 
 
@@ -33,7 +32,25 @@ class Expon(bst.nn.Expon):
     __module__ = 'brainscale.nn'
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.g = ETraceState(init.param(self.g_initializer, self.varshape, batch_size))
+        self.g = ETraceState(bst.init.param(self.g_initializer, self.varshape, batch_size))
+
+
+class Alpha(bst.nn.Alpha):
+    __doc__ = bst.nn.Alpha.__doc__
+    __module__ = 'brainscale.nn'
+
+    def init_state(self, batch_size: int = None, **kwargs):
+        self.g = ETraceState(bst.init.param(self.g_initializer, self.varshape, batch_size))
+        self.h = ETraceState(bst.init.param(self.g_initializer, self.varshape, batch_size))
+
+
+class DualExpon(bst.nn.DualExpon):
+    __doc__ = bst.nn.DualExpon.__doc__
+    __module__ = 'brainscale.nn'
+
+    def init_state(self, batch_size: int = None, **kwargs):
+        self.g_rise = ETraceState(bst.init.param(self.g_initializer, self.varshape, batch_size))
+        self.g_decay = ETraceState(bst.init.param(self.g_initializer, self.varshape, batch_size))
 
 
 class STP(bst.nn.STP):
@@ -41,8 +58,8 @@ class STP(bst.nn.STP):
     __module__ = 'brainscale.nn'
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.x = ETraceState(init.param(init.Constant(1.), self.varshape, batch_size))
-        self.u = ETraceState(init.param(init.Constant(self.U), self.varshape, batch_size))
+        self.x = ETraceState(bst.init.param(bst.init.Constant(1.), self.varshape, batch_size))
+        self.u = ETraceState(bst.init.param(bst.init.Constant(self.U), self.varshape, batch_size))
 
 
 class STD(bst.nn.STD):
@@ -50,4 +67,4 @@ class STD(bst.nn.STD):
     __module__ = 'brainscale.nn'
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.x = ETraceState(init.param(init.Constant(1.), self.varshape, batch_size))
+        self.x = ETraceState(bst.init.param(bst.init.Constant(1.), self.varshape, batch_size))

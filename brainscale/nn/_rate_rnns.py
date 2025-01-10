@@ -20,7 +20,6 @@ from typing import Callable, Union
 
 import brainstate as bst
 import brainunit as u
-from brainstate import init, functional, nn
 
 from brainscale._etrace_concepts import ETraceState, ETraceParamOp, ElementWiseParamOp
 from brainscale._typing import ArrayLike
@@ -33,12 +32,13 @@ __all__ = [
     'LSTMCell',
     'URLSTMCell',
     'MinimalRNNCell',
-    'MinimalRNNv2Cell',
+    'MiniGRU',
+    'MiniLSTM',
     'LRUCell',
 ]
 
 
-class ValinaRNNCell(nn.RNNCell):
+class ValinaRNNCell(bst.nn.RNNCell):
     """
     Vanilla RNN cell.
   
@@ -57,9 +57,9 @@ class ValinaRNNCell(nn.RNNCell):
         self,
         in_size: bst.typing.Size,
         out_size: bst.typing.Size,
-        state_init: Union[ArrayLike, Callable] = init.ZeroInit(),
-        w_init: Union[ArrayLike, Callable] = init.XavierNormal(),
-        b_init: Union[ArrayLike, Callable] = init.ZeroInit(),
+        state_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
+        w_init: Union[ArrayLike, Callable] = bst.init.XavierNormal(),
+        b_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
         activation: str | Callable = 'relu',
         name: str = None,
     ):
@@ -72,7 +72,7 @@ class ValinaRNNCell(nn.RNNCell):
 
         # activation function
         if isinstance(activation, str):
-            self.activation = getattr(functional, activation)
+            self.activation = getattr(bst.functional, activation)
         else:
             assert callable(activation), "The activation function should be a string or a callable function. "
             self.activation = activation
@@ -81,10 +81,10 @@ class ValinaRNNCell(nn.RNNCell):
         self.W = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.h = ETraceState(init.param(self._state_initializer, self.out_size, batch_size))
+        self.h = ETraceState(bst.init.param(self._state_initializer, self.out_size, batch_size))
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        self.h.value = init.param(self._state_initializer, self.out_size, batch_size)
+        self.h.value = bst.init.param(self._state_initializer, self.out_size, batch_size)
 
     def update(self, x):
         xh = u.math.concatenate([x, self.h.value], axis=-1)
@@ -92,7 +92,7 @@ class ValinaRNNCell(nn.RNNCell):
         return self.h.value
 
 
-class GRUCell(nn.RNNCell):
+class GRUCell(bst.nn.RNNCell):
     r"""
     Gated Recurrent Unit (GRU) cell, implemented as in
     `Learning Phrase Representations using RNN Encoder-Decoder for
@@ -114,9 +114,9 @@ class GRUCell(nn.RNNCell):
         self,
         in_size: bst.typing.Size,
         out_size: bst.typing.Size,
-        w_init: Union[ArrayLike, Callable] = init.Orthogonal(),
-        b_init: Union[ArrayLike, Callable] = init.ZeroInit(),
-        state_init: Union[ArrayLike, Callable] = init.ZeroInit(),
+        w_init: Union[ArrayLike, Callable] = bst.init.Orthogonal(),
+        b_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
+        state_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
         activation: str | Callable = 'tanh',
         name: str = None,
     ):
@@ -129,7 +129,7 @@ class GRUCell(nn.RNNCell):
 
         # activation function
         if isinstance(activation, str):
-            self.activation = getattr(functional, activation)
+            self.activation = getattr(bst.functional, activation)
         else:
             assert callable(activation), "The activation function should be a string or a callable function. "
             self.activation = activation
@@ -140,16 +140,16 @@ class GRUCell(nn.RNNCell):
         self.Wh = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.h = ETraceState(init.param(self._state_initializer, self.out_size, batch_size))
+        self.h = ETraceState(bst.init.param(self._state_initializer, self.out_size, batch_size))
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        self.h.value = init.param(self._state_initializer, self.out_size, batch_size)
+        self.h.value = bst.init.param(self._state_initializer, self.out_size, batch_size)
 
     def update(self, x):
         old_h = self.h.value
         xh = u.math.concatenate([x, old_h], axis=-1)
-        z = functional.sigmoid(self.Wz(xh))
-        r = functional.sigmoid(self.Wr(xh))
+        z = bst.functional.sigmoid(self.Wz(xh))
+        r = bst.functional.sigmoid(self.Wr(xh))
         rh = r * old_h
         h = self.activation(self.Wh(u.math.concatenate([x, rh], axis=-1)))
         h = (1 - z) * old_h + z * h
@@ -157,7 +157,7 @@ class GRUCell(nn.RNNCell):
         return h
 
 
-class CFNCell(nn.RNNCell):
+class CFNCell(bst.nn.RNNCell):
     r"""
     Chaos Free Networks (CFN) cell, implemented as in
     `A recurrent neural network without chaos <https://arxiv.org/abs/1612.06212>`_.
@@ -177,9 +177,9 @@ class CFNCell(nn.RNNCell):
         self,
         in_size: bst.typing.Size,
         out_size: bst.typing.Size,
-        w_init: Union[ArrayLike, Callable] = init.Orthogonal(),
-        b_init: Union[ArrayLike, Callable] = init.ZeroInit(),
-        state_init: Union[ArrayLike, Callable] = init.ZeroInit(),
+        w_init: Union[ArrayLike, Callable] = bst.init.Orthogonal(),
+        b_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
+        state_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
         activation: str | Callable = 'tanh',
         name: str = None,
     ):
@@ -192,7 +192,7 @@ class CFNCell(nn.RNNCell):
 
         # activation function
         if isinstance(activation, str):
-            self.activation = getattr(functional, activation)
+            self.activation = getattr(bst.functional, activation)
         else:
             assert callable(activation), "The activation function should be a string or a callable function. "
             self.activation = activation
@@ -203,22 +203,22 @@ class CFNCell(nn.RNNCell):
         self.Wh = Linear(self.out_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.h = ETraceState(init.param(self._state_initializer, self.out_size, batch_size))
+        self.h = ETraceState(bst.init.param(self._state_initializer, self.out_size, batch_size))
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        self.h.value = init.param(self._state_initializer, self.out_size, batch_size)
+        self.h.value = bst.init.param(self._state_initializer, self.out_size, batch_size)
 
     def update(self, x):
         old_h = self.h.value
         xh = u.math.concatenate([x, old_h], axis=-1)
-        f = functional.sigmoid(self.Wf(xh))
-        i = functional.sigmoid(self.Wi(xh))
+        f = bst.functional.sigmoid(self.Wf(xh))
+        i = bst.functional.sigmoid(self.Wi(xh))
         h = f * self.activation(old_h) + i * self.activation(self.Wh(x))
         self.h.value = h
         return h
 
 
-class MGUCell(nn.RNNCell):
+class MGUCell(bst.nn.RNNCell):
     r"""
     Minimal Gated Recurrent Unit (MGU) cell, implemented as in
     `Minimal Gated Unit for Recurrent Neural Networks <https://arxiv.org/abs/1603.09420>`_.
@@ -254,9 +254,9 @@ class MGUCell(nn.RNNCell):
         self,
         in_size: bst.typing.Size,
         out_size: bst.typing.Size,
-        w_init: Union[ArrayLike, Callable] = init.Orthogonal(),
-        b_init: Union[ArrayLike, Callable] = init.ZeroInit(),
-        state_init: Union[ArrayLike, Callable] = init.ZeroInit(),
+        w_init: Union[ArrayLike, Callable] = bst.init.Orthogonal(),
+        b_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
+        state_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
         activation: str | Callable = 'tanh',
         name: str = None,
     ):
@@ -269,7 +269,7 @@ class MGUCell(nn.RNNCell):
 
         # activation function
         if isinstance(activation, str):
-            self.activation = getattr(functional, activation)
+            self.activation = getattr(bst.functional, activation)
         else:
             assert callable(activation), "The activation function should be a string or a callable function. "
             self.activation = activation
@@ -279,22 +279,22 @@ class MGUCell(nn.RNNCell):
         self.Wh = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.h = ETraceState(init.param(self._state_initializer, self.out_size, batch_size))
+        self.h = ETraceState(bst.init.param(self._state_initializer, self.out_size, batch_size))
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        self.h.value = init.param(self._state_initializer, self.out_size, batch_size)
+        self.h.value = bst.init.param(self._state_initializer, self.out_size, batch_size)
 
     def update(self, x):
         old_h = self.h.value
         xh = u.math.concatenate([x, old_h], axis=-1)
-        f = functional.sigmoid(self.Wf(xh))
+        f = bst.functional.sigmoid(self.Wf(xh))
         fh = f * old_h
         h = self.activation(self.Wh(u.math.concatenate([x, fh], axis=-1)))
         self.h.value = (1 - f) * self.h.value + f * h
         return self.h.value
 
 
-class LSTMCell(nn.RNNCell):
+class LSTMCell(bst.nn.RNNCell):
     r"""Long short-term memory (LSTM) RNN core.
   
     The implementation is based on (zaremba, et al., 2014) [1]_. Given
@@ -355,9 +355,9 @@ class LSTMCell(nn.RNNCell):
         self,
         in_size: bst.typing.Size,
         out_size: bst.typing.Size,
-        w_init: Union[ArrayLike, Callable] = init.XavierNormal(),
-        b_init: Union[ArrayLike, Callable] = init.ZeroInit(),
-        state_init: Union[ArrayLike, Callable] = init.ZeroInit(),
+        w_init: Union[ArrayLike, Callable] = bst.init.XavierNormal(),
+        b_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
+        state_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
         activation: str | Callable = 'tanh',
         name: str = None,
     ):
@@ -372,7 +372,7 @@ class LSTMCell(nn.RNNCell):
 
         # activation function
         if isinstance(activation, str):
-            self.activation = getattr(functional, activation)
+            self.activation = getattr(bst.functional, activation)
         else:
             assert callable(activation), "The activation function should be a string or a callable function. "
             self.activation = activation
@@ -384,12 +384,12 @@ class LSTMCell(nn.RNNCell):
         self.Wo = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.c = ETraceState(init.param(self._state_initializer, self.out_size, batch_size))
-        self.h = ETraceState(init.param(self._state_initializer, self.out_size, batch_size))
+        self.c = ETraceState(bst.init.param(self._state_initializer, self.out_size, batch_size))
+        self.h = ETraceState(bst.init.param(self._state_initializer, self.out_size, batch_size))
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        self.c.value = init.param(self._state_initializer, self.out_size, batch_size)
-        self.h.value = init.param(self._state_initializer, self.out_size, batch_size)
+        self.c.value = bst.init.param(self._state_initializer, self.out_size, batch_size)
+        self.h.value = bst.init.param(self._state_initializer, self.out_size, batch_size)
 
     def update(self, x):
         h, c = self.h.value, self.c.value
@@ -398,22 +398,22 @@ class LSTMCell(nn.RNNCell):
         g = self.Wg(xh)
         f = self.Wf(xh)
         o = self.Wo(xh)
-        c = functional.sigmoid(f + 1.) * c + functional.sigmoid(i) * self.activation(g)
-        h = functional.sigmoid(o) * self.activation(c)
+        c = bst.functional.sigmoid(f + 1.) * c + bst.functional.sigmoid(i) * self.activation(g)
+        h = bst.functional.sigmoid(o) * self.activation(c)
         self.h.value = h
         self.c.value = c
         return h
 
 
-class URLSTMCell(nn.RNNCell):
+class URLSTMCell(bst.nn.RNNCell):
     __module__ = 'brainscale.nn'
 
     def __init__(
         self,
         in_size: bst.typing.Size,
         out_size: bst.typing.Size,
-        w_init: Union[ArrayLike, Callable] = init.XavierNormal(),
-        state_init: Union[ArrayLike, Callable] = init.ZeroInit(),
+        w_init: Union[ArrayLike, Callable] = bst.init.XavierNormal(),
+        state_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
         activation: str | Callable = 'tanh',
         name: str = None,
     ):
@@ -428,7 +428,7 @@ class URLSTMCell(nn.RNNCell):
 
         # activation function
         if isinstance(activation, str):
-            self.activation = getattr(functional, activation)
+            self.activation = getattr(bst.functional, activation)
         else:
             assert callable(activation), "The activation function should be a string or a callable function. "
             self.activation = activation
@@ -445,12 +445,12 @@ class URLSTMCell(nn.RNNCell):
         return -u.math.log(1 / u - 1)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.c = ETraceState(init.param(self._state_initializer, self.out_size, batch_size))
-        self.h = ETraceState(init.param(self._state_initializer, self.out_size, batch_size))
+        self.c = ETraceState(bst.init.param(self._state_initializer, self.out_size, batch_size))
+        self.h = ETraceState(bst.init.param(self._state_initializer, self.out_size, batch_size))
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        self.c.value = init.param(self._state_initializer, self.out_size, batch_size)
-        self.h.value = init.param(self._state_initializer, self.out_size, batch_size)
+        self.c.value = bst.init.param(self._state_initializer, self.out_size, batch_size)
+        self.h.value = bst.init.param(self._state_initializer, self.out_size, batch_size)
 
     def update(self, x: ArrayLike) -> ArrayLike:
         h, c = self.h.value, self.c.value
@@ -459,17 +459,17 @@ class URLSTMCell(nn.RNNCell):
         r = self.Wr(xh)
         u_ = self.Wu(xh)
         o = self.Wo(xh)
-        f_ = functional.sigmoid(self.bias.execute(f))
-        r_ = functional.sigmoid(-self.bias.execute(-r))
+        f_ = bst.functional.sigmoid(self.bias.execute(f))
+        r_ = bst.functional.sigmoid(-self.bias.execute(-r))
         g = 2 * r_ * f_ + (1 - 2 * r_) * f_ ** 2
         next_cell = g * c + (1 - g) * self.activation(u_)
-        next_hidden = functional.sigmoid(o) * self.activation(next_cell)
+        next_hidden = bst.functional.sigmoid(o) * self.activation(next_cell)
         self.h.value = next_hidden
         self.c.value = next_cell
         return next_hidden
 
 
-class MinimalRNNCell(nn.RNNCell):
+class MinimalRNNCell(bst.nn.RNNCell):
     r"""
     Minimal RNN Cell, implemented as in
     `MinimalRNN: Toward More Interpretable and Trainable Recurrent Neural Networks <https://arxiv.org/abs/1711.06788>`_
@@ -515,9 +515,9 @@ class MinimalRNNCell(nn.RNNCell):
         self,
         in_size: bst.typing.Size,
         out_size: bst.typing.Size,
-        w_init: Union[ArrayLike, Callable] = init.Orthogonal(),
-        b_init: Union[ArrayLike, Callable] = init.ZeroInit(),
-        state_init: Union[ArrayLike, Callable] = init.ZeroInit(),
+        w_init: Union[ArrayLike, Callable] = bst.init.Orthogonal(),
+        b_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
+        state_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
         phi: Callable = None,
         name: str = None,
     ):
@@ -538,19 +538,19 @@ class MinimalRNNCell(nn.RNNCell):
         self.W_u = Linear(self.out_size[-1] * 2, self.out_size[-1], w_init=w_init, b_init=b_init)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.h = ETraceState(init.param(self._state_initializer, self.out_size, batch_size))
+        self.h = ETraceState(bst.init.param(self._state_initializer, self.out_size, batch_size))
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        self.h.value = init.param(self._state_initializer, self.out_size, batch_size)
+        self.h.value = bst.init.param(self._state_initializer, self.out_size, batch_size)
 
     def update(self, x):
         z = self.phi(x)
-        u_ = functional.sigmoid(self.W_u(u.math.concatenate([z, self.h.value], axis=-1)))
-        self.h.value = u_ * self.h.value + (1 - u_) * z
+        f = bst.functional.sigmoid(self.W_u(u.math.concatenate([z, self.h.value], axis=-1)))
+        self.h.value = f * self.h.value + (1 - f) * z
         return self.h.value
 
 
-class MinimalRNNv2Cell(nn.RNNCell):
+class MiniGRU(bst.nn.RNNCell):
     r"""
     Minimal RNN Cell, implemented as in
     `MinimalRNN: Toward More Interpretable and Trainable Recurrent Neural Networks <https://arxiv.org/abs/1711.06788>`_
@@ -595,9 +595,9 @@ class MinimalRNNv2Cell(nn.RNNCell):
         self,
         in_size: bst.typing.Size,
         out_size: bst.typing.Size,
-        w_init: Union[ArrayLike, Callable] = init.Orthogonal(),
-        b_init: Union[ArrayLike, Callable] = init.ZeroInit(),
-        state_init: Union[ArrayLike, Callable] = init.ZeroInit(),
+        w_init: Union[ArrayLike, Callable] = bst.init.Orthogonal(),
+        b_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
+        state_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
         name: str = None,
     ):
         super().__init__(name=name)
@@ -608,20 +608,98 @@ class MinimalRNNv2Cell(nn.RNNCell):
         self.in_size = in_size
 
         # functions
-        self.phi = Linear(self.in_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
+        self.W_x = Linear(self.in_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
 
         # weights
-        self.W_u = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
+        self.W_z = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.h = ETraceState(init.param(self._state_initializer, self.out_size, batch_size))
+        self.h = ETraceState(bst.init.param(self._state_initializer, self.out_size, batch_size))
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        self.h.value = init.param(self._state_initializer, self.out_size, batch_size)
+        self.h.value = bst.init.param(self._state_initializer, self.out_size, batch_size)
 
     def update(self, x):
-        u_ = functional.sigmoid(self.W_u(u.math.concatenate([x, self.h.value], axis=-1)))
-        self.h.value = u_ * self.h.value + (1 - u_) * self.phi(x)
+        z = bst.functional.sigmoid(self.W_z(u.math.concatenate([x, self.h.value], axis=-1)))
+        self.h.value = (1 - z) * self.h.value + z * self.W_x(x)
+        return self.h.value
+
+
+class MiniLSTM(bst.nn.RNNCell):
+    r"""
+    Minimal RNN Cell, implemented as in
+    `MinimalRNN: Toward More Interpretable and Trainable Recurrent Neural Networks <https://arxiv.org/abs/1711.06788>`_
+
+    Model
+    -----
+
+    At each step $t$, the model first maps its input $\mathbf{x}_t$ to a
+    latent space through
+    $$\mathbf{z}_t=\Phi(\mathbf{x}_t)$$
+    $\Phi(\cdot)$ here can be any highly flexible functions such  as neural networks.
+    Default, we take $\Phi(\cdot)$ as a fully connected layer with tanh activation. That
+    is,  $\Phi ( \mathbf{x} _t) = \tanh ( \mathbf{W} _x\mathbf{x} _t+ \mathbf{b} _z) .$
+
+    Given the latent representation $\mathbf{z}_t$ of the input, MinimalRNN then updates its states simply as:
+
+    $$\mathbf{h}_t=\mathbf{u}_t\odot\mathbf{h}_{t-1}+(\mathbf{1}-\mathbf{u}_t)\odot\mathbf{z}_t$$
+
+    where $\mathbf{u}_t=\sigma(\mathbf{U}_h\mathbf{h}_{t-1}+\mathbf{U}_z\mathbf{z}_t+\mathbf{b}_u)$ is the update
+    gate.
+
+
+    Parameters
+    ----------
+    in_size: bst.typing.Size
+        The number of input units.
+    out_size: bst.typing.Size
+        The number of hidden units.
+    w_init: callable, ArrayLike
+        The input weight initializer.
+    b_init: callable, ArrayLike
+        The bias weight initializer.
+    state_init: callable, ArrayLike
+        The state initializer.
+    name: optional, str
+        The name of the module.
+
+    """
+    __module__ = 'brainscale.nn'
+
+    def __init__(
+        self,
+        in_size: bst.typing.Size,
+        out_size: bst.typing.Size,
+        w_init: Union[ArrayLike, Callable] = bst.init.Orthogonal(),
+        b_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
+        state_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
+        name: str = None,
+    ):
+        super().__init__(name=name)
+
+        # parameters
+        self._state_initializer = state_init
+        self.out_size = out_size
+        self.in_size = in_size
+
+        # functions
+        self.W_x = Linear(self.in_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
+
+        # weights
+        self.W_f = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
+        self.W_i = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
+
+    def init_state(self, batch_size: int = None, **kwargs):
+        self.h = ETraceState(bst.init.param(self._state_initializer, self.out_size, batch_size))
+
+    def reset_state(self, batch_size: int = None, **kwargs):
+        self.h.value = bst.init.param(self._state_initializer, self.out_size, batch_size)
+
+    def update(self, x):
+        xh = u.math.concatenate([x, self.h.value], axis=-1)
+        f = bst.functional.sigmoid(self.W_f(xh))
+        i = bst.functional.sigmoid(self.W_i(xh))
+        self.h.value = f * self.h.value + i * self.W_x(x)
         return self.h.value
 
 
