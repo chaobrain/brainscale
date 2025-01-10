@@ -797,7 +797,7 @@ class DiagETraceAlgorithmForVJP(ETraceAlgorithm):
         dg_running_index = None
 
         return (
-            dg_args if self.graph.is_multi_step else jax.tree.map(lambda x: x[0], dg_args),
+            dg_args,
             dg_weights,
             dg_last_hiddens,
             dg_oth_states,

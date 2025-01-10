@@ -713,49 +713,49 @@ class ETraceGraph:
         # Scan VJP function over multiple time steps
         # ------------------------------------------------------
 
-        # processing the inputs information
-        args_single_step, args_multi_steps, tree_def = split_data_types(*args)
-
-        if len(args_multi_steps):
-            # check the batch size
-            args_dim = [jnp.shape(x)[0] for x in jax.tree.leaves(args_multi_steps)]
-            if len(set(args_dim)) != 1:
-                raise ValueError(f'The sequence size should be the same for all inputs. But we got {args_dim}.')
-
-        def scan_fn(carray, x_single_step: Dict):
-            # non_etrace_weight_vals_: the non-etrace weights
-            # etrace_weight_vals_: the etrace weights
-            # hidden_perturbs_: the hidden perturbations, only used when vjp_time_ahead == 0
-
-            args_ = merge_data(tree_def, x_single_step, args_single_step)
-
-            hidden_vals_, other_vals_ = carray
-            (
-                out,
-                new_hiddens,
-                new_others,
-                hid2weight_jac,
-                hid2hid_jac
-            ) = fun_for_vjp(
-                args_,
-                hidden_vals_,
-                non_etrace_weight_vals,
-                etrace_weight_vals,
-                other_vals_,
-                hidden_perturbs
-            )
-
-            return (
-                (new_hiddens, new_others),
-                (out, hid2weight_jac, hid2hid_jac)
-            )
-
         def scan_over_multiple_inputs(
-            inputs_multi_steps: Dict,  # the inputs for multiple time steps
+            inputs: Dict,  # the inputs for multiple time steps
             hidden_vals_,  # the initial hidden states
+            non_etrace_weight_vals_,  # the non-etrace weights
+            etrace_weight_vals_,  # the etrace weights
             other_vals_,  # the initial other states
+            hidden_perturbs_  # the hidden perturbations, only used when vjp_time_ahead == 0
         ):
-            if len(inputs_multi_steps):
+
+            # processing the inputs information
+            args_single_step, args_multi_steps, tree_def = split_data_types(*inputs)
+
+            if len(args_multi_steps):
+                # check the batch size
+                args_dim = [jnp.shape(x)[0] for x in jax.tree.leaves(args_multi_steps)]
+                if len(set(args_dim)) != 1:
+                    raise ValueError(f'The sequence size should be the same for all inputs. But we got {args_dim}.')
+
+            def scan_fn(carray, x_single_step: Dict):
+                args_ = merge_data(tree_def, x_single_step, args_single_step)
+
+                hidden_vals_, other_vals_ = carray
+                (
+                    out,
+                    new_hiddens,
+                    new_others,
+                    hid2weight_jac,
+                    hid2hid_jac
+                ) = fun_for_vjp(
+                    args_,
+                    hidden_vals_,
+                    non_etrace_weight_vals_,
+                    etrace_weight_vals_,
+                    other_vals_,
+                    hidden_perturbs_
+                )
+
+                return (
+                    (new_hiddens, new_others),
+                    (out, hid2weight_jac, hid2hid_jac)
+                )
+
+            if len(args_multi_steps):
                 (
                     (
                         new_hiddens,
@@ -766,7 +766,7 @@ class ETraceGraph:
                         _hid2weight_jac_multi_steps,
                         _hid2hid_jac_multi_steps
                     )
-                ) = jax.lax.scan(scan_fn, (hidden_vals_, other_vals_), inputs_multi_steps)
+                ) = jax.lax.scan(scan_fn, (hidden_vals_, other_vals_), args_multi_steps)
 
             else:
                 (
@@ -775,7 +775,7 @@ class ETraceGraph:
                         new_others
                     ),
                     ret
-                ) = scan_fn((hidden_vals_, other_vals_), inputs_multi_steps)
+                ) = scan_fn((hidden_vals_, other_vals_), args_multi_steps)
                 (
                     _outs_multi_steps,
                     _hid2weight_jac_multi_steps,
@@ -814,9 +814,12 @@ class ETraceGraph:
             )
         ) = jax.vjp(
             scan_over_multiple_inputs,  # the function
-            args_multi_steps,  # the inputs (multiple time)
+            args,  # the inputs (multiple time)
             hidden_vals,  # the inputs (single time)
+            non_etrace_weight_vals,  # the inputs (single time)
+            etrace_weight_vals,  # the inputs (single time)
             other_vals,  # the inputs (single time)
+            hidden_perturbs,  # the inputs (single time)
             has_aux=True
         )
         out_flat, out_tree = jax.tree.flatten(((outs_multi_steps, hidden_vals, other_vals),))
