@@ -315,15 +315,15 @@ class DMSDataset:
             for _ in range(self.batch_size):
                 x, y = _dms(
                     self.num_steps,
-                            self.num_inputs,
-                            self.n_motion_choice,
-                            self.motion_tuning,
-                            self.sample_time,
-                            self.test_time,
-                            fr,
-                            bg_fr,
-                            self._rotate
-                            )
+                    self.num_inputs,
+                    self.n_motion_choice,
+                    self.motion_tuning,
+                    self.sample_time,
+                    self.test_time,
+                    fr,
+                    bg_fr,
+                    self._rotate
+                )
                 xs.append(x)
                 ys.append(y)
             yield np.asarray(xs), np.asarray(ys)

@@ -509,9 +509,9 @@ class DiagETraceAlgorithmForVJP(ETraceAlgorithm):
 
         # return the model output
         return (
-            jax.tree.map(lambda x: x[0], out)
-            if input_is_multi_step else
             out
+            if input_is_multi_step else
+            jax.tree.map(lambda x: x[0], out)
         )
 
     def _update_fn(

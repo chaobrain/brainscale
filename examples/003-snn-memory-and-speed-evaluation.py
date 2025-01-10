@@ -261,18 +261,6 @@ class ETraceNet(bst.nn.Module):
             loss = loss * factor
         return loss
 
-    def save(self, step, **kwargs):
-        if self.checkpointer is not None:
-            states = self.states().subset(bst.ParamState).to_dict_values()
-            self.checkpointer.save_data(states, step, **kwargs)
-
-    def restore(self, step=None):
-        if self.checkpointer is not None:
-            states = self.states().subset(bst.ParamState)
-            values = self.checkpointer.load_data(states.to_dict_values(), step=step)
-            for k, v in values.items():
-                states[k].value = v
-
     def verify(self, dataloader, x_func, num_show=5, filepath=None):
         def _step(index, x):
             with bst.environ.context(i=index, t=index * bst.environ.get_dt()):
