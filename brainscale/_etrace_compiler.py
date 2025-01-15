@@ -46,7 +46,6 @@ from typing import (NamedTuple, List, Dict, Sequence, Tuple, Set, Optional)
 
 import brainstate as bst
 import brainunit as u
-import jax.extend as jex
 import jax.core
 from jax.extend import source_info_util
 
@@ -66,6 +65,11 @@ from ._typing import (PyTree,
                       HiddenInVar,
                       HiddenOutVar,
                       Path)
+
+if jax.__version_info__ < (0, 4, 38):
+    from jax.core import Var
+else:
+    from jax.extend.core import Var
 
 __all__ = [
     'compile_graph',
@@ -148,11 +152,11 @@ class JaxprEvaluation(object):
 
     def __init__(
         self,
-        weight_invars: Set[jex.core.Var],
-        hidden_invars: Set[jex.core.Var],
-        hidden_outvars: Set[jex.core.Var],
-        invar_to_hidden_path: Dict[jex.core.Var, Path],
-        outvar_to_hidden_path: Dict[jex.core.Var, Path],
+        weight_invars: Set[Var],
+        hidden_invars: Set[Var],
+        hidden_outvars: Set[Var],
+        invar_to_hidden_path: Dict[Var, Path],
+        outvar_to_hidden_path: Dict[Var, Path],
     ):
         self.weight_invars = weight_invars
         self.hidden_invars = hidden_invars
@@ -271,10 +275,10 @@ class HiddenToHiddensTracer(NamedTuple):
     """
     The data structure for the tracing of the hidden-to-hidden states.
     """
-    hidden_invar: jex.core.Var
-    connected_hidden_outvars: set[jex.core.Var]
-    other_invars: set[jex.core.Var]
-    invar_needed_in_oth_eqns: set[jex.core.Var]
+    hidden_invar: Var
+    connected_hidden_outvars: set[Var]
+    other_invars: set[Var]
+    invar_needed_in_oth_eqns: set[Var]
     trace: List[jax.core.JaxprEqn]
 
 
@@ -285,11 +289,11 @@ class HiddenWeightOpTracer(NamedTuple):
     op: jax.core.JaxprEqn  # f: how x is transformed into y, i.e., y = f(x, w)
     weight: ETraceParam  # w
     weight_path: Path  # w
-    x: jex.core.Var  # y
-    y: jex.core.Var  # x
+    x: Var  # y
+    y: Var  # x
     trace: List[jax.core.JaxprEqn]
-    hidden_vars: set[jex.core.Var]
-    invar_needed_in_oth_eqns: set[jex.core.Var]
+    hidden_vars: set[Var]
+    invar_needed_in_oth_eqns: set[Var]
 
     def replace(
         self,
@@ -317,9 +321,9 @@ class HiddenWeightOpTracer(NamedTuple):
 
 
 def _check_some_element_exist_in_the_set(
-    elements: Sequence[jex.core.Var],
-    the_set: Set[jex.core.Var]
-) -> jex.core.Var | None:
+    elements: Sequence[Var],
+    the_set: Set[Var]
+) -> Var | None:
     """
     Checking whether the jaxpr vars contain the weight variables.
 
@@ -328,15 +332,15 @@ def _check_some_element_exist_in_the_set(
       the_set: The set of the weight variables.
     """
     for invar in elements:
-        if isinstance(invar, jex.core.Var) and invar in the_set:
+        if isinstance(invar, Var) and invar in the_set:
             return invar
     return None
 
 
 def _check_matched(
-    invars: Sequence[jex.core.Var],
-    invar_needed_in_oth_eqns: Set[jex.core.Var]
-) -> List[jex.core.Var]:
+    invars: Sequence[Var],
+    invar_needed_in_oth_eqns: Set[Var]
+) -> List[Var]:
     """
     Checking whether the invars are matched with the invar_needed_in_oth_eqns.
 
@@ -346,7 +350,7 @@ def _check_matched(
     """
     matched = []
     for invar in invars:
-        if isinstance(invar, jex.core.Var) and invar in invar_needed_in_oth_eqns:
+        if isinstance(invar, Var) and invar in invar_needed_in_oth_eqns:
             matched.append(invar)
     return matched
 
@@ -397,7 +401,7 @@ def _simplify_hid2hid_tracer(
         if len(need_outvars):
             visited_needed_vars.update(need_outvars)
             new_trace.append(eqn)
-            whole_trace_needed_vars.update([invar for invar in eqn.invars if isinstance(invar, jex.core.Var)])
+            whole_trace_needed_vars.update([invar for invar in eqn.invars if isinstance(invar, Var)])
 
     # [second step]
     # Checking whether the shape of each hidden state is consistent.
@@ -465,7 +469,7 @@ def _trace_simplify(
     hid_path_to_group: Dict[Path, 'HiddenGroupV2'],
     hid_path_to_transition: Dict[Path, 'HiddenTransition'],
     state_id_to_path: Dict[int, Path],
-    outvar_to_hidden_path: Dict[jex.core.Var, Path],
+    outvar_to_hidden_path: Dict[Var, Path],
 ) -> WeightOpHiddenRelation | None:
     """
     Simplifying the trace from the weight output to the hidden state.
@@ -553,7 +557,7 @@ def _trace_simplify(
             for outvar in need_outvars:
                 visited_needed_vars.add(outvar)
             new_trace.append(eqn)
-            whole_trace_needed_vars.update([invar for invar in eqn.invars if isinstance(invar, jex.core.Var)])
+            whole_trace_needed_vars.update([invar for invar in eqn.invars if isinstance(invar, Var)])
 
     # [fourth step]
     equations = list(reversed(new_trace))
@@ -637,8 +641,8 @@ class JaxprEvaluationForWeightOpHiddenRelation(JaxprEvaluation):
         self,
         jaxpr: jax.core.Jaxpr,
         hidden_outvar_to_invar: Dict[HiddenOutVar, HiddenInVar],
-        weight_path_to_vars: Dict[Path, List[jex.core.Var]],
-        invar_to_weight_path: Dict[jex.core.Var, Path],
+        weight_path_to_vars: Dict[Path, List[Var]],
+        invar_to_weight_path: Dict[Var, Path],
         path_to_state: Dict[Path, bst.State],
         hid_path_to_group: Dict[Path, 'HiddenGroupV2'],
         hid_path_to_transition: Dict[Path, 'HiddenTransition'],
@@ -823,7 +827,7 @@ class JaxprEvaluationForWeightOpHiddenRelation(JaxprEvaluation):
     def _get_state_and_inp_and_checking(
         self,
         eqn: jax.core.JaxprEqn
-    ) -> Tuple[Path, jex.core.Var]:
+    ) -> Tuple[Path, Var]:
 
         # Currently, only single input/output are supported, i.e.,
         #       y = f(x, w1, w2, ...)
@@ -913,7 +917,7 @@ def _hpo_tracer_to_relation(
     hid_path_to_group: Dict[Path, 'HiddenGroupV2'],
     hid_path_to_transition: Dict[Path, 'HiddenTransition'],
     state_id_to_path: Dict[int, Path],
-    outvar_to_hidden_path: Dict[jex.core.Var, Path]
+    outvar_to_hidden_path: Dict[Var, Path]
 ) -> WeightOpHiddenRelation | None:
     hpo_tracer = hpo_tracer.replace(hidden_vars=list(hid_relation.hidden_outvars))
     return _trace_simplify(
@@ -1026,7 +1030,7 @@ class JaxprEvaluationForHiddenGroup(JaxprEvaluation):
         self,
         jaxpr: jax.core.Jaxpr,
         hidden_outvar_to_invar: Dict[HiddenOutVar, HiddenInVar],
-        weight_invars: Set[jex.core.Var],
+        weight_invars: Set[Var],
         invar_to_hidden_path: Dict[HiddenInVar, Path],
         outvar_to_hidden_path: Dict[HiddenOutVar, Path],
     ):
@@ -1061,7 +1065,7 @@ class JaxprEvaluationForHiddenGroup(JaxprEvaluation):
         """
 
         # the data structures for the tracing hidden-hidden relationships
-        self.active_tracings: Dict[jex.core.Var, HiddenToHiddensTracer] = dict()
+        self.active_tracings: Dict[Var, HiddenToHiddensTracer] = dict()
 
         # evaluating the jaxpr
         self._eval_jaxpr(self.jaxpr)
@@ -1328,9 +1332,9 @@ class JaxprEvaluationForHiddenPerturbation(JaxprEvaluation):
         self,
         closed_jaxpr: jax.core.ClosedJaxpr,
         hidden_outvar_to_invar: Dict[HiddenOutVar, HiddenInVar],
-        weight_invars: Set[jex.core.Var],
+        weight_invars: Set[Var],
         invar_to_hidden_path: Dict[HiddenInVar, Path],
-        outvar_to_hidden_path: Dict[jex.core.Var, Path],
+        outvar_to_hidden_path: Dict[Var, Path],
     ):
         # necessary data structures
         self.closed_jaxpr = closed_jaxpr
@@ -1394,7 +1398,7 @@ class JaxprEvaluationForHiddenPerturbation(JaxprEvaluation):
 
     def _add_perturb_eqn(self,
                          eqn: jax.core.JaxprEqn,
-                         perturb_var: jex.core.Var):
+                         perturb_var: Var):
         # ------------------------------------------------
         #
         # For the hidden var eqn, we want to add a perturbation:
@@ -1433,7 +1437,7 @@ class JaxprEvaluationForHiddenPerturbation(JaxprEvaluation):
         self.revised_eqns.append(eqn.replace())
 
     def _new_var_like(self, v):
-        return jex.core.Var('', jax.core.ShapedArray(v.aval.shape, v.aval.dtype))
+        return Var('', jax.core.ShapedArray(v.aval.shape, v.aval.dtype))
 
 
 def _summarize_frame(frame) -> str:
@@ -1469,11 +1473,11 @@ class HiddenTransition(NamedTuple):
     """
 
     # the hidden state h_i^{t-1}
-    hidden_invar: jex.core.Var
+    hidden_invar: Var
     hidden_path: Path
 
     # the connected hidden states h_1^t, h_2^t, ...
-    connected_hidden_outvars: List[jex.core.Var]
+    connected_hidden_outvars: List[Var]
     connected_hidden_paths: List[Path]
 
     # the jaxpr for computing hidden state transitions
@@ -1483,7 +1487,7 @@ class HiddenTransition(NamedTuple):
     transition_jaxpr: jax.core.Jaxpr
 
     # the other input variables for jaxpr evaluation
-    other_invars: List[jex.core.Var]
+    other_invars: List[Var]
 
     def state_transition(
         self,
@@ -1534,7 +1538,7 @@ class HiddenGroup(NamedTuple):
     hidden_outvars: List[HiddenOutVar]  # the output hidden states
     hidden_states: List[ETraceState]  # the hidden states
 
-    def hidden_invar_in_this_group(self, invar: jex.core.Var) -> bool:
+    def hidden_invar_in_this_group(self, invar: Var) -> bool:
         """
         Checking whether the input variable is in the hidden states of this group.
 
@@ -1546,7 +1550,7 @@ class HiddenGroup(NamedTuple):
         """
         return invar in self.hidden_invars
 
-    def hidden_outvar_in_this_group(self, outvar: jex.core.Var) -> bool:
+    def hidden_outvar_in_this_group(self, outvar: Var) -> bool:
         """
         Checking whether the output variable is in the hidden states of this group.
 
@@ -1647,12 +1651,12 @@ class CompiledGraph(NamedTuple):
     hidden_groups: Sequence[HiddenGroupV2]
     hidden_param_op_relations: Sequence[WeightOpHiddenRelation]
     hid_path_to_transition: Dict[Path, HiddenTransition]
-    hid_invar_to_path: Dict[jex.core.Var, Path]
-    hid_outvar_to_path: Dict[jex.core.Var, Path]
-    out_hidden_jaxvars: List[jex.core.Var]
-    out_wx_jaxvars: List[jex.core.Var]
-    out_all_jaxvars: List[jex.core.Var]
-    out_state_jaxvars: List[jex.core.Var]
+    hid_invar_to_path: Dict[Var, Path]
+    hid_outvar_to_path: Dict[Var, Path]
+    out_hidden_jaxvars: List[Var]
+    out_wx_jaxvars: List[Var]
+    out_all_jaxvars: List[Var]
+    out_state_jaxvars: List[Var]
     num_out: int
 
 

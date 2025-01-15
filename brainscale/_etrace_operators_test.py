@@ -73,5 +73,3 @@ class TestMatMulETraceOp(unittest.TestCase):
 class TestGeneralETraceOp(unittest.TestCase):
     def test_dx_dy_to_weight(self):
         pass
-
-

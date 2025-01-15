@@ -189,7 +189,6 @@ class Dropout3d(bst.nn.Dropout3d):
     __module__ = 'brainscale.nn'
 
 
-
 class Identity(bst.nn.Identity):
     __doc__ = bst.nn.Identity.__doc__
     __module__ = 'brainscale.nn'

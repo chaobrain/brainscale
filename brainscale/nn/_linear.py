@@ -17,7 +17,6 @@
 
 from __future__ import annotations
 
-import numbers
 from typing import Callable, Union, Sequence, Optional
 
 import brainstate as bst

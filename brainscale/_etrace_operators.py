@@ -21,7 +21,6 @@ from typing import Tuple, Callable, List, Optional, Any
 import brainstate as bst
 import brainunit as u
 import jax
-import jax.core
 
 from ._etrace_concepts import ETraceOp
 from ._misc import remove_units

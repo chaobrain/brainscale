@@ -93,7 +93,7 @@ class LeakySpikeReadout(nn.LeakySpikeReadout):
         spk_reset: str = 'soft',
         name: str = None,
     ):
-        super().__init__(in_size, name=name,  spk_fun=spk_fun, spk_reset=spk_reset)
+        super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
 
         # parameters
         self.tau = init.param(tau, self.varshape)

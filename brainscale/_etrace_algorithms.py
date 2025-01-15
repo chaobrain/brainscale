@@ -613,15 +613,6 @@ class DiagETraceAlgorithmForVJP(ETraceAlgorithm):
         #
         # ----------------------------------------------------------------------------------------------
 
-        # check the inputs
-        if self.graph.is_multi_step:
-            arg_lengths = [jnp.shape(v)[0] for v in jax.tree.leaves(args)]
-            if len(set(arg_lengths)) != 1:
-                raise ValueError(
-                    f'The input arguments should have the same length. '
-                    f'While we got {arg_lengths}. '
-                )
-
         # state value assignment
         assign_state_values_v2(self.param_states, weight_vals, write=False)
         assign_state_values_v2(self.hidden_states, hidden_vals, write=False)
@@ -2306,7 +2297,6 @@ class DiagHybridDimAlgorithm(DiagETraceAlgorithmForVJP):
 
         scan_fn_on = partial(
             _update_IO_dim_etrace_scan_fn,
-            state_id_to_path=self.graph.state_id_to_path,
             hid_weight_op_relations=self.compiled.hidden_param_op_relations,
             decay=self.decay,
         )
