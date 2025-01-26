@@ -31,8 +31,8 @@ import jax.core
 import jax.numpy as jnp
 
 from ._etrace_compiler import (WeightOpHiddenRelation,
+                               HiddenGroupV1,
                                HiddenGroup,
-                               HiddenGroupV2,
                                CompiledGraph, )
 from ._etrace_concepts import (assign_state_values_v2,
                                split_states_v2,
@@ -910,7 +910,7 @@ def _init_IO_dim_state(
         self.etrace_xs_to_weights[relation.x].append(self.graph.state_id_to_path[id(relation.weight)])
 
     for group in relation.hidden_groups:
-        group: HiddenGroupV2
+        group: HiddenGroup
         #
         # Group 1:
         #
@@ -987,7 +987,7 @@ def _update_IO_dim_etrace_scan_fn(
         hwo_relation: WeightOpHiddenRelation
 
         for group in hwo_relation.hidden_groups:
-            group: HiddenGroupV2
+            group: HiddenGroup
             #
             # Step 2:
             #
@@ -1197,7 +1197,7 @@ class DiagTruncatedAlgorithm(DiagETraceAlgorithmForVJP):
                 self.etrace_xs[relation.x] = bst.ShortTermState(u.math.zeros(shape, dtype))
 
             for group in relation.hidden_groups:
-                group: HiddenGroup
+                group: HiddenGroupV1
                 #
                 # Group 1:
                 #
@@ -1325,7 +1325,7 @@ class DiagTruncatedAlgorithm(DiagETraceAlgorithmForVJP):
             hwo_relation: WeightOpHiddenRelation
 
             for group in hwo_relation.hidden_groups:
-                group: HiddenGroup
+                group: HiddenGroupV1
                 #
                 # Step 2:
                 #
@@ -1548,7 +1548,7 @@ class DiagIODimAlgorithm(DiagETraceAlgorithmForVJP):
             # get the weight_op df
             wy_var = relation.y
             for group in relation.hidden_groups:
-                group: HiddenGroup
+                group: HiddenGroupV1
                 for st in group.hidden_states:
                     path = self.state_id_to_path[id(st)]
                     etrace_dfs[(wy_var, path)] = self.etrace_dfs[(wy_var, path)].value
@@ -1682,7 +1682,7 @@ def _init_param_dim_state(
     # TODO: assume the batch size is the first dimension
     batch_size = relation.y.aval.shape[0] if self.mode.has(bst.mixin.Batching) else None
     for group in relation.hidden_groups:
-        group: HiddenGroupV2
+        group: HiddenGroup
 
         for hid_path in group.hidden_paths:
             key = (relation.path, relation.y, hid_path)
@@ -1762,7 +1762,7 @@ def _update_param_dim_etrace_scan_fn(
         weight_val = weight_vals[weight_path]
 
         for group in relation.hidden_groups:
-            group: HiddenGroupV2
+            group: HiddenGroup
             for hid_path2 in group.hidden_paths:
                 #
                 # Step 2:
@@ -1962,7 +1962,7 @@ class DiagParamDimAlgorithm(DiagETraceAlgorithmForVJP):
 
             # retrieve the etrace data
             for group in relation.hidden_groups:
-                group: HiddenGroupV2
+                group: HiddenGroup
                 for hid_path in group.hidden_paths:
                     key = (relation.path, relation.y, hid_path)
                     etraces[key] = self.etrace_bwg[key].value
@@ -2228,13 +2228,13 @@ class DiagHybridDimAlgorithm(DiagETraceAlgorithmForVJP):
                 # get the weight_op df
                 wy_var = relation.y
                 for group in relation.hidden_groups:
-                    group: HiddenGroupV2
+                    group: HiddenGroup
                     for hid_path in group.hidden_paths:
                         etrace_dfs[(wy_var, hid_path)] = self.etrace_dfs[(wy_var, hid_path)].value
 
             # get the batched weight gradients
             for group in relation.hidden_groups:
-                group: HiddenGroupV2
+                group: HiddenGroup
                 for hid_path in group.hidden_paths:
                     key = (relation.path, relation.y, hid_path)
                     etrace_bws[key] = self.etrace_bwg[key].value

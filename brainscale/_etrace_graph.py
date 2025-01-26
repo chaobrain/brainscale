@@ -211,8 +211,8 @@ class ETraceGraph:
 
         The relationship between the hidden states, and state transitions.
 
-        - ``hidden_groups``: Sequence[HiddenGroup]
-        - ``hidden_to_group``: Dict[Path, HiddenGroup]  # Path is the hidden state path
+        - ``hidden_groups``: Sequence[HiddenGroupV1]
+        - ``hidden_to_group``: Dict[Path, HiddenGroupV1]  # Path is the hidden state path
         - ``hidden_to_transition``: Dict[Path, HiddenTransition]  # Path is the hidden state path
 
 

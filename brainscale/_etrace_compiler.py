@@ -73,7 +73,7 @@ else:
 
 __all__ = [
     'compile_graph',
-    'HiddenGroupV2',
+    'HiddenGroup',
     'HiddenTransition',
     'WeightOpHiddenRelation',
     'CompiledGraph',
@@ -466,7 +466,7 @@ def _simplify_hid2hid_tracer(
 
 def _trace_simplify(
     tracer: HiddenWeightOpTracer,
-    hid_path_to_group: Dict[Path, 'HiddenGroupV2'],
+    hid_path_to_group: Dict[Path, 'HiddenGroup'],
     hid_path_to_transition: Dict[Path, 'HiddenTransition'],
     state_id_to_path: Dict[int, Path],
     outvar_to_hidden_path: Dict[Var, Path],
@@ -644,7 +644,7 @@ class JaxprEvaluationForWeightOpHiddenRelation(JaxprEvaluation):
         weight_path_to_vars: Dict[Path, List[Var]],
         invar_to_weight_path: Dict[Var, Path],
         path_to_state: Dict[Path, bst.State],
-        hid_path_to_group: Dict[Path, 'HiddenGroupV2'],
+        hid_path_to_group: Dict[Path, 'HiddenGroup'],
         hid_path_to_transition: Dict[Path, 'HiddenTransition'],
         invar_to_hidden_path: Dict[HiddenInVar, Path],
         outvar_to_hidden_path: Dict[HiddenOutVar, Path],
@@ -912,9 +912,9 @@ class JaxprEvaluationForWeightOpHiddenRelation(JaxprEvaluation):
 
 
 def _hpo_tracer_to_relation(
-    hid_relation: HiddenGroup,
+    hid_relation: HiddenGroupV1,
     hpo_tracer: HiddenWeightOpTracer,
-    hid_path_to_group: Dict[Path, 'HiddenGroupV2'],
+    hid_path_to_group: Dict[Path, 'HiddenGroup'],
     hid_path_to_transition: Dict[Path, 'HiddenTransition'],
     state_id_to_path: Dict[int, Path],
     outvar_to_hidden_path: Dict[Var, Path]
@@ -1056,8 +1056,8 @@ class JaxprEvaluationForHiddenGroup(JaxprEvaluation):
         )
 
     def compile(self) -> Tuple[
-        Sequence[HiddenGroupV2],
-        Dict[Path, HiddenGroupV2],
+        Sequence[HiddenGroup],
+        Dict[Path, HiddenGroup],
         Dict[Path, HiddenTransition]
     ]:
         """
@@ -1203,8 +1203,8 @@ class JaxprEvaluationForHiddenGroup(JaxprEvaluation):
                 tracer.connected_hidden_outvars.add(outvar)
 
     def _post_check(self) -> Tuple[
-        Sequence[HiddenGroupV2],
-        Dict[Path, HiddenGroupV2],
+        Sequence[HiddenGroup],
+        Dict[Path, HiddenGroup],
         Dict[Path, HiddenTransition]
     ]:
         # [First step]
@@ -1235,13 +1235,13 @@ class JaxprEvaluationForHiddenGroup(JaxprEvaluation):
         ]
         group_sets = self._group_merging(groups)
 
-        # transform the hidden group set to the HiddenGroup
+        # transform the hidden group set to the HiddenGroupV1
         groups = []
         # for group in group_sets:
         #     hidden_outvars = list(group)
         #     hidden_invars = [self.hidden_outvar_to_invar[outvar] for outvar in hidden_outvars]
         #     hidden_states = [self.hidden_outvar_to_hidden[outvar] for outvar in hidden_outvars]
-        #     group = HiddenGroup(
+        #     group = HiddenGroupV1(
         #         hidden_invars=hidden_invars,
         #         hidden_outvars=hidden_outvars,
         #         hidden_states=hidden_states
@@ -1251,7 +1251,7 @@ class JaxprEvaluationForHiddenGroup(JaxprEvaluation):
         for group in group_sets:
             hidden_outvars = list(group)
             hidden_invars = [self.hidden_outvar_to_invar[outvar] for outvar in hidden_outvars]
-            group = HiddenGroupV2(
+            group = HiddenGroup(
                 hidden_invars=hidden_invars,
                 hidden_outvars=hidden_outvars,
                 hidden_paths=[self.outvar_to_hidden_path[outvar] for outvar in hidden_outvars],
@@ -1512,7 +1512,7 @@ class HiddenTransition(NamedTuple):
         return new_hidden_vals
 
 
-class HiddenGroup(NamedTuple):
+class HiddenGroupV1(NamedTuple):
     r"""
     The data structure for recording the hidden-to-hidden relation.
 
@@ -1575,7 +1575,7 @@ class HiddenGroup(NamedTuple):
         return state in self.hidden_states
 
 
-class HiddenGroupV2(NamedTuple):
+class HiddenGroup(NamedTuple):
     r"""
     The data structure for recording the hidden-to-hidden relation.
 
@@ -1619,7 +1619,7 @@ class WeightOpHiddenRelation(NamedTuple):
     y: WeightYVar
     jaxpr_y2hid: jax.core.Jaxpr
     hidden_paths: List[Path]
-    hidden_groups: List[HiddenGroupV2]
+    hidden_groups: List[HiddenGroup]
     hidden_path_to_transition: Dict[Path, HiddenTransition]
 
 
@@ -1648,7 +1648,7 @@ class CompiledGraph(NamedTuple):
     jaxpr_perturb_hidden: jax.core.ClosedJaxpr  # the jaxpr the add hidden perturbation
     stateful_fn_states: Sequence[bst.State]
     stateful_fn_outtree: jax.tree_util.PyTreeDef
-    hidden_groups: Sequence[HiddenGroupV2]
+    hidden_groups: Sequence[HiddenGroup]
     hidden_param_op_relations: Sequence[WeightOpHiddenRelation]
     hid_path_to_transition: Dict[Path, HiddenTransition]
     hid_invar_to_path: Dict[Var, Path]
