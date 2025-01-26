@@ -67,9 +67,9 @@ from ._typing import (PyTree,
                       Path)
 
 if jax.__version_info__ < (0, 4, 38):
-    from jax.core import Var
+    from jax.core import Var, Literal, JaxprEqn, Jaxpr, ClosedJaxpr
 else:
-    from jax.extend.core import Var
+    from jax.extend.core import Var, Literal, JaxprEqn, Jaxpr, ClosedJaxpr
 
 __all__ = [
     'compile_graph',
@@ -107,7 +107,7 @@ def _remove_quantity(tree):
             return x.magnitude
         return x
 
-    return jax.tree_map(fn, tree, is_leaf=lambda x: isinstance(x, u.Quantity))
+    return jax.tree.map(fn, tree, is_leaf=lambda x: isinstance(x, u.Quantity))
 
 
 def indent_code(code: str, indent: int = 2) -> str:
@@ -191,7 +191,7 @@ class JaxprEvaluation(object):
             else:
                 self._eval_eqn(eqn)
 
-    def _eval_pjit(self, eqn: jax.core.JaxprEqn) -> None:
+    def _eval_pjit(self, eqn: JaxprEqn) -> None:
         """
         Evaluating the pjit primitive.
         """
@@ -205,7 +205,7 @@ class JaxprEvaluation(object):
         # treat the pjit as a normal jaxpr equation
         self._eval_eqn(eqn)
 
-    def _eval_scan(self, eqn: jax.core.JaxprEqn) -> None:
+    def _eval_scan(self, eqn: JaxprEqn) -> None:
         """
         Evaluating the scan primitive.
         """
@@ -225,7 +225,7 @@ class JaxprEvaluation(object):
             )
         self._eval_eqn(eqn)
 
-    def _eval_while(self, eqn: jax.core.JaxprEqn) -> None:
+    def _eval_while(self, eqn: JaxprEqn) -> None:
         """
         Evaluating the while primitive.
         """
@@ -245,7 +245,7 @@ class JaxprEvaluation(object):
             )
         self._eval_eqn(eqn)
 
-    def _eval_cond(self, eqn: jax.core.JaxprEqn) -> None:
+    def _eval_cond(self, eqn: JaxprEqn) -> None:
         """
         Evaluating the cond primitive.
         """
@@ -279,19 +279,19 @@ class HiddenToHiddensTracer(NamedTuple):
     connected_hidden_outvars: set[Var]
     other_invars: set[Var]
     invar_needed_in_oth_eqns: set[Var]
-    trace: List[jax.core.JaxprEqn]
+    trace: List[JaxprEqn]
 
 
 class HiddenWeightOpTracer(NamedTuple):
     """
     The data structure for the tracing of the ETraceParam operation.
     """
-    op: jax.core.JaxprEqn  # f: how x is transformed into y, i.e., y = f(x, w)
+    op: JaxprEqn  # f: how x is transformed into y, i.e., y = f(x, w)
     weight: ETraceParam  # w
     weight_path: Path  # w
     x: Var  # y
     y: Var  # x
-    trace: List[jax.core.JaxprEqn]
+    trace: List[JaxprEqn]
     hidden_vars: set[Var]
     invar_needed_in_oth_eqns: set[Var]
 
@@ -440,7 +440,7 @@ def _simplify_hid2hid_tracer(
     # Simplify the trace
     visited_needed_vars.add(tracer.hidden_invar)
     constvars = list(whole_trace_needed_vars.difference(visited_needed_vars))
-    jaxpr_opt = jax.core.Jaxpr(
+    jaxpr_opt = Jaxpr(
         # the const vars are not the hidden states, they are
         # intermediate data that are not used in the hidden states
         constvars=constvars,
@@ -565,7 +565,7 @@ def _trace_simplify(
     # [fifth step]
     # Simplify the trace
     visited_needed_vars.add(tracer.y)
-    jaxpr_opt = jax.core.Jaxpr(
+    jaxpr_opt = Jaxpr(
         # the const vars are not the hidden states, they are
         # intermediate data that are not used in the hidden states
         constvars=[nvar for nvar in whole_trace_needed_vars.difference(visited_needed_vars)],
@@ -605,7 +605,7 @@ def _trace_simplify(
     )
 
 
-def _jax_eqn_to_jaxpr(eqn: jax.core.JaxprEqn) -> jax.core.Jaxpr:
+def _jax_eqn_to_jaxpr(eqn: JaxprEqn) -> Jaxpr:
     """
     Convert the jax equation to the jaxpr.
 
@@ -615,7 +615,7 @@ def _jax_eqn_to_jaxpr(eqn: jax.core.JaxprEqn) -> jax.core.Jaxpr:
     Returns:
         The jaxpr.
     """
-    return jax.core.Jaxpr(
+    return Jaxpr(
         constvars=[],
         invars=eqn.invars,
         outvars=eqn.outvars,
@@ -639,7 +639,7 @@ class JaxprEvaluationForWeightOpHiddenRelation(JaxprEvaluation):
 
     def __init__(
         self,
-        jaxpr: jax.core.Jaxpr,
+        jaxpr: Jaxpr,
         hidden_outvar_to_invar: Dict[HiddenOutVar, HiddenInVar],
         weight_path_to_vars: Dict[Path, List[Var]],
         invar_to_weight_path: Dict[Var, Path],
@@ -713,7 +713,7 @@ class JaxprEvaluationForWeightOpHiddenRelation(JaxprEvaluation):
         self.active_tracings = []
         return tuple([trace for trace in final_traces if trace is not None])
 
-    def _eval_pjit(self, eqn: jax.core.JaxprEqn) -> None:
+    def _eval_pjit(self, eqn: JaxprEqn) -> None:
         """
         Evaluating the pjit primitive.
         """
@@ -769,7 +769,7 @@ class JaxprEvaluationForWeightOpHiddenRelation(JaxprEvaluation):
             # treat the pjit as a normal jaxpr equation
             self._eval_eqn(eqn)
 
-    def _eval_eqn(self, eqn: jax.core.JaxprEqn) -> None:
+    def _eval_eqn(self, eqn: JaxprEqn) -> None:
         """
         Evaluating the normal jaxpr equation.
         """
@@ -782,7 +782,7 @@ class JaxprEvaluationForWeightOpHiddenRelation(JaxprEvaluation):
             if len(matched):
                 self._add_eqn_in_a_trace(eqn, trace)
 
-    def _eval_old_traces_are_valid_or_not(self, eqn: jax.core.JaxprEqn) -> None:
+    def _eval_old_traces_are_valid_or_not(self, eqn: JaxprEqn) -> None:
         for trace in tuple(self.active_tracings):
             # Avoid "Weight -> Hidden -> Weight" pathway.
             # But the "Weight -> Weight -> Hidden" pathway is allowed.
@@ -814,7 +814,7 @@ class JaxprEvaluationForWeightOpHiddenRelation(JaxprEvaluation):
 
     def _add_eqn_in_a_trace(
         self,
-        eqn: jax.core.JaxprEqn,
+        eqn: JaxprEqn,
         trace: HiddenWeightOpTracer
     ) -> None:
         trace.trace.append(eqn.replace())
@@ -826,7 +826,7 @@ class JaxprEvaluationForWeightOpHiddenRelation(JaxprEvaluation):
 
     def _get_state_and_inp_and_checking(
         self,
-        eqn: jax.core.JaxprEqn
+        eqn: JaxprEqn
     ) -> Tuple[Path, Var]:
 
         # Currently, only single input/output are supported, i.e.,
@@ -841,7 +841,7 @@ class JaxprEvaluationForWeightOpHiddenRelation(JaxprEvaluation):
         weight_paths = set()
         xs = []
         for invar in eqn.invars:
-            if isinstance(invar, jax.core.Literal):
+            if isinstance(invar, Literal):
                 xs.append(invar)
                 continue
             weight_path = self.invar_to_weight_path.get(invar, None)
@@ -932,7 +932,7 @@ def _hpo_tracer_to_relation(
 def _simplify_hidden_eqns(
     hidden_invars: List[HiddenInVar],
     hidden_outvars: List[HiddenOutVar],
-    eqns: List[jax.core.JaxprEqn]
+    eqns: List[JaxprEqn]
 ):
     # remove the unnecessary equations in the trace
     true_eqns = []
@@ -944,7 +944,7 @@ def _simplify_hidden_eqns(
         temp_vars = []
         true_invars = []
         for invar in eqn.invars:
-            if not isinstance(invar, jax.core.Literal):
+            if not isinstance(invar, Literal):
                 if invar in dependent_vars:
                     temp_vars.append(invar)
                 true_invars.append(invar)
@@ -968,8 +968,8 @@ def _format_and_optimize_jaxpr(
     hidden_outvars: List[HiddenOutVar],
     hidden_outvar_to_invar: Dict,
     hidden_invar_to_outvar: Dict,
-    eqns: List[jax.core.JaxprEqn]
-) -> Optional[jax.core.Jaxpr]:
+    eqns: List[JaxprEqn]
+) -> Optional[Jaxpr]:
     #
     # Several additional things need to pay attention to:
     #
@@ -1000,7 +1000,7 @@ def _format_and_optimize_jaxpr(
         return None
 
     # the jaxpr
-    jaxpr = jax.core.Jaxpr(
+    jaxpr = Jaxpr(
         # the const vars are not the hidden states, they are
         # intermediate data that are not used in the hidden states
         constvars=constvars,
@@ -1028,7 +1028,7 @@ class JaxprEvaluationForHiddenGroup(JaxprEvaluation):
 
     def __init__(
         self,
-        jaxpr: jax.core.Jaxpr,
+        jaxpr: Jaxpr,
         hidden_outvar_to_invar: Dict[HiddenOutVar, HiddenInVar],
         weight_invars: Set[Var],
         invar_to_hidden_path: Dict[HiddenInVar, Path],
@@ -1104,7 +1104,7 @@ class JaxprEvaluationForHiddenGroup(JaxprEvaluation):
             else:
                 self._eval_eqn(eqn)
 
-    def _eval_pjit(self, eqn: jax.core.JaxprEqn) -> None:
+    def _eval_pjit(self, eqn: JaxprEqn) -> None:
         """
         Evaluating the pjit primitive.
         """
@@ -1138,7 +1138,7 @@ class JaxprEvaluationForHiddenGroup(JaxprEvaluation):
         # treat the pjit as a normal jaxpr equation
         self._eval_eqn(eqn)
 
-    def _eval_eqn(self, eqn: jax.core.JaxprEqn) -> None:
+    def _eval_eqn(self, eqn: JaxprEqn) -> None:
         """
         Evaluating the normal jaxpr equation.
         """
@@ -1150,7 +1150,7 @@ class JaxprEvaluationForHiddenGroup(JaxprEvaluation):
         other_invars = []
         hidden_invars = []
         for invar in eqn.invars:
-            if isinstance(invar, jax.core.Literal):
+            if isinstance(invar, Literal):
                 continue
             elif invar in self.hidden_invars:
                 hidden_invars.append(invar)
@@ -1190,7 +1190,7 @@ class JaxprEvaluationForHiddenGroup(JaxprEvaluation):
 
     def _add_eqn_in_a_trace(
         self,
-        eqn: jax.core.JaxprEqn,
+        eqn: JaxprEqn,
         tracer: HiddenToHiddensTracer
     ) -> None:
 
@@ -1330,7 +1330,7 @@ class JaxprEvaluationForHiddenPerturbation(JaxprEvaluation):
 
     def __init__(
         self,
-        closed_jaxpr: jax.core.ClosedJaxpr,
+        closed_jaxpr: ClosedJaxpr,
         hidden_outvar_to_invar: Dict[HiddenOutVar, HiddenInVar],
         weight_invars: Set[Var],
         invar_to_hidden_path: Dict[HiddenInVar, Path],
@@ -1348,7 +1348,7 @@ class JaxprEvaluationForHiddenPerturbation(JaxprEvaluation):
             outvar_to_hidden_path=outvar_to_hidden_path
         )
 
-    def compile(self) -> jax.core.ClosedJaxpr:
+    def compile(self) -> ClosedJaxpr:
         # new invars, the var order is the same as the hidden_outvars
         self.perturb_invars = {
             v: self._new_var_like(v)
@@ -1376,13 +1376,13 @@ class JaxprEvaluationForHiddenPerturbation(JaxprEvaluation):
             )
 
         # new jaxpr
-        jaxpr = jax.core.Jaxpr(
+        jaxpr = Jaxpr(
             constvars=list(self.closed_jaxpr.jaxpr.constvars),
             invars=list(self.closed_jaxpr.jaxpr.invars) + list(self.perturb_invars.values()),
             outvars=list(self.closed_jaxpr.jaxpr.outvars),
             eqns=self.revised_eqns
         )
-        revised_closed_jaxpr = jax.core.ClosedJaxpr(jaxpr, self.closed_jaxpr.literals)
+        revised_closed_jaxpr = ClosedJaxpr(jaxpr, self.closed_jaxpr.literals)
 
         # remove the temporal data
         self.perturb_invars = dict()
@@ -1390,14 +1390,14 @@ class JaxprEvaluationForHiddenPerturbation(JaxprEvaluation):
         self.hidden_jaxvars_to_remove = set()
         return revised_closed_jaxpr
 
-    def _eval_pjit(self, eqn: jax.core.JaxprEqn) -> None:
+    def _eval_pjit(self, eqn: JaxprEqn) -> None:
         """
         Evaluating the pjit primitive.
         """
         self._eval_eqn(eqn)
 
     def _add_perturb_eqn(self,
-                         eqn: jax.core.JaxprEqn,
+                         eqn: JaxprEqn,
                          perturb_var: Var):
         # ------------------------------------------------
         #
@@ -1427,7 +1427,7 @@ class JaxprEvaluationForHiddenPerturbation(JaxprEvaluation):
                                          eqn.source_info.replace())
         self.revised_eqns.append(new_eqn)
 
-    def _eval_eqn(self, eqn: jax.core.JaxprEqn):
+    def _eval_eqn(self, eqn: JaxprEqn):
         if len(eqn.outvars) == 1:
             if eqn.outvars[0] in self.hidden_jaxvars_to_remove:
                 hidden_var = eqn.outvars[0]
@@ -1484,7 +1484,7 @@ class HiddenTransition(NamedTuple):
     #
     # h_1^t, h_2^t, ... = f(h_i^{t-1}, x)
     #
-    transition_jaxpr: jax.core.Jaxpr
+    transition_jaxpr: Jaxpr
 
     # the other input variables for jaxpr evaluation
     other_invars: List[Var]
@@ -1605,7 +1605,7 @@ class WeightOpHiddenRelation(NamedTuple):
     The following fields are included:
 
     - weight: the instance of ``ETraceParam``
-    - op_jaxpr: the jaxpr for the weight operation, instance of ``jax.core.Jaxpr``
+    - op_jaxpr: the jaxpr for the weight operation, instance of ``Jaxpr``
     - x: the jax Var for the weight input
     - y: the jax Var for the wight output
     - jaxpr_y2hid: the jaxpr to evaluate y -->  eligibility trace variables
@@ -1614,10 +1614,10 @@ class WeightOpHiddenRelation(NamedTuple):
 
     weight: ETraceParam
     path: Path
-    op_jaxpr: jax.core.Jaxpr
+    op_jaxpr: Jaxpr
     x: WeightXVar
     y: WeightYVar
-    jaxpr_y2hid: jax.core.Jaxpr
+    jaxpr_y2hid: Jaxpr
     hidden_paths: List[Path]
     hidden_groups: List[HiddenGroup]
     hidden_path_to_transition: Dict[Path, HiddenTransition]
@@ -1644,8 +1644,8 @@ class CompiledGraph(NamedTuple):
     - num_out: the number of outputs
 
     """
-    augmented_jaxpr: jax.core.ClosedJaxpr  # the jaxpr that return necessary intermediate variables
-    jaxpr_perturb_hidden: jax.core.ClosedJaxpr  # the jaxpr the add hidden perturbation
+    augmented_jaxpr: ClosedJaxpr  # the jaxpr that return necessary intermediate variables
+    jaxpr_perturb_hidden: ClosedJaxpr  # the jaxpr the add hidden perturbation
     stateful_fn_states: Sequence[bst.State]
     stateful_fn_outtree: jax.tree_util.PyTreeDef
     hidden_groups: Sequence[HiddenGroup]
@@ -1873,7 +1873,7 @@ def compile_graph(
     #   4. the y-to-hidden variables   ===>  for computing the weight spatial gradients
     #   5. the hidden-hidden transition variables   ===>  for computing the hidden-hidden jacobian
     #
-    jaxpr = jax.core.Jaxpr(
+    jaxpr = Jaxpr(
         constvars=list(jaxpr.constvars),
         invars=list(jaxpr.invars),
         outvars=list(out_all_jaxvars),
@@ -1881,7 +1881,7 @@ def compile_graph(
         effects=jaxpr.effects,
         debug_info=jaxpr.debug_info,
     )
-    augmented_jaxpr = jax.core.ClosedJaxpr(jaxpr, closed_jaxpr.consts)
+    augmented_jaxpr = ClosedJaxpr(jaxpr, closed_jaxpr.consts)
 
     if compile_to_multi_step:
         jaxpr_with_hidden_perturb = None
