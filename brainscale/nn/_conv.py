@@ -182,9 +182,9 @@ class _Conv(_BaseConv):
         w_init: Union[Callable, ArrayLike] = init.XavierNormal(),
         b_init: Optional[Union[Callable, ArrayLike]] = None,
         w_mask: Optional[Union[ArrayLike, Callable]] = None,
-        as_etrace_weight: bool = True,
         full_etrace: bool = False,
         name: Optional[str] = None,
+        param_type: type = ETraceParamOp,
     ):
         super().__init__(in_size=in_size,
                          out_channels=out_channels,
@@ -209,10 +209,7 @@ class _Conv(_BaseConv):
             params['bias'] = bias
 
         # The weight operation
-        if as_etrace_weight:
-            self.weight_op = ETraceParamOp(params, op=self._conv_op, grad='full' if full_etrace else None)
-        else:
-            self.weight_op = NonTempParamOp(params, op=self._conv_op)
+        self.weight_op = param_type(params, op=self._conv_op, grad='full' if full_etrace else None)
 
         # Evaluate the output shape
         abstract_y = jax.eval_shape(self._conv_op,
@@ -341,6 +338,7 @@ class _ScaledWSConv(_BaseConv):
         as_etrace_weight: bool = True,
         full_etrace: bool = False,
         name: Optional[str] = None,
+        param_type: type = ETraceParamOp,
     ):
         super().__init__(in_size=in_size,
                          out_channels=out_channels,
@@ -374,10 +372,7 @@ class _ScaledWSConv(_BaseConv):
         self.eps = eps
 
         # The weight operation
-        if as_etrace_weight:
-            self.weight_op = ETraceParamOp(params, op=self._conv_op, grad='full' if full_etrace else None)
-        else:
-            self.weight_op = NonTempParamOp(params, op=self._conv_op)
+        self.weight_op = param_type(params, op=self._conv_op, grad='full' if full_etrace else None)
 
         # Evaluate the output shape
         abstract_y = jax.eval_shape(self._conv_op,

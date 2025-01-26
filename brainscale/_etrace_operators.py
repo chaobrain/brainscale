@@ -552,6 +552,79 @@ class ElementWiseOp(StandardETraceOp):
             dh_to_dweight = dl_to_dh * dh_to_dw
         return dh_to_dweight
 
+
+class ElementWiseOpV2(StandardETraceOp):
+    """
+    The standard element-wise operator for the eligibility trace updates.
+
+    This operator is much more efficient than the :py:class:`GeneralETraceOp` for the element-wise operation.
+
+    """
+
+    def __init__(self):
+        super().__init__(lambda x, w: w * x, is_diagonal=True)
+
+    def etrace_update(
+        self,
+        mode: bst.mixin.Mode,
+        w: jax.Array,
+        dh_to_dw: List[jax.Array],
+        diag_jac: List[jax.Array],
+        ph_to_pwx: None,
+        ph_to_pwy: jax.Array,
+    ) -> jax.Array:
+        """
+        This is the standard method for computing the eligibility trace updates for the matrix multiplication operation.
+
+        See the :meth:`StandardETraceOp.etrace_update` for more details.
+        """
+
+        # 1. w: the wight value, a pytree
+        # 2. dh_to_dw: derivative of hidden to weight, the number equals to the number of hidden states
+        # 3. diag_jac: the diagonal Jacobian of the hidden states, the number equals to the number of hidden states
+        # 4. ph_to_pwx: the partial derivative of the hidden with respect to the weight input
+        # 5. ph_to_pwy: the partial derivative of the hidden with respect to the weight output
+
+        assert isinstance(dh_to_dw, (list, tuple)), (
+            f'The dh_to_dw must be a list of Array. Got {type(dh_to_dw)}'
+        )
+        assert isinstance(diag_jac, (list, tuple)), (
+            f'The diag_jac must be a list of jax.Array. Got {type(diag_jac)}'
+        )
+        assert len(dh_to_dw) == len(diag_jac), (
+            f'The length of dh_to_dw and diag_jac must be the same. '
+            f'Got {len(dh_to_dw)} and {len(diag_jac)}'
+        )
+
+        diag_mul_dhdw = [
+            self.hidden_to_etrace(mode, w, dh, dw)
+            for dh, dw in zip(diag_jac, dh_to_dw)
+        ]
+        diag_mul_dhdw = reduce(u.math.add, diag_mul_dhdw)
+        dh_to_dweight = u.get_magnitude(diag_mul_dhdw) + u.get_magnitude(ph_to_pwy)
+        return u.maybe_decimal(u.Quantity(dh_to_dweight, unit=u.get_unit(w)))
+
+    def hidden_to_etrace(
+        self,
+        mode: bst.mixin.Mode,
+        w: jax.Array,
+        dl_to_dh: jax.Array,
+        dh_to_dw: jax.Array
+    ) -> jax.Array:
+        """
+        This is the standard method for computing the gradient of the loss with respect to the weight operation
+        for the matrix multiplication operation.
+
+        See the :meth:`StandardETraceOp.hidden_to_etrace` for more details.
+        """
+
+        # 1. w: the wight value
+        # 2. dl_to_dh: the derivative of the loss with respect to the hidden
+        # 3. dh_to_dw: the derivative of the hidden with respect to the weight
+
+        dh_to_dweight = dl_to_dh * dh_to_dw
+        return dh_to_dweight
+
 # class AbsMatMulETraceOp(MatMulETraceOp):
 #   """
 #   The standard matrix multiplication operator for the eligibility trace.
