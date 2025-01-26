@@ -80,8 +80,5 @@ def get_single_step_data(*args):
 
 
 def has_multistep_data(*args):
-    leaves, _ = jax.tree_flatten(args, is_leaf=is_input)
+    leaves, _ = jax.tree.flatten(args, is_leaf=is_input)
     return any(isinstance(leaf, MultiStepData) for leaf in leaves)
-
-
-

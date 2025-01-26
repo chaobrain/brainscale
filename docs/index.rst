@@ -30,7 +30,7 @@ Here we show how easy it is to use `brainscale` to build and train a simple SNN/
    bst.nn.init_all_states(model)
 
    # the only thing you need to do just two lines of code
-   model = brainscale.DiagParamDimAlgorithm(model, None)
+   model = brainscale.DiagParamDimAlgorithm(model)
    model.compile_graph(your_inputs)
 
    # train your model as usual

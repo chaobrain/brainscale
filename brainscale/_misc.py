@@ -20,9 +20,8 @@ import warnings
 from enum import Enum
 from typing import Sequence
 
-import brainunit as u
 import brainstate as bst
-
+import brainunit as u
 
 __all__ = [
     'CompilationError',
@@ -45,8 +44,6 @@ def remove_units(xs):
         xs,
         is_leaf=u.math.is_quantity
     )
-
-
 
 
 git_issue_addr = 'https://github.com/chaobrain/brainscale/issues'

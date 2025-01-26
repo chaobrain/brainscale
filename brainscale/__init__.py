@@ -17,42 +17,49 @@
 
 __version__ = "0.0.3"
 
-from brainscale._etrace_algorithms import *
-from brainscale._etrace_algorithms import __all__ as etrace_algorithms
-from brainscale._etrace_compiler import *
-from brainscale._etrace_compiler import __all__ as etrace_compiler
-from brainscale._etrace_concepts import *
-from brainscale._etrace_concepts import __all__ as concepts_all
-from brainscale._etrace_graph import *
-from brainscale._etrace_graph import __all__ as etrace_compiler_all
-from brainscale._etrace_input_data import *
-from brainscale._etrace_input_data import __all__ as input_data_all
-from brainscale._etrace_operators import *
-from brainscale._etrace_operators import __all__ as operators_all
-from brainscale._misc import *
-from brainscale._misc import __all__ as misc_all
+from brainscale._etrace_algorithms import (
+    ETraceAlgorithm,
+    DiagETraceAlgorithmForVJP,
+    DiagIODimAlgorithm,
+    DiagParamDimAlgorithm,
+    DiagHybridDimAlgorithm,
+)
+from brainscale._etrace_compiler import (
+    compile_graph,
+    HiddenGroup,
+    HiddenTransition,
+    WeightOpHiddenRelation,
+    CompiledGraph
+)
+from brainscale._etrace_concepts import (
+    ETraceState,
+    ETraceParam,
+    ETraceParamOp,
+    ETraceOp,
+    NonTempParamOp,
+    ElementWiseParamOp,
+    ElementWiseParam,
+    NoGradParamOp,
+    stop_param_gradients
+)
+from brainscale._etrace_graph import (
+    ETraceGraph,
+)
+from brainscale._etrace_input_data import (
+    SingleStepData,
+    MultiStepData,
+)
+from brainscale._etrace_operators import (
+    StandardETraceOp,
+    GeneralETraceOp,
+    MatMulETraceOp,
+    ElementWiseOp,
+)
+from brainscale._misc import (
+    CompilationError,
+    NotSupportedError,
+)
 from . import nn
-
-__all__ = (
-    ['nn']
-    + concepts_all
-    + input_data_all
-    + etrace_algorithms
-    + etrace_compiler_all
-    + etrace_compiler
-    + operators_all
-    + misc_all
-)
-
-del (
-    concepts_all,
-    input_data_all,
-    etrace_algorithms,
-    etrace_compiler_all,
-    etrace_compiler,
-    operators_all,
-    misc_all,
-)
 
 # Added 2024-10-27
 from ._misc import deprecation_getattr

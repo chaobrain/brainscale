@@ -62,6 +62,7 @@ class ValinaRNNCell(bst.nn.RNNCell):
         b_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
         activation: str | Callable = 'relu',
         name: str = None,
+        param_type: type = ETraceParamOp,
     ):
         super().__init__(name=name)
 
@@ -78,7 +79,10 @@ class ValinaRNNCell(bst.nn.RNNCell):
             self.activation = activation
 
         # weights
-        self.W = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
+        self.W = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], 
+                        w_init=w_init, 
+                        b_init=b_init,
+                        param_type=param_type)
 
     def init_state(self, batch_size: int = None, **kwargs):
         self.h = ETraceState(bst.init.param(self._state_initializer, self.out_size, batch_size))
@@ -119,6 +123,7 @@ class GRUCell(bst.nn.RNNCell):
         state_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
         activation: str | Callable = 'tanh',
         name: str = None,
+        param_type: type = ETraceParamOp,
     ):
         super().__init__(name=name)
 
@@ -135,9 +140,10 @@ class GRUCell(bst.nn.RNNCell):
             self.activation = activation
 
         # weights
-        self.Wz = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
-        self.Wr = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
-        self.Wh = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
+        params = dict(w_init=w_init, b_init=b_init, param_type=param_type)
+        self.Wz = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], **params)
+        self.Wr = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], **params)
+        self.Wh = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], **params)
 
     def init_state(self, batch_size: int = None, **kwargs):
         self.h = ETraceState(bst.init.param(self._state_initializer, self.out_size, batch_size))
@@ -182,6 +188,7 @@ class CFNCell(bst.nn.RNNCell):
         state_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
         activation: str | Callable = 'tanh',
         name: str = None,
+        param_type: type = ETraceParamOp,
     ):
         super().__init__(name=name)
 
@@ -198,9 +205,10 @@ class CFNCell(bst.nn.RNNCell):
             self.activation = activation
 
         # weights
-        self.Wf = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
-        self.Wi = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
-        self.Wh = Linear(self.out_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
+        params = dict(w_init=w_init, b_init=b_init, param_type=param_type)
+        self.Wf = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], **params)
+        self.Wi = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], **params)
+        self.Wh = Linear(self.out_size[-1], self.out_size[-1], **params)
 
     def init_state(self, batch_size: int = None, **kwargs):
         self.h = ETraceState(bst.init.param(self._state_initializer, self.out_size, batch_size))
@@ -259,6 +267,7 @@ class MGUCell(bst.nn.RNNCell):
         state_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
         activation: str | Callable = 'tanh',
         name: str = None,
+        param_type: type = ETraceParamOp,
     ):
         super().__init__(name=name)
 
@@ -275,8 +284,9 @@ class MGUCell(bst.nn.RNNCell):
             self.activation = activation
 
         # weights
-        self.Wf = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
-        self.Wh = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
+        params = dict(w_init=w_init, b_init=b_init, param_type=param_type)
+        self.Wf = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], **params)
+        self.Wh = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], **params)
 
     def init_state(self, batch_size: int = None, **kwargs):
         self.h = ETraceState(bst.init.param(self._state_initializer, self.out_size, batch_size))
@@ -360,6 +370,7 @@ class LSTMCell(bst.nn.RNNCell):
         state_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
         activation: str | Callable = 'tanh',
         name: str = None,
+        param_type: type = ETraceParamOp,
     ):
         super().__init__(name=name)
 
@@ -378,10 +389,11 @@ class LSTMCell(bst.nn.RNNCell):
             self.activation = activation
 
         # weights
-        self.Wi = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
-        self.Wg = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
-        self.Wf = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
-        self.Wo = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
+        params = dict(w_init=w_init, b_init=b_init, param_type=param_type)
+        self.Wi = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], **params)
+        self.Wg = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], **params)
+        self.Wf = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], **params)
+        self.Wo = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], **params)
 
     def init_state(self, batch_size: int = None, **kwargs):
         self.c = ETraceState(bst.init.param(self._state_initializer, self.out_size, batch_size))
@@ -416,6 +428,7 @@ class URLSTMCell(bst.nn.RNNCell):
         state_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
         activation: str | Callable = 'tanh',
         name: str = None,
+        param_type: type = ETraceParamOp,
     ):
         super().__init__(name=name)
 
@@ -434,11 +447,12 @@ class URLSTMCell(bst.nn.RNNCell):
             self.activation = activation
 
         # weights
-        self.Wu = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], w_init=w_init, b_init=None)
-        self.Wf = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], w_init=w_init, b_init=None)
-        self.Wr = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], w_init=w_init, b_init=None)
-        self.Wo = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], w_init=w_init, b_init=None)
-        self.bias = ETraceParamOp(self._forget_bias(), op=u.math.add, grad='full')
+        params = dict(w_init=w_init, b_init=None, param_type=param_type)
+        self.Wu = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], **params)
+        self.Wf = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], **params)
+        self.Wr = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], **params)
+        self.Wo = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], **params)
+        self.bias = param_type(self._forget_bias(), op=u.math.add, grad='full')
 
     def _forget_bias(self):
         u = bst.random.uniform(1 / self.out_size[-1], 1 - 1 / self.out_size[1], (self.out_size[-1],))
@@ -520,6 +534,7 @@ class MinimalRNNCell(bst.nn.RNNCell):
         state_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
         phi: Callable = None,
         name: str = None,
+        param_type: type = ETraceParamOp,
     ):
         super().__init__(name=name)
 
@@ -529,13 +544,14 @@ class MinimalRNNCell(bst.nn.RNNCell):
         self.in_size = in_size
 
         # functions
+        params = dict(w_init=w_init, b_init=b_init, param_type=param_type)
         if phi is None:
-            phi = Linear(self.in_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
+            phi = Linear(self.in_size[-1], self.out_size[-1], **params)
         assert callable(phi), f"The phi function should be a callable function. But got {phi}"
         self.phi = phi
 
         # weights
-        self.W_u = Linear(self.out_size[-1] * 2, self.out_size[-1], w_init=w_init, b_init=b_init)
+        self.W_u = Linear(self.out_size[-1] * 2, self.out_size[-1], **params)
 
     def init_state(self, batch_size: int = None, **kwargs):
         self.h = ETraceState(bst.init.param(self._state_initializer, self.out_size, batch_size))
@@ -599,6 +615,7 @@ class MiniGRU(bst.nn.RNNCell):
         b_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
         state_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
         name: str = None,
+        param_type: type = ETraceParamOp,
     ):
         super().__init__(name=name)
 
@@ -608,10 +625,11 @@ class MiniGRU(bst.nn.RNNCell):
         self.in_size = in_size
 
         # functions
-        self.W_x = Linear(self.in_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
+        params = dict(w_init=w_init, b_init=b_init, param_type=param_type)
+        self.W_x = Linear(self.in_size[-1], self.out_size[-1], **params)
 
         # weights
-        self.W_z = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
+        self.W_z = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], **params)
 
     def init_state(self, batch_size: int = None, **kwargs):
         self.h = ETraceState(bst.init.param(self._state_initializer, self.out_size, batch_size))
@@ -674,6 +692,7 @@ class MiniLSTM(bst.nn.RNNCell):
         b_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
         state_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
         name: str = None,
+        param_type: type = ETraceParamOp,
     ):
         super().__init__(name=name)
 
@@ -683,11 +702,12 @@ class MiniLSTM(bst.nn.RNNCell):
         self.in_size = in_size
 
         # functions
-        self.W_x = Linear(self.in_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
+        params = dict(w_init=w_init, b_init=b_init, param_type=param_type)
+        self.W_x = Linear(self.in_size[-1], self.out_size[-1], **params)
 
         # weights
-        self.W_f = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
-        self.W_i = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], w_init=w_init, b_init=b_init)
+        self.W_f = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], **params)
+        self.W_i = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], **params)
 
     def init_state(self, batch_size: int = None, **kwargs):
         self.h = ETraceState(bst.init.param(self._state_initializer, self.out_size, batch_size))

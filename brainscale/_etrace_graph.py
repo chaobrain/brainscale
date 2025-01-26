@@ -211,8 +211,8 @@ class ETraceGraph:
 
         The relationship between the hidden states, and state transitions.
 
-        - ``hidden_groups``: Sequence[HiddenGroup]
-        - ``hidden_to_group``: Dict[Path, HiddenGroup]  # Path is the hidden state path
+        - ``hidden_groups``: Sequence[HiddenGroupV1]
+        - ``hidden_to_group``: Dict[Path, HiddenGroupV1]  # Path is the hidden state path
         - ``hidden_to_transition``: Dict[Path, HiddenTransition]  # Path is the hidden state path
 
 
@@ -351,6 +351,9 @@ class ETraceGraph:
             elif isinstance(st, bst.ParamState):
                 pass
             else:
+                if id(st) not in self.state_id_to_path:
+                    raise ValueError(f'This state {st} can not be accessed by the model {self.model}. \n'
+                                     f'Please assign the state as the attribute of the model.')
                 oth_state_vals[self.state_id_to_path[id(st)]] = st_val
         return out, hidden_vals, oth_state_vals, temps
 

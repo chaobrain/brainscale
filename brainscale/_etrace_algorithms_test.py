@@ -18,12 +18,9 @@ import os
 os.environ['JAX_TRACEBACK_FILTERING'] = 'off'
 
 import unittest
-from functools import partial, reduce
 
 import brainstate as bst
 import brainunit as u
-import jax
-import jax.numpy as jnp
 
 from pprint import pprint
 import brainscale
@@ -355,4 +352,3 @@ class TestDiagOn2(unittest.TestCase):
 
             for k in grads:
                 assert u.get_unit(param_states[k]) == u.get_unit(grads[k])
-

@@ -24,7 +24,7 @@ from __future__ import annotations
 import contextlib
 import threading
 from enum import Enum
-from typing import Callable, Sequence, Tuple, List, Optional, Hashable, Dict
+from typing import Callable, Sequence, Tuple, List, Optional, Hashable, Dict, Any
 
 import brainstate as bst
 import brainunit as u
@@ -43,6 +43,7 @@ __all__ = [
     'ETraceVar',
     'ETraceParam',  # the parameter/weight for the etrace-based learning
     'ElementWiseParamOp',
+    'ElementWiseParam',
     'ETraceOp',  # the operator for the etrace-based learning
     'ETraceParamOp',  # the parameter and operator for the etrace-based learning, combining ETraceParam and ETraceOp
     'NonTempParamOp',  # the parameter state with an associated operator
@@ -55,7 +56,8 @@ _etrace_op_name_enable_grad = '_etrace_weight_operator_call_enable_grad_'
 
 
 class CONTEXT(threading.local):
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.stop_param_gradient = [False]
 
 
@@ -228,6 +230,28 @@ class ElementWiseParamOp(ETraceParamOp):
         return self.op(ones, self.value)
 
 
+class ElementWiseParam(ETraceParamOp):
+    """
+    The Element-wise Eligibility Trace Weight and its Associated Operator.
+
+    Args:
+      weight: The weight of the ETrace.
+      op: The operator for the ETrace. See `ETraceOp`.
+    """
+    __module__ = 'brainscale'
+
+    def __init__(
+        self,
+        weight: PyTree,
+    ):
+        from ._etrace_operators import ElementWiseOpV2
+        super().__init__(weight, ElementWiseOpV2(), grad=_ETraceGrad.full, is_diagonal=True)
+
+    def execute(self) -> Any:
+        ones = u.math.zeros(1)
+        return self.op(ones, self.value)
+
+
 class NonTempParamOp(bst.ParamState):
     """
     The Parameter State with an Associated Operator with no temporal dependent back-propagation.
@@ -247,7 +271,8 @@ class NonTempParamOp(bst.ParamState):
         self,
         value: PyTree,
         op: Callable,
-        name: Optional[str] = None
+        name: Optional[str] = None,
+        **kwargs
     ):
         super().__init__(value, name=name)
 

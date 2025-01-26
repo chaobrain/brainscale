@@ -22,6 +22,11 @@ from typing import Any, Dict, Sequence, Union, FrozenSet, List, Tuple
 import brainstate as bst
 import jax
 
+if jax.__version_info__ < (0, 4, 38):
+    from jax.core import Var
+else:
+    from jax.extend.core import Var
+
 __all__ = [
     'PyTree', 'StateID', 'WeightID', 'Size', 'Axis', 'Axes',
     'Inputs', 'Outputs',
@@ -56,8 +61,8 @@ StateVals = Dict[Path, PyTree]
 WeightVals = Dict[Path, PyTree]
 ETraceVals = Dict[Path, PyTree]
 
-HiddenOutVar = jax.core.Var
-HiddenInVar = jax.core.Var
+HiddenOutVar = Var
+HiddenInVar = Var
 
 # --- gradients --- #
 dG_Inputs = PyTree  # gradients of inputs
@@ -65,9 +70,9 @@ dG_Weight = Sequence[PyTree]  # gradients of weights
 dG_Hidden = Sequence[PyTree]  # gradients of hidden states
 dG_State = Sequence[PyTree]  # gradients of other states
 
-ETraceX_Key = jax.core.Var
-ETraceY_Key = jax.core.Var
-ETraceDF_Key = Tuple[jax.core.Var, Path]
+ETraceX_Key = Var
+ETraceY_Key = Var
+ETraceDF_Key = Tuple[Var, Path]
 
 _WeightPath = Path
 _HiddenPath = Path
@@ -76,11 +81,11 @@ ETraceWG_Key = Tuple[_WeightPath, ETraceY_Key, _HiddenPath]
 HidHidJac_Key = Tuple[Path, Path]
 
 # --- data --- #
-WeightXVar = jax.core.Var
-WeightYVar = jax.core.Var
-WeightXs = Dict[jax.core.Var, jax.Array]
-WeightDfs = Dict[jax.core.Var, jax.Array]
-TempData = Dict[jax.core.Var, jax.Array]
+WeightXVar = Var
+WeightYVar = Var
+WeightXs = Dict[Var, jax.Array]
+WeightDfs = Dict[Var, jax.Array]
+TempData = Dict[Var, jax.Array]
 Current = ArrayLike  # the synaptic current
 Conductance = ArrayLike  # the synaptic conductance
 Spike = ArrayLike  # the spike signal
