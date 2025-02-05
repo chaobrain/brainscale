@@ -39,7 +39,7 @@ from brainscale._etrace_concepts import (
     NonTempParamOp,
     ElementWiseParamOp,
     ElementWiseParam,
-    NoGradParamOp,
+    FakedParamOp,
     stop_param_gradients
 )
 from brainscale._etrace_graph import (

@@ -30,41 +30,50 @@ import brainunit as u
 import jax.core
 import jax.numpy as jnp
 
-from ._etrace_compiler import (WeightOpHiddenRelation,
-                               HiddenGroupV1,
-                               HiddenGroup,
-                               CompiledGraph, )
-from ._etrace_concepts import (assign_state_values_v2,
-                               split_states_v2,
-                               ETraceState,
-                               ETraceParamOp,
-                               ElementWiseParamOp,
-                               _ETraceGrad)
-from ._etrace_graph import (ETraceGraph)
+from ._etrace_compiler import (
+    WeightOpHiddenRelation,
+    HiddenGroupV1,
+    HiddenGroup,
+    CompiledGraph,
+)
+from ._etrace_concepts import (
+    assign_state_values_v2,
+    split_states_v2,
+    ETraceState,
+    ETraceParamOp,
+    ElementWiseParam,
+    ElementWiseParamOp,
+    _ETraceGrad
+)
+from ._etrace_graph import ETraceGraph
 from ._etrace_input_data import has_multistep_data
-from ._etrace_operators import (StandardETraceOp,
-                                GeneralETraceOp)
+from ._etrace_operators import (
+    StandardETraceOp,
+    GeneralETraceOp
+)
 from ._misc import remove_units
-from ._typing import (PyTree,
-                      Outputs,
-                      WeightID,
-                      HiddenOutVar,
-                      WeightXVar,
-                      WeightYVar,
-                      WeightVals,
-                      HiddenVals,
-                      StateVals,
-                      ETraceVals,
-                      Path,
-                      ETraceX_Key,
-                      ETraceDF_Key,
-                      ETraceWG_Key,
-                      Hid2WeightJacobian,
-                      Hid2HidJacobian,
-                      dG_Inputs,
-                      dG_Weight,
-                      dG_Hidden,
-                      dG_State)
+from ._typing import (
+    PyTree,
+    Outputs,
+    WeightID,
+    HiddenOutVar,
+    WeightXVar,
+    WeightYVar,
+    WeightVals,
+    HiddenVals,
+    StateVals,
+    ETraceVals,
+    Path,
+    ETraceX_Key,
+    ETraceDF_Key,
+    ETraceWG_Key,
+    Hid2WeightJacobian,
+    Hid2HidJacobian,
+    dG_Inputs,
+    dG_Weight,
+    dG_Hidden,
+    dG_State
+)
 
 __all__ = [
     'ETraceAlgorithm',
@@ -897,7 +906,7 @@ def _init_IO_dim_state(
     # we need to initialize the eligibility trace states for the weight x and the df.
 
     # "relation.x" may be repeatedly used in the graph
-    if not isinstance(relation.weight, ElementWiseParamOp):
+    if not isinstance(relation.weight, ElementWiseParam):
         if relation.x not in self.etrace_xs:
             shape = relation.x.aval.shape
             dtype = relation.x.aval.dtype
@@ -1058,9 +1067,7 @@ def _solve_IO_dim_weight_gradients(
     for relation in weight_hidden_relations:
         relation: WeightOpHiddenRelation
 
-        if isinstance(relation.weight, ElementWiseParamOp):
-            x = u.math.zeros_like(relation.x.aval)
-        else:
+        if not isinstance(relation.weight, ElementWiseParam):
             x = xs[relation.x]
         weight_path = relation.path
 
@@ -1088,7 +1095,21 @@ def _solve_IO_dim_weight_gradients(
             #
             #    dw = df(dx, dy)
             #
-            dg_weight = fun_dxy2dw(x, df_hid)
+            if isinstance(relation.weight, ElementWiseParam):
+                dg_weight = u.maybe_decimal(
+                    u.Quantity(
+                        u.get_mantissa(df_hid),
+                        unit=u.get_unit(relation.weight.value)
+                    )
+                )
+            else:
+                dg_weight = fun_dxy2dw(x, df_hid)
+
+            # f = lambda x: jnp.abs(x).max()
+            # jax.debug.print('dg_weight = {d1}, df_hid = {d2}',
+            #                 d1=jax.tree.map(f, dg_weight),
+            #                 d2=jax.tree.map(f, df_hid))
+
             _update_dict(dG_weights, weight_path, dg_weight)  # update the weight gradients
 
 
@@ -1856,6 +1877,8 @@ def _solve_param_dim_weight_gradients(
                 dg_hidden,
                 hist_etrace_data[key],
             )
+
+            # jax.debug.print('dg = {dg}', dg=jax.tree.map(lambda x: jnp.abs(x).max(), dg_hidden))
 
             # update the weight gradients
             _update_dict(temp_data, weight_path, dg_weight)

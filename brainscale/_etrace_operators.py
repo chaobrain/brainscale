@@ -412,18 +412,20 @@ class MatMulETraceOp(StandardETraceOp):
                 # ph_to_pwx: (batch_size, input_size,)
                 # ph_to_pwy: (batch_size, hidden_size,)
                 # dh_to_dweight = dh_to_dweight + u.math.einsum('bi,bh->bih', ph_to_pwx, ph_to_pwy)
-                dh_to_dweight = dh_to_dweight + u.math.einsum('bi,bh->bih', ph_to_pwx, ph_to_pwy)
-                if dh_to_dbias is not None:
-                    # dh_to_dbias = dh_to_dbias + ph_to_pwy
-                    dh_to_dbias = dh_to_dbias + ph_to_pwy
+                dW = u.math.einsum('bi,bh->bih', ph_to_pwx, ph_to_pwy)
             else:
                 # dh_to_dweight: (input_size, hidden_size,)
                 # dh_to_dbias: (hidden_size,)
                 # ph_to_pwx: (input_size,)
                 # ph_to_pwy: (hidden_size,)
-                dh_to_dweight = dh_to_dweight + u.math.outer(ph_to_pwx, ph_to_pwy)
-                if dh_to_dbias is not None:
-                    dh_to_dbias = dh_to_dbias + ph_to_pwy
+                dW = u.math.outer(ph_to_pwx, ph_to_pwy)
+
+            if self.weight_mask is not None:
+                dW = dW * self.weight_mask
+            dh_to_dweight = dh_to_dweight + dW
+            if dh_to_dbias is not None:
+                # dh_to_dbias = dh_to_dbias + ph_to_pwy
+                dh_to_dbias = dh_to_dbias + ph_to_pwy
         return unflatten(dh_to_dweight, dh_to_dbias)
 
     def hidden_to_etrace(
@@ -453,12 +455,17 @@ class MatMulETraceOp(StandardETraceOp):
             dh_to_dweight = u.math.expand_dims(dl_to_dh, axis=1) * dh_to_dweight
             if dh_to_dbias is not None:
                 dh_to_dbias = dh_to_dbias * dl_to_dh
+
         else:
             # dl_to_dh: (hidden_size,)
             # dh_to_dw: (input_size, hidden_size,)
             dh_to_dweight = dh_to_dweight * u.math.expand_dims(dl_to_dh, axis=0)
             if dh_to_dbias is not None:
                 dh_to_dbias = dh_to_dbias * dl_to_dh
+
+        # weight mask
+        if self.weight_mask is not None:
+            dh_to_dweight = dh_to_dweight * self.weight_mask
         return unflatten(dh_to_dweight, dh_to_dbias)
 
 
@@ -562,7 +569,7 @@ class ElementWiseOpV2(StandardETraceOp):
     """
 
     def __init__(self):
-        super().__init__(lambda x, w: w * x, is_diagonal=True)
+        super().__init__(lambda x, w: x * w, is_diagonal=True)
 
     def etrace_update(
         self,
@@ -602,6 +609,14 @@ class ElementWiseOpV2(StandardETraceOp):
         ]
         diag_mul_dhdw = reduce(u.math.add, diag_mul_dhdw)
         dh_to_dweight = u.get_magnitude(diag_mul_dhdw) + u.get_magnitude(ph_to_pwy)
+
+        # f = lambda x: jax.numpy.abs(x).max()
+        # jax.debug.print(
+        #     'diag = {d}, dh_to_dw = {dd}, dl2dw = {ddd}',
+        #     d=jax.tree.map(f, diag_jac),
+        #     dd=jax.tree.map(f, dh_to_dw),
+        #     ddd=jax.tree.map(f, dh_to_dweight)
+        # )
         return u.maybe_decimal(u.Quantity(dh_to_dweight, unit=u.get_unit(w)))
 
     def hidden_to_etrace(
@@ -622,8 +637,10 @@ class ElementWiseOpV2(StandardETraceOp):
         # 2. dl_to_dh: the derivative of the loss with respect to the hidden
         # 3. dh_to_dw: the derivative of the hidden with respect to the weight
 
-        dh_to_dweight = dl_to_dh * dh_to_dw
-        return dh_to_dweight
+        # jax.debug.print('dl2dh = {dlh}, dh2dw = {dhw}', dlh=dl_to_dh, dhw=dh_to_dw)
+
+        dh_to_dweight = u.get_mantissa(dl_to_dh * dh_to_dw)
+        return u.maybe_decimal(u.Quantity(dh_to_dweight, unit=u.get_unit(w)))
 
 # class AbsMatMulETraceOp(MatMulETraceOp):
 #   """

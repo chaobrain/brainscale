@@ -267,11 +267,25 @@ class ETraceGraph:
         # hidden group
         msg = '===' * 40 + '\n'
         msg += 'The hidden groups are:\n\n'
+        hidden_paths = []
         group_mapping = dict()
         for i, group in enumerate(self.compiled.hidden_groups):
             msg += f'   Group {i}: {group.hidden_paths}\n'
             group_mapping[id(group)] = i
+            hidden_paths.extend(group.hidden_paths)
         msg += '\n\n'
+
+        # other hidden states
+        other_states = []
+        short_states = self.states.filter(bst.ShortTermState)
+        for i, path in enumerate(short_states.keys()):
+            if path not in hidden_paths:
+                other_states.append(path)
+        if len(other_states):
+            msg += 'The dynamic (non-hidden) states are:\n\n'
+            for i, path in enumerate(other_states):
+                msg += f'   Dynamic state {i}: {path}\n'
+            msg += '\n\n'
 
         # etrace weights
         etratce_weight_paths = set()

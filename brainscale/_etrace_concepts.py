@@ -47,7 +47,7 @@ __all__ = [
     'ETraceOp',  # the operator for the etrace-based learning
     'ETraceParamOp',  # the parameter and operator for the etrace-based learning, combining ETraceParam and ETraceOp
     'NonTempParamOp',  # the parameter state with an associated operator
-    'NoGradParamOp',
+    'FakedParamOp',
     'stop_param_gradients',
 ]
 
@@ -285,7 +285,7 @@ class NonTempParamOp(bst.ParamState):
         return self.op(x, self.value)
 
 
-class NoGradParamOp(object):
+class FakedParamOp(object):
     """
     The Parameter State with an Associated Operator that does not require to compute gradients.
 
@@ -394,10 +394,12 @@ def assign_state_values_v2(
       state_values: The values to be assigned.
       write: Whether to write the values to the states. If False, the values will be restored.
     """
-    assert set(states.keys()) == set(state_values.keys()), (f'The keys of states and state_values must be '
-                                                            f'the same. Got: \n '
-                                                            f'{states.keys()} \n '
-                                                            f'{state_values.keys()}')
+    assert set(states.keys()) == set(state_values.keys()), (
+        f'The keys of states and state_values must be '
+        f'the same. Got: \n '
+        f'{states.keys()} \n '
+        f'{state_values.keys()}'
+    )
 
     if write:
         for key in states.keys():
