@@ -15,6 +15,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import threading
 from functools import partial, reduce
 from typing import Tuple, Callable, List, Optional, Any
 
@@ -22,18 +24,159 @@ import brainstate as bst
 import brainunit as u
 import jax
 
-from ._etrace_concepts import ETraceOp
 from ._misc import remove_units
 from ._typing import PyTree
 
 WeightTree = Any
 
 __all__ = [
+    'ETraceOp',
     'StandardETraceOp',
     'GeneralETraceOp',
     'MatMulETraceOp',
     'ElementWiseOp',
+
+    # helper functions
+    'stop_param_gradients',
 ]
+
+_etrace_op_name = '_etrace_weight_operator_call'
+_etrace_op_name_enable_grad = f'{_etrace_op_name}_enable_grad_'
+
+X = bst.typing.ArrayLike
+W = bst.typing.PyTree
+Y = bst.typing.ArrayLike
+
+
+class OperatorContext(threading.local):
+    """
+    The context for the eligibility trace operator.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.stop_param_gradient = [False]
+
+
+context = OperatorContext()
+
+
+@contextlib.contextmanager
+def stop_param_gradients(stop_or_not: bool = True):
+    """
+    Stop the weight gradients for the ETrace weight operator.
+
+    Example::
+
+      >>> import brainscale
+      >>> with brainscale.stop_weight_gradients():
+      >>>    # do something
+
+    Args:
+        stop_or_not: Whether to stop the weight gradients.
+    """
+    try:
+        context.stop_param_gradient.append(stop_or_not)
+        yield
+    finally:
+        context.stop_param_gradient.pop()
+
+
+def wrap_etrace_fun(fun, name: str = _etrace_op_name):
+    fun.__name__ = name
+    return fun
+
+
+def is_etrace_op(jit_param_name: str):
+    return jit_param_name.startswith(_etrace_op_name)
+
+
+def is_etrace_op_enable_gradient(jit_param_name: str):
+    return jit_param_name.startswith(_etrace_op_name_enable_grad)
+
+
+class ETraceOp:
+    """
+    The Eligibility Trace Operator.
+
+    The function must have the signature: ``(x: jax.Array, weight: PyTree) -> jax.Array``.
+
+    Attributes:
+        fun: The operator function.
+        is_diagonal: bool. Whether the operator is in the hidden diagonal or not.
+
+    Args:
+        fun: The operator function.
+        is_diagonal: bool. Whether the operator is in the hidden diagonal or not.
+    """
+    __module__ = 'brainscale'
+
+    def __init__(
+        self,
+        fun: Callable,
+        is_diagonal: bool = False
+    ):
+        super().__init__()
+        self.fun = fun
+        self.is_diagonal = is_diagonal
+        name = (
+            _etrace_op_name_enable_grad
+            if is_diagonal else
+            _etrace_op_name
+        )
+        self._jitted_call = jax.jit(wrap_etrace_fun(self._call, name))
+
+    def __call__(
+        self,
+        inputs: X,
+        weights: W,
+    ) -> Y:
+        return self.xw_to_y(inputs, weights)
+
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__}({self.fun.__name__}, is_diagonal={self.is_diagonal})'
+
+    def _call(self, x, weight):
+        return self.fun(x, weight)
+
+    def xw_to_y(
+        self,
+        inputs: X,
+        weights: W,
+    ) -> Y:
+        r"""
+        This function is used to compute the output of the operator.
+
+        It computes:
+
+            $$
+            y = f(x, w)
+            $$
+
+        """
+        y = self._jitted_call(inputs, weights)
+        if context.stop_param_gradient[-1] and not self.is_diagonal:
+            y = jax.lax.stop_gradient(self._jitted_call(inputs, weights))
+        return y
+
+    def yw_to_w(
+        self,
+        hidden_dim_arr: Y,
+        weight_dim_tree: W,
+    ) -> W:
+        r"""
+        This function is used to compute the weight from the hidden dimensional array.
+
+        It computes:
+
+            $$
+            w = f(y, w)
+            $$
+
+        This function is mainly used when computing eligibility trace updates based on
+        :py:class:`DiagParamDimAlgorithm`.
+        """
+        raise NotImplementedError
 
 
 class StandardETraceOp(ETraceOp):

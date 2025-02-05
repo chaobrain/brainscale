@@ -42,29 +42,34 @@ from __future__ import annotations
 
 import itertools
 import warnings
-from typing import (NamedTuple, List, Dict, Sequence, Tuple, Set, Optional)
+from typing import NamedTuple, List, Dict, Sequence, Tuple, Set, Optional
 
 import brainstate as bst
 import brainunit as u
 import jax.core
 from jax.extend import source_info_util
 
-from ._etrace_concepts import (is_etrace_op,
-                               is_etrace_op_enable_gradient,
-                               ETraceParam,
-                               ETraceState)
-from ._etrace_concepts import sequence_split_state_values
+from ._etrace_concepts import ETraceParam, ETraceState
 from ._etrace_debug_jaxpr2code import jaxpr_to_python_code
-from ._misc import (git_issue_addr,
-                    NotSupportedError,
-                    CompilationError)
-from ._typing import (PyTree,
-                      StateID,
-                      WeightXVar,
-                      WeightYVar,
-                      HiddenInVar,
-                      HiddenOutVar,
-                      Path)
+from ._etrace_operators import (
+    is_etrace_op,
+    is_etrace_op_enable_gradient
+)
+from ._misc import (
+    git_issue_addr,
+    NotSupportedError,
+    CompilationError
+)
+from ._state_managment import sequence_split_state_values
+from ._typing import (
+    PyTree,
+    StateID,
+    WeightXVar,
+    WeightYVar,
+    HiddenInVar,
+    HiddenOutVar,
+    Path
+)
 
 if jax.__version_info__ < (0, 4, 38):
     from jax.core import Var, Literal, JaxprEqn, Jaxpr, ClosedJaxpr

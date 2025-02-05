@@ -31,17 +31,6 @@ from brainscale._etrace_compiler import (
     WeightOpHiddenRelation,
     CompiledGraph
 )
-from brainscale._etrace_concepts import (
-    ETraceState,
-    ETraceParam,
-    ETraceParamOp,
-    ETraceOp,
-    NonTempParamOp,
-    ElementWiseParamOp,
-    ElementWiseParam,
-    FakedParamOp,
-    stop_param_gradients
-)
 from brainscale._etrace_graph import (
     ETraceGraph,
 )

@@ -46,17 +46,18 @@ import jax.core
 import jax.numpy as jnp
 from jax.extend import linear_util as lu
 from jax.interpreters import partial_eval as pe
+from jax.tree_util import register_pytree_node_class
 
 from ._etrace_compiler import (HiddenTransition,
                                compile_graph,
                                CompiledGraph)
-from ._etrace_concepts import (ETraceState,
-                               assign_dict_state_values,
-                               dict_split_state_values,
-                               split_dict_states_v2)
+from ._etrace_concepts import ETraceState
 from ._etrace_input_data import (get_single_step_data,
                                  split_data_types,
                                  merge_data)
+from ._state_managment import (assign_dict_state_values,
+                               dict_split_state_values,
+                               split_dict_states_v2)
 from ._typing import (PyTree,
                       TempData,
                       Outputs,
@@ -83,7 +84,7 @@ __all__ = [
 ]
 
 
-@jax.tree_util.register_pytree_node_class
+@register_pytree_node_class
 class Residuals:
     """
     The residuals for storing the backward pass data in a VJP function.
@@ -95,7 +96,13 @@ class Residuals:
       consts: The constants for the backward pass.
     """
 
-    def __init__(self, jaxpr, in_tree, out_tree, consts):
+    def __init__(
+        self,
+        jaxpr,
+        in_tree,
+        out_tree,
+        consts
+    ):
         self.jaxpr = jaxpr
         self.in_tree = in_tree
         self.out_tree = out_tree
@@ -114,7 +121,7 @@ class Residuals:
 
 
 class ETraceGraph:
-    """
+    r"""
     The eligibility trace graph, tracking the relationship between the etrace weights
     :py:class:`ETraceParam`, the etrace variables :py:class:`ETraceState`, and the etrace
     operations :py:class:`ETraceOp`.
@@ -130,10 +137,20 @@ class ETraceGraph:
     ----------
     model: brainstate.nn.Module
         The model to build the eligibility trace graph. The models should only define the one-step behavior.
+    vjp_method: str
+        The method for computing the VJP. It should be either "single-step" or "multi-step".
+
+        - "single-step": The VJP is computed at the current time step, i.e., $\partial L^t/\partial h^t$.
+        - "multi-step": The VJP is computed at multiple time steps, i.e., $\partial L^t/\partial h^{t-k}$,
+          where $k$ is determined by the data input.
     """
     __module__ = 'brainscale'
 
-    def __init__(self, model: bst.nn.Module, vjp_method: str = 'single-step'):
+    def __init__(
+        self,
+        model: bst.nn.Module,
+        vjp_method: str = 'single-step'
+    ):
         # the VJP method
         assert vjp_method in ('single-step', 'multi-step'), (
             'The VJP method should be either "single-step" or "multi-step". '
@@ -433,6 +450,9 @@ class ETraceGraph:
         self,
         intermediate_values: dict
     ) -> Dict[HidHidJac_Key, jax.Array]:
+        """
+        Computing the hidden-to-hidden Jacobian according to the given intermediate values.
+        """
 
         intermediate_values = jax.lax.stop_gradient(intermediate_values)
 

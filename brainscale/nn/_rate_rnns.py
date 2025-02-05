@@ -21,7 +21,7 @@ from typing import Callable, Union
 import brainstate as bst
 import brainunit as u
 
-from brainscale._etrace_concepts import ETraceState, ETraceParamOp, ElementWiseParamOp
+from brainscale._etrace_concepts import ETraceState, ETraceParamOp
 from brainscale._typing import ArrayLike
 from ._linear import Linear
 
@@ -79,8 +79,8 @@ class ValinaRNNCell(bst.nn.RNNCell):
             self.activation = activation
 
         # weights
-        self.W = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], 
-                        w_init=w_init, 
+        self.W = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1],
+                        w_init=w_init,
                         b_init=b_init,
                         param_type=param_type)
 

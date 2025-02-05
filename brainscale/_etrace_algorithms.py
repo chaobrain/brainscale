@@ -37,12 +37,9 @@ from ._etrace_compiler import (
     CompiledGraph,
 )
 from ._etrace_concepts import (
-    assign_state_values_v2,
-    split_states_v2,
     ETraceState,
     ETraceParamOp,
-    ElementWiseParam,
-    ElementWiseParamOp,
+    ElemWiseParamOp,
     _ETraceGrad
 )
 from ._etrace_graph import ETraceGraph
@@ -52,6 +49,7 @@ from ._etrace_operators import (
     GeneralETraceOp
 )
 from ._misc import remove_units
+from ._state_managment import assign_state_values_v2, split_states_v2
 from ._typing import (
     PyTree,
     Outputs,
@@ -906,7 +904,7 @@ def _init_IO_dim_state(
     # we need to initialize the eligibility trace states for the weight x and the df.
 
     # "relation.x" may be repeatedly used in the graph
-    if not isinstance(relation.weight, ElementWiseParam):
+    if not isinstance(relation.weight, ElemWiseParamOp):
         if relation.x not in self.etrace_xs:
             shape = relation.x.aval.shape
             dtype = relation.x.aval.dtype
@@ -1067,7 +1065,7 @@ def _solve_IO_dim_weight_gradients(
     for relation in weight_hidden_relations:
         relation: WeightOpHiddenRelation
 
-        if not isinstance(relation.weight, ElementWiseParam):
+        if not isinstance(relation.weight, ElemWiseParamOp):
             x = xs[relation.x]
         weight_path = relation.path
 
@@ -1095,7 +1093,7 @@ def _solve_IO_dim_weight_gradients(
             #
             #    dw = df(dx, dy)
             #
-            if isinstance(relation.weight, ElementWiseParam):
+            if isinstance(relation.weight, ElemWiseParamOp):
                 dg_weight = u.maybe_decimal(
                     u.Quantity(
                         u.get_mantissa(df_hid),
@@ -1814,7 +1812,7 @@ def _update_param_dim_etrace_scan_fn(
                     diag_jac,  # List of jax.Array
                     (
                         None
-                        if isinstance(etrace_op, ElementWiseParamOp) else
+                        if isinstance(etrace_op, ElemWiseParamOp) else
                         etrace_xs_at_t[relation.x]
                     ),  # jax.Array
                     etrace_ys_at_t.get((relation.y, hid_path2), None)  # jax.Array | None
