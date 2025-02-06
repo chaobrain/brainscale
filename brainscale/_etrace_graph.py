@@ -58,16 +58,19 @@ from ._etrace_input_data import (get_single_step_data,
 from ._state_managment import (assign_dict_state_values,
                                dict_split_state_values,
                                split_dict_states_v2)
-from ._typing import (PyTree,
-                      TempData,
-                      Outputs,
-                      HiddenVals,
-                      StateVals,
-                      ETraceX_Key,
-                      ETraceDF_Key,
-                      HidHidJac_Key,
-                      Hid2WeightJacobian,
-                      Hid2HidJacobian)
+from ._typing import (
+    PyTree,
+    TempData,
+    Outputs,
+    HiddenVals,
+    StateVals,
+    ETraceX_Key,
+    ETraceDF_Key,
+    HidHidJac_Key,
+    Hid2WeightJacobian,
+    Hid2HidJacobian,
+    Path,
+)
 
 # TODO
 #
@@ -169,6 +172,7 @@ class ETraceGraph:
 
         # the compiled graph
         self._compiled_graph = None
+        self._state_id_to_path = None
 
     @property
     def is_single_step(self):
@@ -253,6 +257,38 @@ class ETraceGraph:
             raise ValueError('The graph is not compiled yet. Please call ".compile_graph()" first.')
         return self._compiled_graph
 
+    @property
+    def states(self) -> bst.util.FlattedDict[Path, bst.State]:
+        """
+        The states for the model.
+
+        Returns:
+            The states for the model.
+        """
+        return self.compiled.model_retrieved_states
+
+    @property
+    def path_to_states(self) -> bst.util.FlattedDict[Path, bst.State]:
+        """
+        The path to the states.
+
+        Returns:
+            The path to the states.
+        """
+        return self.states
+
+    @property
+    def state_id_to_path(self) -> Dict[int, Path]:
+        """
+        The state id to the path.
+
+        Returns:
+            The state id to the path.
+        """
+        if self._state_id_to_path is None:
+            self._state_id_to_path = {id(state): path for path, state in self.states.items()}
+        return self._state_id_to_path
+
     def compile_graph(self, *args):
         r"""
         Building the eligibility trace graph for the model according to the given inputs.
@@ -264,11 +300,6 @@ class ETraceGraph:
         Args:
             *args: The positional arguments for the model.
         """
-
-        # state information
-        self.states = bst.graph.states(self.model)
-        self.path_to_states = {path: state for path, state in self.states.items()}
-        self.state_id_to_path = {id(state): path for path, state in self.states.items()}
 
         # process the inputs
         args = get_single_step_data(*args)

@@ -34,8 +34,8 @@ from brainscale._etrace_compiler import (
 from brainscale._etrace_concepts import (
     # state
     ETraceState,
-    ETraceMultiState,
-    ETraceDictState,
+    ETraceGroupState,
+    ETraceTreeState,
     # parameter
     ETraceParam,
     ElemWiseParam,
@@ -54,7 +54,7 @@ from brainscale._etrace_input_data import (
 from brainscale._etrace_operators import (
     ETraceOp,
     StandardOp,
-    MatmulOp,
+    MatMulOp,
     AbsMatmulOp,
     ElemWiseOp,
 )

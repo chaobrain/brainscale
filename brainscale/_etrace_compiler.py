@@ -33,7 +33,12 @@
 #   [2024-12-05] change the ETraceWeight to NonETraceWeight if the hidden states are not found;
 #                remove the connected hidden states when y=x@w is not shape broadcastable with the hidden states.
 #   [2024-12-09] small updates, related to the key items in "CompiledGraph"
-#
+#   [2025-02-06]
+#       - [] unify model retrieved states (brainstate.graph.states)
+#            and compiled states (brainstate.compile.StatefulFunction)
+#       - [] add the support for the "ETraceGroupState" and "ETraceTreeState"
+#       - [] add the support for the "ElemWiseParam"
+
 # ==============================================================================
 
 # -*- coding: utf-8 -*-
@@ -164,6 +169,7 @@ class JaxprEvaluation(object):
         invar_to_hidden_path: The mapping from the input variables to the hidden states.
         outvar_to_hidden_path: The mapping from the output variables to the hidden states.
     """
+
     def __init__(
         self,
         weight_invars: Set[Var],
@@ -1672,7 +1678,7 @@ class CompiledGraph(NamedTuple):
     """
     augmented_jaxpr: ClosedJaxpr  # the jaxpr which returns necessary intermediate variables
     jaxpr_perturb_hidden: ClosedJaxpr  # the jaxpr which adds the hidden perturbation
-    model_retrieved_states: Dict[Path, bst.State]  # the states retrieved by ``module.states()``
+    model_retrieved_states: bst.util.FlattedDict[Path, bst.State]  # the states retrieved by ``module.states()``
     stateful_fn_states: Sequence[bst.State]  # the states compiled by the stateful function
     stateful_fn_outtree: jax.tree_util.PyTreeDef
     hidden_groups: Sequence[HiddenGroup]
@@ -1816,16 +1822,6 @@ def compile_graph(
         outvar: hidden_path_to_invar[hid]
         for hid, outvar in hidden_path_to_outvar.items()
     }
-    hidden_outvar_to_hidden = {
-        outvar: st
-        for outvar, st in zip(outvars_with_state_tree, compiled_states)
-        if isinstance(st, ETraceState)
-    }
-    hidden_invar_to_hidden = {
-        invar: st
-        for invar, st in zip(invars_with_state_tree, compiled_states)
-        if isinstance(st, ETraceState)
-    }
 
     # -- evaluating the relationship for hidden-to-hidden -- #
     weight_invars = set([v for vs in weight_path_to_invar.values() for v in vs])
@@ -1842,7 +1838,6 @@ def compile_graph(
     ).compile()
 
     # -- evaluating the jaxpr for (hidden, weight, op) relationships -- #
-
     hidden_param_op_relations = JaxprEvalForWeightOpHiddenRelation(
         jaxpr=jaxpr,
         hidden_outvar_to_invar=hidden_outvar_to_invar,

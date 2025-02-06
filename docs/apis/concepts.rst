@@ -8,8 +8,8 @@ Online Learning Concepts
    :depth: 1
 
 
-ETrace Model Definition
------------------------
+ETrace State
+------------
 
 
 If you are trying to define the hidden states for eligibility trace-based learning,
@@ -21,8 +21,12 @@ you can use the following classes to define the model.
    :template: classtemplate.rst
 
     ETraceState
-    ETraceMultiState
+    ETraceGroupState
+    ETraceTreeState
 
+
+ETrace Parameter
+----------------
 
 
 If you are trying to define the weight parameters for eligibility trace-based learning,
@@ -66,33 +70,4 @@ or :py:class:`FakeElemWiseParam`, which does not compute the gradients at all.
     FakeETraceParam
     FakeElemWiseParam
 
-
-
-
-ETrace Operations
------------------
-
-
-Eligibility trace-based operations define the operations that transform the inputs and the weights
-to the outputs.
-
-
-
-
-.. autosummary::
-   :toctree: generated/
-   :nosignatures:
-   :template: classtemplate.rst
-
-    ETraceOp
-    StandardETraceOp
-    GeneralETraceOp
-    MatMulETraceOp
-
-
-.. autosummary::
-   :toctree: generated/
-   :nosignatures:
-
-   stop_param_gradients
 

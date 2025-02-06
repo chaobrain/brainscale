@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from functools import partial
-from typing import Dict, Tuple, Any, List, Protocol, Optional, Sequence, Hashable
+from typing import Dict, Tuple, Any, List, Protocol, Optional, Sequence
 
 import brainstate as bst
 import brainunit as u
@@ -43,12 +43,11 @@ from ._etrace_concepts import (
 )
 from ._etrace_graph import ETraceGraph
 from ._etrace_input_data import has_multistep_data
-from ._etrace_operators import (
-    StandardETraceOp,
-    GeneralETraceOp
-)
 from ._misc import remove_units
-from ._state_managment import assign_state_values_v2, split_states_v2
+from ._state_managment import (
+    assign_state_values_v2,
+    split_states_v2
+)
 from ._typing import (
     PyTree,
     Outputs,
@@ -198,7 +197,7 @@ class ETraceAlgorithm(bst.nn.Module):
         The model function, which receives the input arguments and returns the model output.
     name: str, optional
         The name of the etrace algorithm.
-     vjp_method: bool
+    vjp_method: bool
         The time to compute the loss-to-hidden Jacobian.
 
         - ``0``: the current time step: $\frac{\partial L^t}{\partial h^t}$.  Memory is
@@ -222,24 +221,6 @@ class ETraceAlgorithm(bst.nn.Module):
     """
     __module__ = 'brainscale'
 
-    # the etrace graph
-    graph: ETraceGraph
-
-    # the weight states
-    param_states: Dict[Hashable, bst.ParamState]
-
-    # the hidden states
-    hidden_states: Dict[Hashable, ETraceState]
-
-    # the other states
-    other_states: Dict[Hashable, bst.State]
-
-    # whether the etrace algorithm has been compiled
-    is_compiled: bool
-
-    # the running index
-    running_index: bst.ParamState[int]
-
     def __init__(
         self,
         model: bst.nn.Module,
@@ -257,16 +238,71 @@ class ETraceAlgorithm(bst.nn.Module):
 
         # the model and graph
         if not isinstance(model, bst.nn.Module):
-            raise ValueError(f'The model should be a brainstate.nn.Module, this can help us to '
-                             f'better obtain the program structure. But we got {type(model)}.')
+            raise ValueError(
+                f'The model should be a brainstate.nn.Module, this can help us to '
+                f'better obtain the program structure. But we got {type(model)}.'
+            )
         self.graph = ETraceGraph(model, vjp_method=vjp_method)
 
         # The flag to indicate whether the etrace algorithm has been compiled
         self.is_compiled = False
 
+        # the running index
+        self.running_index = bst.LongTermState(0)
+
+        # other states
+        self._param_states = None
+        self._hidden_states = None
+        self._other_states = None
+
     @property
     def compiled(self) -> CompiledGraph:
         return self.graph.compiled
+
+    @property
+    def param_states(self) -> bst.util.FlattedDict[Path, bst.ParamState]:
+        """
+        Get the parameter weight states.
+        """
+        if self._param_states is None:
+            self._split_state()
+        return self._param_states
+
+    @property
+    def hidden_states(self) -> bst.util.FlattedDict[Path, ETraceState]:
+        """
+        Get the hidden states.
+        """
+        if self._hidden_states is None:
+            self._split_state()
+        return self._hidden_states
+
+    @property
+    def other_states(self) -> bst.util.FlattedDict[Path, bst.State]:
+        """
+        Get the other states.
+        """
+        if self._other_states is None:
+            self._split_state()
+        return self._other_states
+
+    def _split_state(self):
+        # --- the state separation --- #
+        #
+        # [NOTE]
+        #
+        # The `ETraceGraph` and the following states suggests that
+        # `ETraceAlgorithm` depends on the states we created in the
+        # `ETraceGraph`, including:
+        #
+        #   - the weight states, which is invariant during the training process
+        #   - the hidden states, the recurrent states, which may be changed between different training epochs
+        #   - the other states, which may be changed between different training epochs
+        (
+            self._param_states,
+            self._hidden_states,
+            self._other_states
+        ) = self.compiled.model_retrieved_states.split(bst.ParamState, ETraceState, ...)
 
     def compile_graph(self, *args) -> None:
         r"""
@@ -282,24 +318,6 @@ class ETraceAlgorithm(bst.nn.Module):
         """
 
         if not self.is_compiled:
-            # --- the state separation --- #
-            #
-            # [NOTE]
-            #
-            # The `ETraceGraph` and the following states suggests that
-            # `ETraceAlgorithm` depends on the states we created in the
-            # `ETraceGraph`, including:
-            #
-            #   - the weight states, which is invariant during the training process
-            #   - the hidden states, the recurrent states, which may be changed between different training epochs
-            #   - the other states, which may be changed between different training epochs
-            #
-            (
-                self.param_states,
-                self.hidden_states,
-                self.other_states
-            ) = bst.graph.states(self.graph.model, bst.ParamState, ETraceState, ...)
-
             # --- the model etrace graph -- #
             self.graph.compile_graph(*args)
 
@@ -310,11 +328,17 @@ class ETraceAlgorithm(bst.nn.Module):
             self.is_compiled = True
 
     @property
-    def path_to_states(self) -> Dict[Path, bst.State]:
+    def path_to_states(self) -> bst.util.FlattedDict[Path, bst.State]:
+        """
+        Get the path to the states.
+        """
         return self.graph.path_to_states
 
     @property
     def state_id_to_path(self) -> Dict[int, Path]:
+        """
+        Get the state ID to the path.
+        """
         return self.graph.state_id_to_path
 
     def show_graph(self) -> None:
@@ -327,7 +351,6 @@ class ETraceAlgorithm(bst.nn.Module):
         """
         Update the model and the eligibility trace states.
         """
-
         return self.update(*args)
 
     def update(self, *args) -> Any:
@@ -404,9 +427,6 @@ class DiagETraceAlgorithmForVJP(ETraceAlgorithm):
         vjp_method: str = 'single-step'
     ):
         super().__init__(model=model, name=name, vjp_method=vjp_method)
-
-        # the running index
-        self.running_index = bst.LongTermState(0)
 
         # the update rule
         self._true_update_fun = jax.custom_vjp(self._update_fn)

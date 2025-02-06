@@ -28,14 +28,13 @@ __all__ = [
     'stop_param_gradients',  # stop weight gradients
     'ETraceOp',  # base class
     'StandardOp',  # standard operator, base class
-    'MatmulOp',  # x @ w + b
-    'AbsMatmulOp',  # x @ |w| + b
+    'MatMulOp',  # x @ f(w * m) + b
     'ElemWiseOp',  # element-wise operation
 ]
 
-_etrace_op_name = '_etrace_weight_operator_call'
+_etrace_op_name = '_etrace_operator_call'
 _etrace_op_name_enable_grad = f'{_etrace_op_name}_enable_grad_'
-_etrace_op_name_enable_grad_elem = f'{_etrace_op_name}_enable_grad_elemwise_'
+_etrace_op_name_elemwise = f'{_etrace_op_name}_enable_grad_elemwise_'
 
 X = bst.typing.ArrayLike
 W = bst.typing.PyTree
@@ -82,11 +81,24 @@ def wrap_etrace_fun(fun, name: str = _etrace_op_name):
 
 
 def is_etrace_op(jit_param_name: str):
+    """
+    Check whether the jitted parameter name is the operator.
+    """
     return jit_param_name.startswith(_etrace_op_name)
 
 
 def is_etrace_op_enable_gradient(jit_param_name: str):
+    """
+    Check whether the jitted parameter name is the operator with the gradient enabled.
+    """
     return jit_param_name.startswith(_etrace_op_name_enable_grad)
+
+
+def is_etrace_op_name_elemwise(jit_param_name: str):
+    """
+    Check whether the jitted parameter name is the element-wise operator.
+    """
+    return jit_param_name.startswith(_etrace_op_name_elemwise)
 
 
 class ETraceOp:
@@ -198,25 +210,28 @@ class StandardOp(ETraceOp):
         raise NotImplementedError
 
 
-class MatmulOp(StandardOp):
+class MatMulOp(StandardOp):
     """
     The matrix multiplication operator for eligibility trace-based gradient learning.
 
     This operator is used to compute the output of the operator, mathematically:
 
         $$
-        y = x @ w + b
+        y = x @ f(w * m) + b
         $$
 
-    $b$ is the bias term, which can be optional.
+    $b$ is the bias term, which can be optional, $m$ is the weight mask,
+    and $f$ is the weight function.
     """
 
     def __init__(
         self,
         weight_mask: Optional[jax.Array] = None,
+        weight_fn: Callable[[X], X] = lambda w: w,
     ):
         super().__init__(is_diagonal=False)
 
+        # weight mask
         if weight_mask is None:
             pass
         elif isinstance(weight_mask, (np.ndarray, jax.Array, u.Quantity)):
@@ -224,6 +239,10 @@ class MatmulOp(StandardOp):
         else:
             raise TypeError(f'The weight_mask must be an array-like. But got {type(weight_mask)}')
         self.weight_mask = weight_mask
+
+        # weight function
+        assert callable(weight_fn), f'The weight_fn must be callable. But got {type(weight_fn)}'
+        self.weight_fn = weight_fn
 
     def xw_to_y(
         self,
@@ -234,24 +253,28 @@ class MatmulOp(StandardOp):
         This function is used to compute the output of the operator, mathematically:
 
             $$
-            y = x @ w + b
+            y = x @ f(w * m) + b
             $$
 
         if the bias is provided.
 
             $$
-            y = x @ w
+            y = x @ f(w * m)
             $$
 
         if the bias is not provided.
 
         """
         if not isinstance(w, dict):
-            raise TypeError(f'{MatmulOp.__name__} only supports '
+            raise TypeError(f'{MatMulOp.__name__} only supports '
                             f'the dictionary weight. But got {type(w)}')
         if 'weight' not in w:
             raise ValueError(f'The weight must contain the key "weight".')
-        y = u.math.matmul(x, w['weight'] * self.weight_mask)
+        weight = w['weight']
+        if self.weight_mask is not None:
+            weight = weight * self.weight_mask
+        weight = self.weight_fn(weight)
+        y = u.math.matmul(x, weight)
         if 'bias' in w:
             y = y + w['bias']
         return y
@@ -320,60 +343,22 @@ class MatmulOp(StandardOp):
             return {'weight': weight_like, 'bias': bias_like}
 
 
-class AbsMatmulOp(MatmulOp):
-    """
-    The matrix multiplication operator with absolute weight values for eligibility trace-based gradient learning.
-
-    This operator is used to compute the output of the operator, mathematically:
-
-        $$
-        y = x @ w + b
-        $$
-
-    $b$ is the bias term, which can be optional.
-
-    """
-
-    def xw_to_y(
-        self,
-        x: bst.typing.ArrayLike,
-        w: Dict[str, bst.typing.ArrayLike]
-    ):
-        r"""
-        This function is used to compute the output of the operator, mathematically:
-
-            $$
-            y = x @ |w| + b
-            $$
-
-        if the bias is provided.
-
-            $$
-            y = x @ |w|
-            $$
-
-        if the bias is not provided.
-
-        """
-        if not isinstance(w, dict):
-            raise TypeError(f'{MatmulOp.__name__} only supports '
-                            f'the dictionary weight. But got {type(w)}')
-        if 'weight' not in w:
-            raise ValueError(f'The weight must contain the key "weight".')
-        y = u.math.matmul(x, u.math.abs(w['weight']) * self.weight_mask)
-        if 'bias' in w:
-            y = y + w['bias']
-        return y
-
-
 class ElemWiseOp(StandardOp):
     """
     The element-wise operator for the eligibility trace-based gradient learning.
     
     This interface can be used to define any element-wise operation between weight parameters and hidden states. 
-    
+
+    .. note::
+
+        Different from the :py:class:`StandardOp`, the element-wise operator does not require the input data.
+        Its function signature is ``(w: PyTree) -> ndarray``.
+
+        The most important thing is that the element-wise operator must generate the output with
+        the same shape as the hidden states.
+
     Args:
-        fn: the element-wise function, which must have the signature: ``(w: ndarray) -> ndarray``.
+        fn: the element-wise function, which must have the signature: ``(w: PyTree) -> ndarray``.
     """
 
     def __init__(
@@ -382,21 +367,13 @@ class ElemWiseOp(StandardOp):
     ):
         self._raw_fn = fn
         super().__init__(is_diagonal=True)
-        self._jitted_call = jax.jit(wrap_etrace_fun(self._call, _etrace_op_name_enable_grad_elem))
+        self._jitted_call = jax.jit(wrap_etrace_fun(self.xw_to_y, _etrace_op_name_elemwise))
 
-    def __call__(
-        self,
-        inputs: X,
-        weights: W,
-    ) -> Y:
-        return self._jitted_call(inputs, weights)
+    def __call__(self, weights: W) -> Y:
+        return self._jitted_call(weights)
 
-    def xw_to_y(
-        self,
-        inputs: X,
-        weights: W,
-    ) -> Y:
-        return self._raw_fn(inputs, weights)
+    def xw_to_y(self, weights: W) -> Y:
+        return self._raw_fn(weights)
 
     def yw_to_w(
         self,
