@@ -12,5 +12,6 @@ Online Learning Compiler
     ETraceGraph
     compile_graph
     CompiledGraph
+    HiddenParamOpRelation
 
 

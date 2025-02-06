@@ -19,17 +19,11 @@ __version__ = "0.0.4"
 
 from brainscale._etrace_algorithms import (
     ETraceAlgorithm,
-    DiagETraceAlgorithmForVJP,
-    DiagIODimAlgorithm,
-    DiagParamDimAlgorithm,
-    DiagHybridDimAlgorithm,
+    EligibilityTraceState,
 )
 from brainscale._etrace_compiler import (
-    compile_graph,
     HiddenGroup,
-    HiddenTransition,
-    WeightOpHiddenRelation,
-    CompiledGraph
+    HiddenParamOpRelation,
 )
 from brainscale._etrace_concepts import (
     # state
@@ -55,8 +49,18 @@ from brainscale._etrace_operators import (
     ETraceOp,
     StandardOp,
     MatMulOp,
-    AbsMatmulOp,
     ElemWiseOp,
+)
+from brainscale._etrace_vjp_algorithms import (
+    ETraceVjpAlgorithm,
+    IODimVjpAlgorithm,
+    ParamDimVjpAlgorithm,
+    HybridDimVjpAlgorithm,
+)
+from brainscale._etrace_vjp_compiler import (
+    compile_graph_vjp,
+    HiddenTransition,
+    CompiledVJPGraph
 )
 from brainscale._grad_exponential import (
     GradExpon,

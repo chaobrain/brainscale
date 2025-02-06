@@ -400,7 +400,7 @@ class OnlineTrainer(Trainer):
         weights = self.target.states().subset(bst.ParamState)
 
         # initialize the online learning model
-        # model = brainscale.DiagParamDimAlgorithm(self.target, mode=bst.mixin.Batching())
+        # model = brainscale.ParamDimVjpAlgorithm(self.target, mode=bst.mixin.Batching())
         model = brainscale.DiagIODimAlgorithm(self.target, self.decay_or_rank)
         model.compile_graph(inputs[0])
 

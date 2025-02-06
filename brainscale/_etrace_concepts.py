@@ -120,6 +120,10 @@ class ETraceState(bst.ShortTermState):
         """
         return self.value.shape
 
+    @property
+    def num_state(self) -> int:
+        return 1
+
     def _check_value(self, value: bst.typing.ArrayLike):
         if not isinstance(value, (np.ndarray, jax.Array, u.Quantity)):
             raise TypeError(
@@ -189,6 +193,10 @@ class ETraceGroupState(ETraceState):
         The shape of each hidden state variable.
         """
         return self.value.shape[:-1]
+
+    @property
+    def num_state(self) -> int:
+        return self.value.shape[-1]
 
     def _check_value(self, value) -> Tuple[bst.typing.ArrayLike, Dict[str, int]]:
         if not isinstance(value, (np.ndarray, jax.Array, u.Quantity)):
@@ -260,7 +268,7 @@ class ETraceGroupState(ETraceState):
 
 class ETraceTreeState(ETraceGroupState):
     """
-    A dictionary of multiple hidden states for eligibility trace-based learning.
+    A pytree of multiple hidden states for eligibility trace-based learning.
 
     .. note::
 
@@ -344,7 +352,7 @@ class ETraceTreeState(ETraceGroupState):
     .. note::
 
         Avoid using ``ETraceTreeState.value`` to get the state value, or
-        ``ETraceTreeState.value = `` to assign the state value. Instead, use
+        ``ETraceTreeState.value =`` to assign the state value. Instead, use
         ``ETraceTreeState.get_value()`` and ``ETraceTreeState.set_value()``.
         This is because ``.value`` loss hidden state units and other information,
         and it is only dimensionless data.
@@ -377,6 +385,14 @@ class ETraceTreeState(ETraceGroupState):
         """
         return self.value.shape[:-1]
 
+    @property
+    def num_state(self) -> int:
+        assert self.value.shape[-1] == len(self.name2index), (
+            f'The number of hidden states '
+            f'is not equal to the number of hidden state names.'
+        )
+        return self.value.shape[-1]
+
     def _check_value(
         self,
         value: dict | Sequence
@@ -395,10 +411,11 @@ class ETraceTreeState(ETraceGroupState):
                 )
             shapes.append(v.shape)
         if len(set(shapes)) > 1:
+            info = {k: v.shape for k, v in value.items()}
             raise ValueError(
                 f'Currently, {self.__class__.__name__} only supports '
                 f'hidden states with the same shape. '
-                f'But we got {dict(k=v.shape for k, v in value.items())}.'
+                f'But we got {info}.'
             )
         name2unit = {k: u.get_unit(v) for k, v in value.items()}
         name2index = {k: i for i, k in enumerate(value.keys())}

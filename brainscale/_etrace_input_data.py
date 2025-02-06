@@ -21,7 +21,7 @@ import jax
 
 __all__ = [
     'SingleStepData',
-    'MultiStepData'
+    'MultiStepData',
 ]
 
 

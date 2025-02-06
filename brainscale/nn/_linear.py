@@ -24,7 +24,7 @@ import brainunit as u
 from brainstate import functional, init
 
 from brainscale._etrace_concepts import ETraceParam
-from brainscale._etrace_operators import MatMulETraceOp
+from brainscale._etrace_operators import MatMulOp
 from brainscale._typing import ArrayLike
 
 __all__ = [
@@ -59,13 +59,16 @@ class Linear(bst.nn.Module):
         self.w_mask = init.param(w_mask, self.in_size + self.out_size)
 
         # weights
-        op = MatMulETraceOp(self.w_mask)
         params = dict(weight=init.param(w_init, self.in_size + self.out_size, allow_none=False))
         if b_init is not None:
             params['bias'] = init.param(b_init, self.out_size, allow_none=False)
 
         # weight + op
-        self.weight_op = param_type(params, op, grad='full' if full_etrace else None)
+        self.weight_op = param_type(
+            params,
+            op=MatMulOp(self.w_mask),
+            grad='full' if full_etrace else None
+        )
 
     def update(self, x):
         return self.weight_op.execute(x)

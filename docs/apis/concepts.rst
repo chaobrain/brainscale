@@ -71,3 +71,30 @@ or :py:class:`FakeElemWiseParam`, which does not compute the gradients at all.
     FakeElemWiseParam
 
 
+
+ETrace Operator
+---------------
+
+
+Eligibility trace-based operators define the operations that transform the inputs and the weights
+to the outputs.
+
+
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+   :template: classtemplate.rst
+
+    ETraceOp
+    StandardOp
+    MatMulOp
+    ElemWiseOp
+
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   stop_param_gradients
+

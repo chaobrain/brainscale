@@ -179,7 +179,7 @@ class StandardOp(ETraceOp):
             $$
 
         This function is mainly used when computing eligibility trace updates based on
-        :py:class:`DiagParamDimAlgorithm`.
+        :py:class:`ParamDimVjpAlgorithm`.
         """
         raise NotImplementedError
 

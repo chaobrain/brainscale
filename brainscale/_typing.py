@@ -76,7 +76,7 @@ dG_State = Sequence[PyTree]  # gradients of other states
 
 ETraceX_Key = Var
 ETraceY_Key = Var
-ETraceDF_Key = Tuple[Var, Path]
+ETraceDF_Key = Tuple[Var, str]
 
 _WeightPath = Path
 _HiddenPath = Path
@@ -100,3 +100,5 @@ Hid2WeightJacobian = Tuple[
     Dict[ETraceDF_Key, jax.Array]
 ]
 Hid2HidJacobian = Dict[HidHidJac_Key, jax.Array]
+HidGroupJacobian = Sequence[jax.Array]
+

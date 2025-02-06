@@ -23,12 +23,37 @@ from typing import Sequence
 import brainstate as bst
 import brainunit as u
 
+import jax.tree
+
 __all__ = [
     'CompilationError',
     'NotSupportedError',
 ]
 
-import jax.tree
+
+def check_dict_keys(
+    d1: dict,
+    d2: dict,
+):
+    """
+    Check the keys of two dictionaries.
+
+    Parameters
+    ----------
+    d1 : dict
+      The first dictionary.
+    d2 : dict
+      The second dictionary.
+
+    Raises
+    ------
+    ValueError
+      If the keys of the two dictionaries are not the same.
+    """
+    if d1.keys() != d2.keys():
+        raise ValueError(f'The keys of the two dictionaries are not the same: {d1.keys()} != {d2.keys()}.')
+
+
 
 
 def _dimensionless(x):
