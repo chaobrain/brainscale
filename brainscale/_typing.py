@@ -28,8 +28,12 @@ else:
     from jax.extend.core import Var
 
 __all__ = [
-    'PyTree', 'StateID', 'WeightID', 'Size', 'Axis', 'Axes',
-    'Inputs', 'Outputs',
+    'PyTree',
+    'StateID',
+    'WeightID',
+    'Size', 'Axis', 'Axes',
+    'Inputs',
+    'Outputs',
     'HiddenVals', 'StateVals', 'WeightVals', 'ETraceVals',
     'HiddenInVar', 'HiddenOutVar',
     'dG_Inputs', 'dG_Weight', 'dG_Hidden', 'dG_State',

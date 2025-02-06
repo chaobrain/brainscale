@@ -124,7 +124,12 @@ def split_states(
 
 def split_states_v2(
     states: Sequence[bst.State]
-) -> Tuple[List[ETraceParam], List[ETraceState], List[bst.ParamState], List[bst.State]]:
+) -> Tuple[
+    List[ETraceParam],
+    List[ETraceState],
+    List[bst.ParamState],
+    List[bst.State]
+]:
     """
     Split the states into weight states, hidden states, and other states.
 
@@ -147,14 +152,15 @@ def split_states_v2(
         if isinstance(st, ETraceState):
             hidden_states.append(st)
         elif isinstance(st, ETraceParam):
-            if st.is_not_etrace:
-                # The ETraceParam is set to "is_not_etrace" since
+            if st.is_etrace:
+                etrace_param_states.append(st)
+            else:
+                # The ETraceParam is not set to "is_etrace" since
                 # no hidden state is associated with it,
                 # so it should be treated as a normal parameter state
                 # and be trained with spatial gradients only
                 param_states.append(st)
-            else:
-                etrace_param_states.append(st)
+
         else:
             if isinstance(st, bst.ParamState):
                 # The ParamState which is not an ETraceParam,
@@ -315,14 +321,14 @@ def split_dict_states_v2(
         if isinstance(st, ETraceState):
             hidden_states[key] = st
         elif isinstance(st, ETraceParam):
-            if st.is_not_etrace:
-                # The ETraceParam is set to "is_not_etrace" since
+            if st.is_etrace:
+                etrace_param_states[key] = st
+            else:
+                # The ETraceParam is not set to "is_etrace" since
                 # no hidden state is associated with it,
                 # so it should be treated as a normal parameter state
                 # and be trained with spatial gradients only
                 param_states[key] = st
-            else:
-                etrace_param_states[key] = st
         else:
             if isinstance(st, bst.ParamState):
                 # The ParamState which is not an ETraceParam,

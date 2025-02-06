@@ -21,7 +21,7 @@ from typing import Callable, Union
 import brainstate as bst
 import brainunit as u
 
-from brainscale._etrace_concepts import ETraceState, ETraceParamOp
+from brainscale._etrace_concepts import ETraceState, ETraceParam
 from brainscale._typing import ArrayLike
 from ._linear import Linear
 
@@ -62,7 +62,7 @@ class ValinaRNNCell(bst.nn.RNNCell):
         b_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
         activation: str | Callable = 'relu',
         name: str = None,
-        param_type: type = ETraceParamOp,
+        param_type: type = ETraceParam,
     ):
         super().__init__(name=name)
 
@@ -123,7 +123,7 @@ class GRUCell(bst.nn.RNNCell):
         state_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
         activation: str | Callable = 'tanh',
         name: str = None,
-        param_type: type = ETraceParamOp,
+        param_type: type = ETraceParam,
     ):
         super().__init__(name=name)
 
@@ -188,7 +188,7 @@ class CFNCell(bst.nn.RNNCell):
         state_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
         activation: str | Callable = 'tanh',
         name: str = None,
-        param_type: type = ETraceParamOp,
+        param_type: type = ETraceParam,
     ):
         super().__init__(name=name)
 
@@ -267,7 +267,7 @@ class MGUCell(bst.nn.RNNCell):
         state_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
         activation: str | Callable = 'tanh',
         name: str = None,
-        param_type: type = ETraceParamOp,
+        param_type: type = ETraceParam,
     ):
         super().__init__(name=name)
 
@@ -370,7 +370,7 @@ class LSTMCell(bst.nn.RNNCell):
         state_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
         activation: str | Callable = 'tanh',
         name: str = None,
-        param_type: type = ETraceParamOp,
+        param_type: type = ETraceParam,
     ):
         super().__init__(name=name)
 
@@ -428,7 +428,7 @@ class URLSTMCell(bst.nn.RNNCell):
         state_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
         activation: str | Callable = 'tanh',
         name: str = None,
-        param_type: type = ETraceParamOp,
+        param_type: type = ETraceParam,
     ):
         super().__init__(name=name)
 
@@ -534,7 +534,7 @@ class MinimalRNNCell(bst.nn.RNNCell):
         state_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
         phi: Callable = None,
         name: str = None,
-        param_type: type = ETraceParamOp,
+        param_type: type = ETraceParam,
     ):
         super().__init__(name=name)
 
@@ -615,7 +615,7 @@ class MiniGRU(bst.nn.RNNCell):
         b_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
         state_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
         name: str = None,
-        param_type: type = ETraceParamOp,
+        param_type: type = ETraceParam,
     ):
         super().__init__(name=name)
 
@@ -692,7 +692,7 @@ class MiniLSTM(bst.nn.RNNCell):
         b_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
         state_init: Union[ArrayLike, Callable] = bst.init.ZeroInit(),
         name: str = None,
-        param_type: type = ETraceParamOp,
+        param_type: type = ETraceParam,
     ):
         super().__init__(name=name)
 
@@ -801,7 +801,7 @@ class LRUCell(bst.nn.Module):
 
         # Parameter for skip connection
         D = bst.random.randn(d_model)
-        self.D = ETraceParamOp(D, lambda x, p: x * p, is_diagonal=True)
+        self.D = ETraceParam(D, lambda x, p: x * p, is_diagonal=True)
 
     def init_state(self, batch_size: int = None, **kwargs):
         self.h_re = ETraceState(bst.init.param(bst.init.ZeroInit(), self.d_hidden, batch_size))

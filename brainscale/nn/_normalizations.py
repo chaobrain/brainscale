@@ -23,7 +23,7 @@ from typing import Callable, Union, Sequence, Optional, Any
 import brainstate as bst
 from brainstate.nn._interaction._normalizations import _BatchNorm
 
-from brainscale._etrace_concepts import ETraceParamOp, NonTempParamOp, ETraceState
+from brainscale._etrace_concepts import ETraceParam, NonTempParam, ETraceState
 from brainscale._typing import ArrayLike, Size, Axes
 
 __all__ = [
@@ -64,13 +64,13 @@ class _BatchNormETrace(_BatchNorm):
 
         if as_etrace_weight:
             weight_type = partial(
-                ETraceParamOp,
+                ETraceParam,
                 op=_operation,
                 grad='full' if full_etrace else None,
                 is_diagonal=True
             )
         else:
-            weight_type = partial(NonTempParamOp, op=_operation)
+            weight_type = partial(NonTempParam, op=_operation)
 
         super().__init__(
             in_size=in_size,
@@ -127,13 +127,13 @@ class LayerNorm(bst.nn.LayerNorm):
     ):
         if as_etrace_weight:
             weight_type = partial(
-                ETraceParamOp,
+                ETraceParam,
                 op=_operation,
                 grad='full' if full_etrace else None,
                 is_diagonal=True
             )
         else:
-            weight_type = partial(NonTempParamOp, op=_operation)
+            weight_type = partial(NonTempParam, op=_operation)
         super().__init__(*args, param_type=weight_type, **kwargs)
 
 
@@ -150,13 +150,13 @@ class RMSNorm(bst.nn.LayerNorm):
     ):
         if as_etrace_weight:
             weight_type = partial(
-                ETraceParamOp,
+                ETraceParam,
                 op=_operation,
                 grad='full' if full_etrace else None,
                 is_diagonal=True
             )
         else:
-            weight_type = partial(NonTempParamOp, op=_operation)
+            weight_type = partial(NonTempParam, op=_operation)
         super().__init__(*args, param_type=weight_type, **kwargs)
 
 
@@ -173,11 +173,11 @@ class GroupNorm(bst.nn.LayerNorm):
     ):
         if as_etrace_weight:
             weight_type = partial(
-                ETraceParamOp,
+                ETraceParam,
                 op=_operation,
                 grad='full' if full_etrace else None,
                 is_diagonal=True
             )
         else:
-            weight_type = partial(NonTempParamOp, op=_operation)
+            weight_type = partial(NonTempParam, op=_operation)
         super().__init__(*args, param_type=weight_type, **kwargs)

@@ -325,3 +325,8 @@ class TestCompileGraphSNN(unittest.TestCase):
         graph = brainscale.compile_graph(net, False, input)
 
         pprint(graph)
+
+
+class TestStateConsistency(unittest.TestCase):
+    pass
+

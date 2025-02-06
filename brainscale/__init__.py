@@ -15,7 +15,7 @@
 
 # -*- coding: utf-8 -*-
 
-__version__ = "0.0.3"
+__version__ = "0.0.4"
 
 from brainscale._etrace_algorithms import (
     ETraceAlgorithm,
@@ -31,6 +31,19 @@ from brainscale._etrace_compiler import (
     WeightOpHiddenRelation,
     CompiledGraph
 )
+from brainscale._etrace_concepts import (
+    # state
+    ETraceState,
+    ETraceMultiState,
+    ETraceDictState,
+    # parameter
+    ETraceParam,
+    ElemWiseParam,
+    NonTempParam,
+    # fake parameter
+    FakeETraceParam,
+    FakeElemWiseParam,
+)
 from brainscale._etrace_graph import (
     ETraceGraph,
 )
@@ -39,10 +52,14 @@ from brainscale._etrace_input_data import (
     MultiStepData,
 )
 from brainscale._etrace_operators import (
-    StandardETraceOp,
-    GeneralETraceOp,
-    MatMulETraceOp,
-    ElementWiseOp,
+    ETraceOp,
+    StandardOp,
+    MatmulOp,
+    AbsMatmulOp,
+    ElemWiseOp,
+)
+from brainscale._grad_exponential import (
+    GradExpon,
 )
 from brainscale._misc import (
     CompilationError,

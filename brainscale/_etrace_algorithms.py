@@ -32,15 +32,14 @@ import jax.numpy as jnp
 
 from ._etrace_compiler import (
     WeightOpHiddenRelation,
-    HiddenGroupV1,
     HiddenGroup,
     CompiledGraph,
 )
 from ._etrace_concepts import (
     ETraceState,
-    ETraceParamOp,
-    ElemWiseParamOp,
-    _ETraceGrad
+    ETraceParam,
+    ElemWiseParam,
+    ETraceGrad
 )
 from ._etrace_graph import ETraceGraph
 from ._etrace_input_data import has_multistep_data
@@ -732,7 +731,7 @@ class DiagETraceAlgorithmForVJP(ETraceAlgorithm):
         #   - the gradients of the hidden states at the last time step,
         #     maybe unnecessary but can be optimized away by the XLA compiler
         #
-        #   - the gradients of the non-etrace parameters, defined by "NonTempParamOp"
+        #   - the gradients of the non-etrace parameters, defined by "NonTempParam"
         #
         #   - the gradients of the other states
         #
@@ -904,7 +903,7 @@ def _init_IO_dim_state(
     # we need to initialize the eligibility trace states for the weight x and the df.
 
     # "relation.x" may be repeatedly used in the graph
-    if not isinstance(relation.weight, ElemWiseParamOp):
+    if not isinstance(relation.weight, ElemWiseParam):
         if relation.x not in self.etrace_xs:
             shape = relation.x.aval.shape
             dtype = relation.x.aval.dtype
@@ -1065,7 +1064,7 @@ def _solve_IO_dim_weight_gradients(
     for relation in weight_hidden_relations:
         relation: WeightOpHiddenRelation
 
-        if not isinstance(relation.weight, ElemWiseParamOp):
+        if not isinstance(relation.weight, ElemWiseParam):
             x = xs[relation.x]
         weight_path = relation.path
 
@@ -1093,7 +1092,7 @@ def _solve_IO_dim_weight_gradients(
             #
             #    dw = df(dx, dy)
             #
-            if isinstance(relation.weight, ElemWiseParamOp):
+            if isinstance(relation.weight, ElemWiseParam):
                 dg_weight = u.maybe_decimal(
                     u.Quantity(
                         u.get_mantissa(df_hid),
@@ -1216,7 +1215,7 @@ class DiagTruncatedAlgorithm(DiagETraceAlgorithmForVJP):
                 self.etrace_xs[relation.x] = bst.ShortTermState(u.math.zeros(shape, dtype))
 
             for group in relation.hidden_groups:
-                group: HiddenGroupV1
+                group: HiddenGroup
                 #
                 # Group 1:
                 #
@@ -1344,7 +1343,7 @@ class DiagTruncatedAlgorithm(DiagETraceAlgorithmForVJP):
             hwo_relation: WeightOpHiddenRelation
 
             for group in hwo_relation.hidden_groups:
-                group: HiddenGroupV1
+                group: HiddenGroup
                 #
                 # Step 2:
                 #
@@ -1567,7 +1566,7 @@ class DiagIODimAlgorithm(DiagETraceAlgorithmForVJP):
             # get the weight_op df
             wy_var = relation.y
             for group in relation.hidden_groups:
-                group: HiddenGroupV1
+                group: HiddenGroup
                 for st in group.hidden_states:
                     path = self.state_id_to_path[id(st)]
                     etrace_dfs[(wy_var, path)] = self.etrace_dfs[(wy_var, path)].value
@@ -1750,14 +1749,14 @@ def _update_param_dim_etrace_scan_fn(
 
         #
         # ParamDim algorithm relies on the "ETraceOp" to compute the etrace updates
-        # Therefore, the weight should be defined as an "ETraceParamOp", so that
-        # the "ETraceOp" can be obtained directly through "ETraceParamOp.op".
+        # Therefore, the weight should be defined as an "ETraceParam", so that
+        # the "ETraceOp" can be obtained directly through "ETraceParam.op".
         #
-        if not isinstance(relation.weight, ETraceParamOp):
+        if not isinstance(relation.weight, ETraceParam):
             raise NotImplementedError(
                 f'When using {DiagParamDimAlgorithm.__name__} or '
                 f'{DiagHybridDimAlgorithm.__name__} algorithms, '
-                f'the weight should be an {ETraceParamOp.__name__}. '
+                f'the weight should be an {ETraceParam.__name__}. '
             )
 
         #
@@ -1812,7 +1811,7 @@ def _update_param_dim_etrace_scan_fn(
                     diag_jac,  # List of jax.Array
                     (
                         None
-                        if isinstance(etrace_op, ElemWiseParamOp) else
+                        if isinstance(etrace_op, ElemWiseParam) else
                         etrace_xs_at_t[relation.x]
                     ),  # jax.Array
                     etrace_ys_at_t.get((relation.y, hid_path2), None)  # jax.Array | None
@@ -1835,11 +1834,11 @@ def _solve_param_dim_weight_gradients(
     # update the etrace weight gradients
     temp_data = dict()
     for relation in weight_hidden_relations:
-        if not isinstance(relation.weight, ETraceParamOp):
+        if not isinstance(relation.weight, ETraceParam):
             raise NotImplementedError(
                 f'When using {DiagParamDimAlgorithm.__name__} '
                 f'or {DiagHybridDimAlgorithm.__name__} algorithms, '
-                f'the weight should be an {ETraceParamOp.__name__}. '
+                f'the weight should be an {ETraceParam.__name__}. '
             )
 
         #
@@ -2071,8 +2070,8 @@ def _is_weight_need_full_grad(
     relation: WeightOpHiddenRelation,
     mode: bst.mixin.Mode
 ):
-    if isinstance(relation.weight, ETraceParamOp):
-        if relation.weight.gradient == _ETraceGrad.full:
+    if isinstance(relation.weight, ETraceParam):
+        if relation.weight.gradient == ETraceGrad.full:
             return True
 
     batch_size = relation.x.aval.shape[0] if mode.has(bst.mixin.Batching) else 1
@@ -2167,21 +2166,21 @@ class DiagHybridDimAlgorithm(DiagETraceAlgorithmForVJP):
         self.etrace_xs_to_weights = defaultdict(list)
 
         for relation in self.compiled.hidden_param_op_relations:
-            if isinstance(relation.weight, ETraceParamOp):
-                if relation.weight.gradient == _ETraceGrad.full:
+            if isinstance(relation.weight, ETraceParam):
+                if relation.weight.gradient == ETraceGrad.full:
                     #
                     # When
-                    #     weight.gradient == _ETraceGrad.full
+                    #     weight.gradient == ETraceGrad.full
                     #
                     # the weights will be forced to use O(n^2) algorithm
                     # to compute the eligibility trace.
                     #
                     _init_param_dim_state(self, relation)
                     continue
-                elif relation.weight.gradient == _ETraceGrad.approx:
+                elif relation.weight.gradient == ETraceGrad.approx:
                     #
                     # When
-                    #     weight.gradient == _ETraceGrad.approx
+                    #     weight.gradient == ETraceGrad.approx
                     #
                     # the weights will be forced to use O(n) algorithm
                     # to compute the eligibility trace.

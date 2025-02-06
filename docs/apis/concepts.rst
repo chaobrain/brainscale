@@ -21,7 +21,7 @@ you can use the following classes to define the model.
    :template: classtemplate.rst
 
     ETraceState
-    ETraceGroupState
+    ETraceMultiState
 
 
 
@@ -34,14 +34,14 @@ you can use the following classes to define the model.
    :template: classtemplate.rst
 
     ETraceParam
-    ETraceParamOp
-    ElemWiseParamOp
+    ElemWiseParam
+
 
 
 If you do not want to compute weight gradients using eligibility trace-based learning,
 you can use :py:class:`NonTempParamOp`, which computes the gradients using the standard
 backpropagation algorithm at the current time step, while it is satisfying the
-same interface as :py:class:`ETraceParamOp`.
+same interface as :py:class:`ETraceParam`.
 
 
 .. autosummary::
@@ -52,8 +52,10 @@ same interface as :py:class:`ETraceParamOp`.
     NonTempParamOp
 
 
-If you do not want to compute weight gradients at all, you can use :py:class:`FakeParamOp`,
-or :py:class:`FakeElemWiseParamOp`, which does not compute the gradients at all.
+
+
+If you do not want to compute weight gradients at all, you can use :py:class:`FakeETraceParam`,
+or :py:class:`FakeElemWiseParam`, which does not compute the gradients at all.
 
 
 .. autosummary::
@@ -61,13 +63,20 @@ or :py:class:`FakeElemWiseParamOp`, which does not compute the gradients at all.
    :nosignatures:
    :template: classtemplate.rst
 
-    FakeParamOp
-    FakeElemWiseParamOp
+    FakeETraceParam
+    FakeElemWiseParam
+
 
 
 
 ETrace Operations
 -----------------
+
+
+Eligibility trace-based operations define the operations that transform the inputs and the weights
+to the outputs.
+
+
 
 
 .. autosummary::
@@ -80,9 +89,6 @@ ETrace Operations
     GeneralETraceOp
     MatMulETraceOp
 
-
-Others
--------
 
 .. autosummary::
    :toctree: generated/

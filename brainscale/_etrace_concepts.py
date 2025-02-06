@@ -22,39 +22,55 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Callable, Optional, Any
+from typing import Callable, Optional, Dict, Sequence
 
 import brainstate as bst
 import brainunit as u
-import jax.lax
+import jax
 import numpy as np
+from brainstate.typing import ArrayLike
 
-from ._etrace_operators import ETraceOp
+from ._etrace_operators import ETraceOp, ElemWiseOp
 from ._misc import BaseEnum
-from ._typing import WeightVals
 
 __all__ = [
     # eligibility trace states
-    'ETraceState',  # the hidden state for the etrace-based learning
-    'ETraceGroupState',  # the hidden state group for the etrace-based learning
+    'ETraceState',  # single hidden state for the etrace-based learning
+    'ETraceMultiState',  # multiple hidden state for the etrace-based learning
+    'ETraceDictState',  # dictionary of hidden states for the etrace-based learning
 
     # eligibility trace parameters and operations
-    'ETraceParam',  # the parameter/weight for the etrace-based learning
-    'ETraceParamOp',  # the parameter and operator for the etrace-based learning, combining ETraceParam and ETraceOp
-    'NonTempParamOp',  # the parameter state with an associated operator without temporal dependent gradient learning
+    # 'ETraceParam',  # the parameter/weight for the etrace-based learning
+    'ETraceParam',  # the parameter and operator for the etrace-based learning, combining ETraceParam and ETraceOp
+    'NonTempParam',  # the parameter state with an associated operator without temporal dependent gradient learning
 
     # element-wise eligibility trace parameters
-    'ElemWiseParamOp',  # the element-wise weight parameter for the etrace-based learning
+    'ElemWiseParam',  # the element-wise weight parameter for the etrace-based learning
 
     # fake parameter state
-    'FakeParamOp',
-    'FakeElemWiseParamOp',
+    'FakeETraceParam',  # the fake parameter state with an associated operator
+    'FakeElemWiseParam',  # the fake element-wise parameter state with an associated operator
 ]
 
+X = bst.typing.ArrayLike
+W = bst.typing.PyTree
+Y = bst.typing.ArrayLike
 
-# -------------------------------------------------------------------------------------- #
-# Eligibility Trace Related Concepts
-# -------------------------------------------------------------------------------------- #
+
+class ETraceGrad(BaseEnum):
+    """
+    The Gradient Type for the Eligibility Trace.
+
+    This defines how the weight gradient is computed in the eligibility trace-based learning.
+
+    - `full`: The full eligibility trace gradient is computed.
+    - `approx`: The approximated eligibility trace gradient is computed.
+    - `adaptive`: The adaptive eligibility trace gradient is computed.
+
+    """
+    full = 'full'
+    approx = 'approx'
+    adaptive = 'adaptive'
 
 
 class ETraceState(bst.ShortTermState):
@@ -68,7 +84,8 @@ class ETraceState(bst.ShortTermState):
         single hidden variable.
 
         If you want to define multiple hidden variables within a single instance of
-        :py:class:`ETraceState`, you can :py:class:`ETraceGroupState` instead.
+        :py:class:`ETraceState`, you can try :py:class:`ETraceMultiState` or
+        :py:class:`ETraceDictState` instead.
 
     Args:
         value: The value of the hidden state.
@@ -77,9 +94,11 @@ class ETraceState(bst.ShortTermState):
     """
     __module__ = 'brainscale'
 
+    value: bst.typing.ArrayLike
+
     def __init__(
         self,
-        value: bst.typing.ArrayLike,
+        value: bst.typing.PyTree,
         name: Optional[str] = None
     ):
         self._check_value(value)
@@ -94,62 +113,230 @@ class ETraceState(bst.ShortTermState):
             )
 
 
-class ETraceGroupState(bst.ShortTermState):
+class ETraceMultiState(ETraceState):
     """
-    The hidden state group for eligibility trace-based learning.
+    A group of multiple hidden states for eligibility trace-based learning.
+
+    This class is used to define multiple hidden states within a single instance
+    of :py:class:`ETraceState`. Normally, you should define multiple instances
+    of :py:class:`ETraceState` to represent multiple hidden states. But
+    :py:class:`ETraceMultiState` let your define multiple hidden states within
+    a single instance.
+
+    Args:
+        value: The values of the hidden states.
+        name: The name of the hidden states.
+    """
+
+    __module__ = 'brainscale'
+    value: bst.typing.ArrayLike
+
+    def __init__(
+        self,
+        value: bst.typing.PyTree,
+        names: Optional[Sequence[str]] = None
+    ):
+        self.names = names
+        self.name2index = (
+            None
+            if names is None else
+            {name: i for i, name in enumerate(names)}
+        )
+        self._check_value(value)
+        bst.ShortTermState.__init__(self, value)
+
+    def _check_value(self, value):
+        if not isinstance(value, (np.ndarray, jax.Array, u.Quantity)):
+            raise TypeError(
+                f'Currently, {ETraceMultiState.__name__} only supports '
+                f'numpy.ndarray, jax.Array or brainunit.Quantity. '
+                f'But we got {type(value)}.'
+            )
+        if value.ndim < 2:
+            raise ValueError(
+                f'Currently, {ETraceMultiState.__name__} only supports '
+                f'hidden states with more than 2 dimensions, where the last '
+                f'dimension is the number of state size and the other dimensions '
+                f'are the hidden shape. '
+                f'But we got {value.ndim} dimensions.'
+            )
+
+    def get_value(self, item: int | str) -> bst.typing.ArrayLike:
+        """
+        Get the value of the hidden state with the item.
+
+        Args:
+            item: int or str. The index of the hidden state.
+                - If int, the index of the hidden state.
+                - If str, the name of the hidden state.
+        Returns:
+            The value of the hidden state.
+        """
+        if isinstance(item, int):
+            assert item < self.value.shape[-1], (f'Index {item} out of range. '
+                                                 f'The maximum index is {self.value.shape[-1] - 1}.')
+            return self.value[..., item]
+        elif isinstance(item, str):
+            assert self.names is not None, (f'Hidden state names are not defined. '
+                                            f'Please define the names when initializing '
+                                            f'{ETraceMultiState.__name__}.')
+            assert item in self.name2index, (f'Hidden state name {item} not found. '
+                                             f'Please check the hidden state names.')
+            index = self.name2index[item]
+            return self.value[..., index]
+        else:
+            raise TypeError(
+                f'Currently, {ETraceMultiState.__name__} only supports '
+                f'int or str for getting the hidden state. '
+                f'But we got {type(item)}.'
+            )
+
+
+class ETraceDictState(ETraceMultiState):
+    """
+    A dictionary of multiple hidden states for eligibility trace-based learning.
+
+    .. note::
+
+        This value in this state class behaves likes a dictionary of hidden states.
+        However, the state is actually stored as a single dimensionless array.
 
     Args:
         value: The values of the hidden states.
     """
 
     __module__ = 'brainscale'
+    value: Dict[str, bst.typing.ArrayLike]
 
-    def _check_value_tree(self, v):
-        pass
+    def __init__(
+        self,
+        value: Dict[str, bst.typing.ArrayLike],
+    ):
+        self._check_value(value)
+        self.name2unit = {
+            k: u.get_unit(v)
+            for k, v in value.items()
+        }
+        self.name2index = {
+            k: i
+            for i, k in enumerate(value.keys())
+        }
+        value = u.math.stack([u.get_magnitude(v) for v in value.values()], axis=-1)
+        bst.ShortTermState.__init__(self, value)
+
+    def _check_value(self, value: dict):
+        if not isinstance(value, dict):
+            raise TypeError(
+                f'Currently, {ETraceDictState.__name__} only supports '
+                f'dictionary of hidden states. '
+                f'But we got {type(value)}.'
+            )
+        shapes = []
+        for k, v in value.items():
+            if not isinstance(v, (np.ndarray, jax.Array, u.Quantity)):
+                raise TypeError(
+                    f'Currently, {ETraceDictState.__name__} only supports '
+                    f'numpy.ndarray, jax.Array or brainunit.Quantity. '
+                    f'But we got {type(v)} for key {k}.'
+                )
+            shapes.append(v.shape)
+        if len(set(shapes)) > 1:
+            raise ValueError(
+                f'Currently, {ETraceDictState.__name__} only supports '
+                f'hidden states with the same shape. '
+                f'But we got {dict(k=v.shape for k, v in value.items())}.'
+            )
+
+    def get_value(self, item: str | int) -> bst.typing.ArrayLike:
+        """
+        Get the value of the hidden state with the key.
+
+        Args:
+            item: The key of the hidden state.
+                - If int, the index of the hidden state.
+                - If str, the name of the hidden state.
+        """
+        if isinstance(item, int):
+            assert item < self._value.shape[-1], (f'Index {item} out of range. '
+                                                  f'The maximum index is {self._value.shape[-1] - 1}.')
+            return self._value[..., item]
+        elif isinstance(item, str):
+            assert item in self.name2index, (f'Hidden state name {item} not found. '
+                                             f'Please check the hidden state names.')
+            index = self.name2index[item]
+            return self._value[..., index]
+        else:
+            raise TypeError(
+                f'Currently, {self.__class__.__name__} only supports '
+                f'int or str for getting the hidden state. '
+                f'But we got {type(item)}.'
+            )
+
+    def _read_value(self) -> Dict[str, ArrayLike]:
+        res = dict()
+        for i, k in enumerate(self.name2unit.keys()):
+            v = self._value[..., i]
+            res[k] = u.maybe_decimal(u.Quantity(v, unit=self.name2unit[k]))
+        return res
+
+    def _write_value(self, value: Dict[str, ArrayLike]) -> None:
+        self._check_value(value)
+        res = []
+        for k, v in value.items():
+            res.append(u.get_magnitude(u.Quantity(v).to(self.name2unit[k])))
+        value = u.math.stack(res, axis=-1)
+        self._value = value
+
+
+# class ETraceParam(bst.ParamState):
+#     """
+#     The Eligibility Trace Weight Parameter.
+#
+#     Args:
+#         value: The value of the weight. Can be a PyTree.
+#         name: The name of the weight.
+#     """
+#     __module__ = 'brainscale'
+#
+#     def __init__(
+#         self,
+#         value: bst.typing.PyTree,
+#         name: Optional[str] = None
+#     ):
+#         super().__init__(value, name=name)
+#
+#         self.is_etrace = False
 
 
 class ETraceParam(bst.ParamState):
     """
-    The Eligibility Trace Weight Parameter.
-
-    Args:
-        value: The value of the weight. Can be a PyTree.
-        name: The name of the weight.
-    """
-    __module__ = 'brainscale'
-
-    is_not_etrace: bool
-
-    def __init__(
-        self,
-        value: bst.typing.PyTree,
-        name: Optional[str] = None
-    ):
-        super().__init__(value, name=name)
-        self.is_not_etrace = False
-
-
-class _ETraceGrad(BaseEnum):
-    full = 'full'
-    approx = 'approx'
-    adaptive = 'adaptive'
-
-
-class ETraceParamOp(ETraceParam):
-    """
     The Eligibility Trace Weight and its Associated Operator.
 
+    .. note::
+
+        Although one weight is defined as :py:class:`ETraceParam`,
+        whether eligibility traces are used for training with temporal
+        dependencies depends on the final compilation result of the
+        compiler regarding this parameter. If no hidden states are
+        found to associate this parameter, the training based on
+        eligibility traces will not be performed.
+        Then, this parameter will perform the same as :py:class:`NonTempParam`.
+
     Args:
-      weight: The weight of the ETrace.
-      op: The operator for the ETrace. See `ETraceOp`.
+        weight: The weight of the ETrace.
+        op: The operator for the ETrace. See :py:class:`ETraceOp`.
+        grad: The gradient type for the ETrace. Default is `adaptive`.
+        is_diagonal: Whether the operator is diagonal. Default is `None`.
+        name: The name of the weight-operator.
     """
     __module__ = 'brainscale'
     op: ETraceOp  # operator
+    is_etrace: bool
 
     def __init__(
         self,
         weight: bst.typing.PyTree,
-        op: Callable[[jax.Array, WeightVals], jax.Array],
+        op: ETraceOp | Callable[[X, W], Y],
         grad: Optional[str | Enum] = None,
         is_diagonal: bool = None,
         name: Optional[str] = None
@@ -160,46 +347,94 @@ class ETraceParamOp(ETraceParam):
         # gradient
         if grad is None:
             grad = 'adaptive'
-        self.gradient = _ETraceGrad.get(grad)
+        self.gradient = ETraceGrad.get(grad)
 
         # operation
-        if isinstance(op, ETraceOp):
-            self.op = op
-            if is_diagonal is not None:
-                self.op.is_diagonal = is_diagonal
-        else:
-            self.op = ETraceOp(op, is_diagonal=is_diagonal if is_diagonal is not None else False)
+        if not isinstance(op, ETraceOp):
+            op = ETraceOp(op, is_diagonal=False if is_diagonal is None else is_diagonal)
+        self.op = op
+        if is_diagonal is not None:
+            self.op.is_diagonal = is_diagonal
 
-    def execute(self, x: jax.Array) -> jax.Array:
+        # check if the operator is not an eligibility trace
+        self.is_etrace = True
+
+    def execute(self, x: X) -> Y:
+        """
+        Execute the operator with the input.
+        """
         return self.op(x, self.value)
 
 
-class ElemWiseParamOp(ETraceParamOp):
-    """
+class ElemWiseParam(ETraceParam):
+    r"""
     The Element-wise Eligibility Trace Weight and its Associated Operator.
 
+    .. note::
+
+        The ``element-wise`` is called with the correspondence to the hidden state.
+        That means the operator performs element-wise operations with the hidden state.
+
+    It supports all element-wise operations for the eligibility trace-based learning.
+    For example, if the parameter weight has the shape with the same as the hidden state,
+
+        $$
+        I = \theta_1 * h_1
+        $$
+
+    where $\theta_1 \in \mathbb{R}^H$ is the weight and $h_1 \in \mathbb{R}^H$ is the
+    hidden state. The element-wise operation is defined as:
+
+    .. code-block:: python
+
+       op = ElemWiseParam(weight, op=lambda w: w)
+
+    If the parameter weight is a scalar,
+
+        $$
+        I = \theta * h
+        $$
+
+    where $\theta \in \mathbb{R}$ is the weight and $h \in \mathbb{R}^H$ is the hidden state.
+    Then the element-wise operation can be defined as:
+
+    .. code-block:: python
+
+         h = 100  # hidden size
+         op = ElemWiseParam(weight, op=lambda w: w * jax.numpy.ones(h))
+
+    Other element-wise operations can be defined in the same way.
+
     Args:
-      weight: The weight of the ETrace.
+        weight: The weight of the ETrace.
+        op: The operator for the ETrace. See :py:class:`ElemWiseOp`.
+        name: The name of the weight-operator.
     """
     __module__ = 'brainscale'
 
     def __init__(
         self,
         weight: bst.typing.PyTree,
+        op: ElemWiseOp | Callable[[W], Y] = (lambda w: w),
+        name: Optional[str] = None,
     ):
-        from ._etrace_operators import ElementWiseOpV2
-        super().__init__(weight, ElementWiseOpV2(), grad=_ETraceGrad.full, is_diagonal=True)
+        super().__init__(
+            weight,
+            op=ElemWiseOp(op),
+            grad=ETraceGrad.full,
+            is_diagonal=True,
+            name=name
+        )
 
-    def execute(self) -> Any:
-        ones = u.math.zeros(1)
-        return self.op(ones, self.value)
+    def execute(self) -> Y:
+        return self.op(self.value)
 
 
-class NonTempParamOp(bst.ParamState):
+class NonTempParam(bst.ParamState):
     r"""
     The Parameter State with an Associated Operator with no temporal dependent gradient learning.
 
-    This class behaves the same as :py:class:`ETraceParamOp`, but will not build the
+    This class behaves the same as :py:class:`ETraceParam`, but will not build the
     eligibility trace graph when using online learning. Therefore, in a sequence
     learning task, the weight gradient can only be computed with the spatial gradients.
     That is,
@@ -208,7 +443,7 @@ class NonTempParamOp(bst.ParamState):
         \nabla \theta = \sum_t \partial L^t / \partial \theta^t
         $$
 
-    Instead, the gradient of the weight $\theta$ which is labeled as :py:class:`ETraceParamOp` is
+    Instead, the gradient of the weight $\theta$ which is labeled as :py:class:`ETraceParam` is
     computed as:
 
         $$
@@ -240,12 +475,12 @@ class NonTempParamOp(bst.ParamState):
         return self.op(x, self.value)
 
 
-class FakeParamOp(object):
+class FakeETraceParam(object):
     """
     The Parameter State with an Associated Operator that does not require to compute gradients.
 
-    This class corresponds to the :py:class:`NonTempParamOp` but does not require to compute gradients.
-    It has the same usage interface with :py:class:`NonTempParamOp`.
+    This class corresponds to the :py:class:`NonTempParam` but does not require to compute gradients.
+    It has the same usage interface with :py:class:`NonTempParam`.
 
     Args:
       value: The value of the parameter.
@@ -269,24 +504,31 @@ class FakeParamOp(object):
         return self.op(x, self.value)
 
 
-class FakeElemWiseParamOp(object):
+class FakeElemWiseParam(object):
     """
     The fake element-wise parameter state with an associated operator.
 
-    This class corresponds to the :py:class:`ElemWiseParamOp` but does not require to compute gradients.
-    It has the same usage interface with :py:class:`ElemWiseParamOp`.
+    This class corresponds to the :py:class:`ElemWiseParam` but does not require to compute gradients.
+    It has the same usage interface with :py:class:`ElemWiseParam`. For usage, please see
+    :py:class:`ElemWiseParam`.
 
     Args:
         weight: The weight of the ETrace.
+        op: The operator for the ETrace. See :py:class:`ElemWiseOp`.
+        name: The name of the weight-operator.
     """
     __module__ = 'brainscale'
 
     def __init__(
         self,
         weight: bst.typing.PyTree,
+        op: ElemWiseOp | Callable[[W], Y] = (lambda w: w),
+        name: Optional[str] = None,
     ):
         super().__init__()
         self.value = weight
+        self.op = op
+        self.name = name
 
     def execute(self) -> bst.typing.ArrayLike:
-        return self.value
+        return self.op(self.value)

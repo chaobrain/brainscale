@@ -4,6 +4,8 @@
 .. currentmodule:: brainscale.nn 
 .. automodule:: brainscale.nn 
 
+
+
 Connection Operation
 --------------------
 

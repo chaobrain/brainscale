@@ -23,7 +23,7 @@ import brainstate as bst
 import brainunit as u
 from brainstate import functional, init
 
-from brainscale._etrace_concepts import ETraceParamOp
+from brainscale._etrace_concepts import ETraceParam
 from brainscale._etrace_operators import MatMulETraceOp
 from brainscale._typing import ArrayLike
 
@@ -47,7 +47,7 @@ class Linear(bst.nn.Module):
         w_mask: Optional[Union[ArrayLike, Callable]] = None,
         full_etrace: bool = False,
         name: Optional[str] = None,
-        param_type: type = ETraceParamOp,
+        param_type: type = ETraceParam,
     ):
         super().__init__(name=name)
 
@@ -85,7 +85,7 @@ class SignedWLinear(bst.nn.Module):
         w_sign: Optional[ArrayLike] = None,
         full_etrace: bool = False,
         name: Optional[str] = None,
-        param_type: type = ETraceParamOp,
+        param_type: type = ETraceParam,
     ):
         super().__init__(name=name)
 
@@ -149,7 +149,7 @@ class ScaledWSLinear(bst.nn.Module):
         ws_gain: bool = True,
         eps: float = 1e-4,
         name: Optional[str] = None,
-        param_type: type = ETraceParamOp,
+        param_type: type = ETraceParam,
     ):
         super().__init__(name=name)
 
@@ -207,7 +207,7 @@ class SparseLinear(bst.nn.Module):
         b_init: Optional[Union[Callable, ArrayLike]] = None,
         in_size: bst.typing.Size = None,
         name: Optional[str] = None,
-        param_type: type = ETraceParamOp,
+        param_type: type = ETraceParam,
     ):
         super().__init__(name=name)
 
@@ -287,7 +287,7 @@ class LoRA(bst.nn.Module):
         base_module: Optional[bst.nn.Module] = None,
         B_init: Union[Callable, ArrayLike] = init.ZeroInit(),
         A_init: Union[Callable, ArrayLike] = init.LecunNormal(),
-        param_type: type = ETraceParamOp,
+        param_type: type = ETraceParam,
     ):
         super().__init__()
 

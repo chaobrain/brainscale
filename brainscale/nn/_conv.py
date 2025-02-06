@@ -25,7 +25,7 @@ import brainunit as u
 import jax
 from brainstate import functional, init
 
-from brainscale._etrace_concepts import ETraceParamOp, NonTempParamOp
+from brainscale._etrace_concepts import ETraceParam, NonTempParam
 from brainscale._typing import ArrayLike
 
 __all__ = [
@@ -84,7 +84,7 @@ class _BaseConv(bst.nn.Module):
     num_spatial_dims: int
 
     # the weight and its operations
-    weight_op: ETraceParamOp | NonTempParamOp
+    weight_op: ETraceParam | NonTempParam
 
     def __init__(
         self,
@@ -184,7 +184,7 @@ class _Conv(_BaseConv):
         w_mask: Optional[Union[ArrayLike, Callable]] = None,
         full_etrace: bool = False,
         name: Optional[str] = None,
-        param_type: type = ETraceParamOp,
+        param_type: type = ETraceParam,
     ):
         super().__init__(in_size=in_size,
                          out_channels=out_channels,
@@ -338,7 +338,7 @@ class _ScaledWSConv(_BaseConv):
         as_etrace_weight: bool = True,
         full_etrace: bool = False,
         name: Optional[str] = None,
-        param_type: type = ETraceParamOp,
+        param_type: type = ETraceParam,
     ):
         super().__init__(in_size=in_size,
                          out_channels=out_channels,
