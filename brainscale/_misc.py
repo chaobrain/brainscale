@@ -22,13 +22,14 @@ from typing import Sequence
 
 import brainstate as bst
 import brainunit as u
-
 import jax.tree
 
-__all__ = [
-    'CompilationError',
-    'NotSupportedError',
-]
+from ._typing import Path
+
+if jax.__version_info__ < (0, 4, 38):
+    from jax.core import Var
+else:
+    from jax.extend.core import Var
 
 
 def check_dict_keys(
@@ -54,6 +55,32 @@ def check_dict_keys(
         raise ValueError(f'The keys of the two dictionaries are not the same: {d1.keys()} != {d2.keys()}.')
 
 
+def hid_group_key(hidden_group_id: int) -> str:
+    assert isinstance(hidden_group_id, int), f'hidden_group_id must be an int, but got {hidden_group_id}.'
+    return f'hidden_group_{hidden_group_id}'
+
+
+def etrace_df_key(
+    y_key: Var,
+    hidden_group_id: int,
+):
+    assert isinstance(y_key, Var), f'y_key must be a Var, but got {y_key}.'
+    return (y_key, hid_group_key(hidden_group_id))
+
+
+def etrace_param_key(
+    weight_path: Path,
+    y_key: Var,
+    hidden_group_id: int,
+):
+    assert isinstance(weight_path, (list, tuple)), f'weight_path must be a list or tuple, but got {weight_path}.'
+    assert all(isinstance(x, str) for x in weight_path), f'weight_path must be a list of str, but got {weight_path}.'
+    assert isinstance(y_key, Var), f'y_key must be a Var, but got {y_key}.'
+    return (weight_path, y_key, hid_group_key(hidden_group_id))
+
+
+def unknown_state_path(i: int) -> str:
+    return f'_unknown_path_{i}'
 
 
 def _dimensionless(x):

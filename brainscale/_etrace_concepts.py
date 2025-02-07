@@ -344,20 +344,21 @@ class ETraceTreeState(ETraceGroupState):
                          np.random.randn(10, 10) * u.mS])  # set all hidden state value
         # or
         state.set_value({
-            0: np.random.randn(10, 10) * u.mV,
-            1: np.random.randn(10, 10) * u.mA,
-            2: np.random.randn(10, 10) * u.mS
+            'v': np.random.randn(10, 10) * u.mV,
+            'g': np.random.randn(10, 10) * u.mA,
+            'i': np.random.randn(10, 10) * u.mS
         })  # set all hidden state value
 
     .. note::
 
         Avoid using ``ETraceTreeState.value`` to get the state value, or
-        ``ETraceTreeState.value =`` to assign the state value. Instead, use
-        ``ETraceTreeState.get_value()`` and ``ETraceTreeState.set_value()``.
+        ``ETraceTreeState.value =`` to assign the state value.
+
+        Instead, use ``ETraceTreeState.get_value()`` and ``ETraceTreeState.set_value()``.
         This is because ``.value`` loss hidden state units and other information,
         and it is only dimensionless data.
 
-        This design ensures that any etrace hidden state has only one array.
+        This design aims to ensure that any etrace hidden state has only one array.
 
 
     Args:
@@ -387,6 +388,9 @@ class ETraceTreeState(ETraceGroupState):
 
     @property
     def num_state(self) -> int:
+        """
+        The number of hidden states.
+        """
         assert self.value.shape[-1] == len(self.name2index), (
             f'The number of hidden states '
             f'is not equal to the number of hidden state names.'
@@ -492,7 +496,6 @@ class ETraceParam(bst.ParamState):
         weight: The weight of the ETrace.
         op: The operator for the ETrace. See :py:class:`ETraceOp`.
         grad: The gradient type for the ETrace. Default is `adaptive`.
-        is_diagonal: Whether the operator is diagonal. Default is `None`.
         name: The name of the weight-operator.
     """
     __module__ = 'brainscale'
@@ -504,9 +507,8 @@ class ETraceParam(bst.ParamState):
     def __init__(
         self,
         weight: bst.typing.PyTree,
-        op: ETraceOp | Callable[[X, W], Y],
+        op: ETraceOp,
         grad: Optional[str | Enum] = None,
-        is_diagonal: bool = None,
         name: Optional[str] = None
     ):
         # weight value
@@ -518,11 +520,11 @@ class ETraceParam(bst.ParamState):
         self.gradient = ETraceGrad.get(grad)
 
         # operation
-        if not isinstance(op, ETraceOp):
-            op = ETraceOp(op, is_diagonal=False if is_diagonal is None else is_diagonal)
+        assert isinstance(op, ETraceOp), (
+            f'op should be ETraceOp. '
+            f'But we got {type(op)}.'
+        )
         self.op = op
-        if is_diagonal is not None:
-            self.op.is_diagonal = is_diagonal
 
         # check if the operator is not an eligibility trace
         self.is_etrace = True
@@ -608,11 +610,14 @@ class ElemWiseParam(ETraceParam):
     ):
         if not isinstance(op, ElemWiseOp):
             op = ElemWiseOp(op)
+        assert isinstance(op, ElemWiseOp), (
+            f'op should be ElemWiseOp. '
+            f'But we got {type(op)}.'
+        )
         super().__init__(
             weight,
             op=op,
             grad=ETraceGrad.full,
-            is_diagonal=True,
             name=name
         )
 
@@ -659,7 +664,7 @@ class NonTempParam(bst.ParamState):
 
         # operation
         if isinstance(op, ETraceOp):
-            op = op.fun
+            op = op.xy_to_w
         self.op = op
 
     def execute(self, x: jax.Array) -> jax.Array:
@@ -670,8 +675,9 @@ class FakeETraceParam(object):
     """
     The Parameter State with an Associated Operator that does not require to compute gradients.
 
-    This class corresponds to the :py:class:`NonTempParam` but does not require to compute gradients.
-    It has the same usage interface with :py:class:`NonTempParam`.
+    This class corresponds to the :py:class:`NonTempParam` and :py:class:`ETraceParam` but does
+    not require to compute gradients. It has the same usage interface with :py:class:`NonTempParam`
+    and :py:class:`ETraceParam`.
 
     Args:
       value: The value of the parameter.
@@ -690,7 +696,7 @@ class FakeETraceParam(object):
 
         self.value = value
         if isinstance(op, ETraceOp):
-            op = op.fun
+            op = op.xy_to_w
         self.op = op
 
     def execute(self, x: bst.typing.ArrayLike) -> bst.typing.ArrayLike:
@@ -722,7 +728,11 @@ class FakeElemWiseParam(object):
     ):
         super().__init__()
         if isinstance(op, ETraceOp):
-            op = op.fun
+            assert isinstance(op, ElemWiseOp), (
+                f'op should be ElemWiseOp. '
+                f'But we got {type(op)}.'
+            )
+            op = op.xy_to_w
         self.op = op
         self.value = weight
         self.name = name

@@ -19,7 +19,7 @@ __version__ = "0.0.4"
 
 from brainscale._etrace_algorithms import (
     ETraceAlgorithm,
-    EligibilityTraceState,
+    EligibilityTraceData,
 )
 from brainscale._etrace_compiler import (
     HiddenGroup,
@@ -39,7 +39,7 @@ from brainscale._etrace_concepts import (
     FakeElemWiseParam,
 )
 from brainscale._etrace_graph import (
-    ETraceGraph,
+    ETraceGraphExecutor,
 )
 from brainscale._etrace_input_data import (
     SingleStepData,
@@ -47,7 +47,6 @@ from brainscale._etrace_input_data import (
 )
 from brainscale._etrace_operators import (
     ETraceOp,
-    StandardOp,
     MatMulOp,
     ElemWiseOp,
 )
@@ -58,9 +57,9 @@ from brainscale._etrace_vjp_algorithms import (
     HybridDimVjpAlgorithm,
 )
 from brainscale._etrace_vjp_compiler import (
-    compile_graph_vjp,
+    compile_vjp_graph,
     HiddenTransition,
-    CompiledVJPGraph
+    CompiledVjpGraph
 )
 from brainscale._grad_exponential import (
     GradExpon,

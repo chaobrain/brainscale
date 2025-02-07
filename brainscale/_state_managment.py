@@ -204,7 +204,7 @@ def sequence_split_state_values(
     Examples:
     ---------
     >>> sequence_split_state_values(states, state_values)
-    (weight_vals, hidden_vals, other_vals)
+    (weight_path_to_vals, hidden_vals, other_vals)
 
     >>> sequence_split_state_values(states, state_values, include_weight=False)
     (hidden_vals, other_vals)

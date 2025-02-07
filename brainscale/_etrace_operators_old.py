@@ -625,7 +625,7 @@ class GeneralETraceOpOld(OldStandardETraceOp):
                 dh = u.maybe_decimal(u.get_magnitude(dh) * u.get_unit(primals))
             return f_vjp(dh)[0]
 
-        # fun = lambda dh, x: jax.vjp(partial(op, x), weight_vals)[1](dh)[0]
+        # fun = lambda dh, x: jax.vjp(partial(op, x), weight_path_to_vals)[1](dh)[0]
         if mode.has(bst.mixin.Batching):
             # TODO:
             #    assuming the batch size is the first dimension

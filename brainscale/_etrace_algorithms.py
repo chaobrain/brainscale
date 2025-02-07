@@ -27,16 +27,19 @@ import brainstate as bst
 
 from ._etrace_compiler import CompiledGraph
 from ._etrace_concepts import ETraceState
-from ._etrace_graph import ETraceGraph
+from ._etrace_graph import ETraceGraphExecutor
 from ._typing import Path
 
 __all__ = [
     'ETraceAlgorithm',
-    'EligibilityTraceState',
+    'EligibilityTraceData',
 ]
 
 
-class EligibilityTraceState(bst.ShortTermState):
+class EligibilityTraceData(bst.ShortTermState):
+    """
+    The temporary data for the eligibility trace algorithm computation.
+    """
     pass
 
 
@@ -53,7 +56,7 @@ class ETraceAlgorithm(bst.nn.Module):
 
     Attributes:
     -----------
-    graph: ETraceGraph
+    graph: ETraceGraphExecutor
         The etrace graph.
     param_states: Dict[Hashable, bst.ParamState]
         The weight states.
@@ -71,7 +74,7 @@ class ETraceAlgorithm(bst.nn.Module):
     def __init__(
         self,
         model: bst.nn.Module,
-        graph: ETraceGraph,
+        graph: ETraceGraphExecutor,
         name: Optional[str] = None,
     ):
         super().__init__(name=name)
@@ -84,9 +87,9 @@ class ETraceAlgorithm(bst.nn.Module):
             )
 
         # the graph
-        if not isinstance(graph, ETraceGraph):
+        if not isinstance(graph, ETraceGraphExecutor):
             raise ValueError(
-                f'The graph should be a ETraceGraph, this can help us to '
+                f'The graph should be a ETraceGraphExecutor, this can help us to '
                 f'better obtain the program structure. But we got {type(graph)}.'
             )
         self.graph = graph
@@ -138,9 +141,9 @@ class ETraceAlgorithm(bst.nn.Module):
         #
         # [NOTE]
         #
-        # The `ETraceGraph` and the following states suggests that
+        # The `ETraceGraphExecutor` and the following states suggests that
         # `ETraceAlgorithm` depends on the states we created in the
-        # `ETraceGraph`, including:
+        # `ETraceGraphExecutor`, including:
         #
         #   - the weight states, which is invariant during the training process
         #   - the hidden states, the recurrent states, which may be changed between different training epochs

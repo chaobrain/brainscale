@@ -37,7 +37,7 @@ class TestShowGraph(unittest.TestCase):
         cell = brainscale.nn.LSTMCell(10, 20, activation=jnp.tanh)
         bst.nn.init_all_states(cell, 16)
 
-        graph = brainscale.ETraceGraph(cell)
+        graph = brainscale.ETraceGraphExecutor(cell)
         graph.compile_graph(jnp.zeros((16, 10)))
         graph.show_graph()
 
@@ -45,7 +45,7 @@ class TestShowGraph(unittest.TestCase):
         cell = brainscale.nn.GRUCell(10, 20, activation=jnp.tanh)
         bst.nn.init_all_states(cell, 16)
 
-        graph = brainscale.ETraceGraph(cell)
+        graph = brainscale.ETraceGraphExecutor(cell)
         graph.compile_graph(jnp.zeros((16, 10)))
         graph.show_graph()
 
@@ -53,7 +53,7 @@ class TestShowGraph(unittest.TestCase):
         cell = brainscale.nn.LRUCell(10, 20)
         bst.nn.init_all_states(cell)
 
-        graph = brainscale.ETraceGraph(cell)
+        graph = brainscale.ETraceGraphExecutor(cell)
         graph.compile_graph(jnp.zeros((10,)))
         graph.show_graph()
 
@@ -64,6 +64,6 @@ class TestShowGraph(unittest.TestCase):
         net = ALIF_STPExpCu_Dense_Layer(n_in, n_rec)
         bst.nn.init_all_states(net)
 
-        graph = brainscale.ETraceGraph(net)
+        graph = brainscale.ETraceGraphExecutor(net)
         graph.compile_graph(bst.random.rand(n_in))
         graph.show_graph()

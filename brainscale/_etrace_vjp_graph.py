@@ -30,6 +30,8 @@
 #   [2024-11-23] Add the support for vjp_time_ahead > 1, it can combine the
 #                advantage of etrace learning and backpropagation through time.
 #   [2024-11] version 0.0.3, a complete new revision for better model debugging.
+#   [2025-02-06]
+#       - [x] split into "_etrace_graph.py" and "_etrace_vjp_graph.py"
 #
 # ==============================================================================
 
@@ -46,11 +48,11 @@ import jax.core
 import jax.numpy as jnp
 from jax.extend import linear_util as lu
 from jax.interpreters import partial_eval as pe
+from jax.tree_util import register_pytree_node_class
 
 from ._etrace_concepts import ETraceState
 from ._etrace_graph import (
-    ETraceGraph,
-    Residuals,
+    ETraceGraphExecutor,
 )
 from ._etrace_input_data import (
     get_single_step_data,
@@ -59,7 +61,8 @@ from ._etrace_input_data import (
 )
 from ._etrace_vjp_compiler import (
     HiddenTransition,
-    compile_graph_vjp,
+    compile_vjp_graph,
+    CompiledVjpGraph,
 )
 from ._state_managment import (
     assign_dict_state_values,
@@ -90,11 +93,75 @@ from ._typing import (
 #       The `df` for w1 and w2 are the same, although them have the different weight y.
 
 __all__ = [
-    'ETraceGraphVJP',
+    'ETraceVjpGraphExecutor',
 ]
 
 
-class ETraceGraphVJP(ETraceGraph):
+# @bst.util.dataclass
+# class HiddenGroupJacobian:
+#     """
+#     The hidden-to-hidden Jacobian for the hidden group.
+#     """
+#
+#     hidden_group: HiddenGroup
+#     jac: jax.Array
+#
+#
+# @bst.util.dataclass
+# class HG2WeightJacobian:
+#     """
+#     The hidden-to-weight Jacobian for the hidden group.
+#     """
+#     hidden_group: HiddenGroup
+#     jac: jax.Array
+#
+#
+# @bst.util.dataclass
+# class HG2YJacobian:
+#     """
+#     The hidden-to-weight Jacobian for the hidden group.
+#     """
+#     hidden_group: HiddenGroup
+#     jac: jax.Array
+
+
+@register_pytree_node_class
+class VjpResiduals:
+    """
+    The residuals for storing the backward pass data in a VJP function.
+
+    Args:
+      jaxpr: The jaxpr for the backward pass.
+      in_tree: The input tree structure.
+      out_tree: The output tree structure.
+      consts: The constants for the backward pass.
+    """
+
+    def __init__(
+        self,
+        jaxpr,
+        in_tree,
+        out_tree,
+        consts
+    ):
+        self.jaxpr = jaxpr
+        self.in_tree = in_tree
+        self.out_tree = out_tree
+        self.consts = consts
+
+    def __iter__(self):
+        return iter((self.jaxpr, self.in_tree, self.out_tree, self.consts))
+
+    def tree_flatten(self):
+        return self.consts, (self.jaxpr, self.in_tree, self.out_tree)
+
+    @classmethod
+    def tree_unflatten(cls, aux, consts):
+        jaxpr, in_tree, out_tree = aux
+        return cls(jaxpr, in_tree, out_tree, consts)
+
+
+class ETraceVjpGraphExecutor(ETraceGraphExecutor):
     r"""
     The eligibility trace graph, tracking the relationship between the etrace weights
     :py:class:`ETraceParam`, the etrace variables :py:class:`ETraceState`, and the etrace
@@ -116,9 +183,10 @@ class ETraceGraphVJP(ETraceGraph):
 
         - "single-step": The VJP is computed at the current time step, i.e., $\partial L^t/\partial h^t$.
         - "multi-step": The VJP is computed at multiple time steps, i.e., $\partial L^t/\partial h^{t-k}$,
-          where $k$ is determined by the data input.
+           where $k$ is determined by the data input.
     """
     __module__ = 'brainscale'
+    compiled: CompiledVjpGraph
 
     def __init__(
         self,
@@ -135,7 +203,7 @@ class ETraceGraphVJP(ETraceGraph):
         self.vjp_method = vjp_method
 
     @property
-    def is_single_step(self):
+    def is_single_step_vjp(self) -> bool:
         """
         Whether the VJP method is single-step.
 
@@ -145,7 +213,7 @@ class ETraceGraphVJP(ETraceGraph):
         return self.vjp_method == 'single-step'
 
     @property
-    def is_multi_step(self):
+    def is_multi_step_vjp(self) -> bool:
         """
         Whether the VJP method is multi-step.
 
@@ -154,7 +222,7 @@ class ETraceGraphVJP(ETraceGraph):
         """
         return self.vjp_method == 'multi-step'
 
-    def compile_graph(self, *args):
+    def compile_graph(self, *args) -> None:
         r"""
         Building the eligibility trace graph for the model according to the given inputs.
 
@@ -170,11 +238,16 @@ class ETraceGraphVJP(ETraceGraph):
         args = get_single_step_data(*args)
 
         # compile the graph
-        self._compiled_graph = compile_graph_vjp(self.model, self.vjp_method == 'multi-step', *args)
+        self._compiled_graph = compile_vjp_graph(self.model, self.is_multi_step_vjp, *args)
 
     def _jaxpr_compute_model(
         self, *args,
-    ) -> Tuple[PyTree, HiddenVals, StateVals, TempData]:
+    ) -> Tuple[
+        PyTree,
+        HiddenVals,
+        StateVals,
+        TempData
+    ]:
         """
         Computing the model according to the given inputs and parameters by using the compiled jaxpr.
         """
@@ -359,7 +432,7 @@ class ETraceGraphVJP(ETraceGraph):
             The outputs, hidden states, other states, and the spatial gradients of the weights.
         """
         # --- compile the model --- #
-        if self.is_single_step:
+        if self.is_single_step_vjp:
             assert self.compiled.jaxpr_perturb_hidden is not None, (
                 'The jaxpr_with_hidden_perturb should not be None '
                 'when the vjp_time_ahead is 0.'
@@ -469,7 +542,7 @@ class ETraceGraphVJP(ETraceGraph):
     def solve_h2w_h2h_jacobian_and_l2h_vjp(
         self,
         *args,
-    ) -> Tuple[Outputs, HiddenVals, StateVals, Hid2WeightJacobian, Hid2HidJacobian, Residuals]:
+    ) -> Tuple[Outputs, HiddenVals, StateVals, Hid2WeightJacobian, Hid2HidJacobian, VjpResiduals]:
         r"""
         Solving the hidden-to-weight and hidden-to-hidden Jacobian and the VJP transformed loss-to-hidden
         gradients according to the given inputs.
@@ -543,7 +616,7 @@ class ETraceGraphVJP(ETraceGraph):
             # get state values by the "stateful_model", to preserve the order of states
             old_state_vals = [st.value for st in self.compiled.stateful_fn_states]
 
-            if self.is_single_step:
+            if self.is_single_step_vjp:
                 assert self.compiled.jaxpr_perturb_hidden is not None, (
                     'The jaxpr_with_hidden_perturb should not be None '
                     'when the vjp_time_ahead is 0.'
@@ -717,7 +790,7 @@ class ETraceGraphVJP(ETraceGraph):
         rule, in_tree = jax.api_util.flatten_fun_nokwargs(lu.wrap_init(f_vjp), out_tree)
         out_avals = [jax.core.get_aval(x).at_least_vspace() for x in out_flat]
         jaxpr, _, consts = pe.trace_to_jaxpr_dynamic(rule, out_avals)
-        residual = Residuals(jaxpr, in_tree(), out_tree, consts)
+        residual = VjpResiduals(jaxpr, in_tree(), out_tree, consts)
 
         # ---------------------- [Part 4] ------------------------
         # Recover the weight states values

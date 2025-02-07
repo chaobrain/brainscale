@@ -43,7 +43,7 @@ you can use the following classes to define the model.
 
 
 If you do not want to compute weight gradients using eligibility trace-based learning,
-you can use :py:class:`NonTempParamOp`, which computes the gradients using the standard
+you can use :py:class:`NonTempParam`, which computes the gradients using the standard
 backpropagation algorithm at the current time step, while it is satisfying the
 same interface as :py:class:`ETraceParam`.
 
@@ -53,7 +53,7 @@ same interface as :py:class:`ETraceParam`.
    :nosignatures:
    :template: classtemplate.rst
 
-    NonTempParamOp
+    NonTempParam
 
 
 
@@ -87,7 +87,6 @@ to the outputs.
    :template: classtemplate.rst
 
     ETraceOp
-    StandardOp
     MatMulOp
     ElemWiseOp
 

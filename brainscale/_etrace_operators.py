@@ -27,7 +27,6 @@ import numpy as np
 __all__ = [
     'stop_param_gradients',  # stop weight gradients
     'ETraceOp',  # base class
-    'StandardOp',  # standard operator, base class
     'MatMulOp',  # x @ f(w * m) + b
     'ElemWiseOp',  # element-wise operation
 ]
@@ -112,25 +111,31 @@ class ETraceOp:
         is_diagonal: bool. Whether the operator is in the hidden diagonal or not.
 
     Args:
-        fun: The operator function.
         is_diagonal: bool. Whether the operator is in the hidden diagonal or not.
     """
     __module__ = 'brainscale'
 
     def __init__(
         self,
-        fun: Callable,
-        is_diagonal: bool = False
+        is_diagonal: Optional[bool] = False,
+        name: Optional[str] = None,
     ):
         super().__init__()
-        self.fun = fun
+
+        # whether the operator is in the hidden diagonal
         self.is_diagonal = is_diagonal
-        name = (
-            _etrace_op_name_enable_grad
-            if is_diagonal else
-            _etrace_op_name
-        )
-        self._jitted_call = jax.jit(wrap_etrace_fun(self._call, name))
+
+        # function JIT name
+        if name is None:
+            name = (
+                _etrace_op_name_enable_grad
+                if is_diagonal else
+                _etrace_op_name
+            )
+
+        # JIT the operator function
+        # This is important during compilation of eligibility trace graph
+        self._jitted_call = jax.jit(wrap_etrace_fun(self.xw_to_y, name))
 
     def __call__(
         self,
@@ -143,34 +148,28 @@ class ETraceOp:
         return y
 
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__}({self.fun.__name__}, is_diagonal={self.is_diagonal})'
-
-    def _call(self, x, weight):
-        return self.fun(x, weight)
-
-
-class StandardOp(ETraceOp):
-    """
-    The standard operator for the eligibility trace-based online gradient learning.
-    """
-
-    def __init__(self, is_diagonal: bool = False):
-        super().__init__(self.xw_to_y, is_diagonal=is_diagonal)
+        return f'{self.__class__.__name__}(is_diagonal={self.is_diagonal})'
 
     def xw_to_y(
         self,
         inputs: X,
         weights: W,
     ) -> Y:
-        r"""
+        """
         This function is used to compute the output of the operator.
 
         It computes:
 
-            $$
-            y = f(x, w)
-            $$
+        $$
+        y = f(x, w)
+        $$
 
+        Args:
+            inputs: The input data.
+            weights: The weight parameters.
+
+        Returns:
+            The output of the operator.
         """
         raise NotImplementedError
 
@@ -179,14 +178,14 @@ class StandardOp(ETraceOp):
         hidden_dim_arr: Y,
         weight_dim_tree: W,
     ) -> W:
-        r"""
+        """
         This function is used to compute the weight from the hidden dimensional array.
 
         It computes:
 
-            $$
-            w = f(y, w)
-            $$
+        $$
+        w = f(y, w)
+        $$
 
         This function is mainly used when computing eligibility trace updates based on
         :py:class:`ParamDimVjpAlgorithm`.
@@ -203,25 +202,38 @@ class StandardOp(ETraceOp):
 
         It computes:
 
-            $$
-            w = f(x, y)
-            $$
+        $$
+        w = f(x, y)
+        $$
+
+        This function is mainly used when computing eligibility trace updates based on
+        :py:class:`IODimVjpAlgorithm`.
+
+        Args:
+            input_dim_arr: The input dimensional array.
+            hidden_dim_arr: The hidden dimensional array.
+
+        Returns:
+            The weight dimensional array.
         """
         raise NotImplementedError
 
 
-class MatMulOp(StandardOp):
+class MatMulOp(ETraceOp):
     """
     The matrix multiplication operator for eligibility trace-based gradient learning.
 
     This operator is used to compute the output of the operator, mathematically:
 
-        $$
-        y = x @ f(w * m) + b
-        $$
+    $$
+    y = x @ f(w * m) + b
+    $$
 
     $b$ is the bias term, which can be optional, $m$ is the weight mask,
     and $f$ is the weight function.
+
+    By default, the weight function is the identity function, and
+    the weight mask is None.
     """
 
     def __init__(
@@ -252,15 +264,15 @@ class MatMulOp(StandardOp):
         r"""
         This function is used to compute the output of the operator, mathematically:
 
-            $$
-            y = x @ f(w * m) + b
-            $$
+        $$
+        y = x @ f(w * m) + b
+        $$
 
         if the bias is provided.
 
-            $$
-            y = x @ f(w * m)
-            $$
+        $$
+        y = x @ f(w * m)
+        $$
 
         if the bias is not provided.
 
@@ -284,8 +296,19 @@ class MatMulOp(StandardOp):
         hidden_dim_arr: bst.typing.ArrayLike,
         weight_dim_tree: Dict[str, bst.typing.ArrayLike],
     ) -> Dict[str, bst.typing.ArrayLike]:
-        r"""
+        """
         This function is used to compute the weight from the hidden dimensional array.
+
+        $$
+        w = f(y, w)
+        $$
+
+        Args:
+            hidden_dim_arr: The hidden dimensional array.
+            weight_dim_tree: The weight dimensional tree.
+
+        Returns:
+            The updated weight dimensional tree.
         """
         if not isinstance(hidden_dim_arr, (np.ndarray, jax.Array, u.Quantity)):
             raise TypeError(f'The hidden_dim_arr must be an array-like. But got {type(hidden_dim_arr)}')
@@ -342,8 +365,29 @@ class MatMulOp(StandardOp):
         else:
             return {'weight': weight_like, 'bias': bias_like}
 
+    def xy_to_w(
+        self,
+        input_dim_arr: X,
+        hidden_dim_arr: Y,
+    ) -> W:
+        """
+        This function is used to compute the weight dimensional array from the input and hidden dimensional inputs.
 
-class ElemWiseOp(StandardOp):
+        $$
+        w = f(x, y)
+        $$
+
+        Args:
+            input_dim_arr: The input dimensional array.
+            hidden_dim_arr: The hidden dimensional array.
+
+        Returns:
+            The weight dimensional array.
+        """
+        pass
+
+
+class ElemWiseOp(ETraceOp):
     """
     The element-wise operator for the eligibility trace-based gradient learning.
     
@@ -366,13 +410,27 @@ class ElemWiseOp(StandardOp):
         fn: Callable = lambda w: w,
     ):
         self._raw_fn = fn
-        super().__init__(is_diagonal=True)
-        self._jitted_call = jax.jit(wrap_etrace_fun(self.xw_to_y, _etrace_op_name_elemwise))
+        super().__init__(is_diagonal=True, name=_etrace_op_name_elemwise)
 
     def __call__(self, weights: W) -> Y:
         return self._jitted_call(weights)
 
     def xw_to_y(self, weights: W) -> Y:
+        """
+        This function is used to compute the output of the element-wise operator.
+
+        It computes:
+
+        $$
+        y = f(w)
+        $$
+
+        Args:
+            weights: The weight parameters.
+
+        Returns:
+            The output of the operator.
+        """
         return self._raw_fn(weights)
 
     def yw_to_w(
@@ -380,9 +438,48 @@ class ElemWiseOp(StandardOp):
         hidden_dim_arr: Y,
         weight_dim_tree: W,
     ) -> W:
+        """
+        This function is used to compute the weight from the hidden dimensional array.
+
+        It computes:
+
+        $$
+        w = f(y, w)
+        $$
+
+        Args:
+            hidden_dim_arr: The hidden dimensional array.
+            weight_dim_tree: The weight dimensional tree.
+
+        Returns:
+            The updated weight dimensional tree.
+        """
         prim, f_vjp = jax.vjp(self._raw_fn, weight_dim_tree)
         assert hidden_dim_arr.shape == prim.shape, (
             f'The shape of the hidden_dim_arr must be the same as the weight_dim_tree. '
             f'Got {hidden_dim_arr.shape} and {prim.shape}'
         )
         return f_vjp((hidden_dim_arr,))
+
+    def xy_to_w(
+        self,
+        input_dim_arr: Optional[X],
+        hidden_dim_arr: Y,
+    ) -> W:
+        """
+        This function is used to compute the weight dimensional array from the input and hidden dimensional inputs.
+
+        It computes:
+
+        $$
+        w = f(x, y)
+        $$
+
+        Args:
+            input_dim_arr: The input dimensional array. It is None.
+            hidden_dim_arr: The hidden dimensional array.
+
+        Returns:
+            The weight dimensional array.
+        """
+        pass

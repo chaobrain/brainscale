@@ -32,13 +32,14 @@
 #   [2024-11-26] version 0.0.3, a complete new revision for better model debugging.
 #   [2024-12-05] change the ETraceWeight to NonETraceWeight if the hidden states are not found;
 #                remove the connected hidden states when y=x@w is not shape broadcastable with the hidden states.
-#   [2024-12-09] small updates, related to the key items in "CompiledVJPGraph"
+#   [2024-12-09] small updates, related to the key items in "CompiledVjpGraph"
 #   [2025-02-06]
-#       - [] unify model retrieved states (brainstate.graph.states)
-#            and compiled states (brainstate.compile.StatefulFunction)
-#       - [] add the support for the "ETraceGroupState" and "ETraceTreeState"
-#       - [] add the support for the "ElemWiseParam"
-
+#       - [x] unify model retrieved states (brainstate.graph.states)
+#             and compiled states (brainstate.compile.StatefulFunction)
+#       - [x] add the support for the "ETraceGroupState" and "ETraceTreeState"
+#       - [x] add the support for the "ElemWiseParam"
+#       - [x] split into "_etrace_compiler.py" and "_etrace_vjp_compiler.py"
+#
 # ==============================================================================
 
 # -*- coding: utf-8 -*-
@@ -54,11 +55,15 @@ import brainunit as u
 import jax.core
 from jax.extend import source_info_util
 
+from ._etrace_compiler import (
+    CompiledGraph,
+    HiddenGroup,
+    HiddenParamOpRelation,
+)
 from ._etrace_concepts import (
     ETraceParam,
     ETraceState,
 )
-from ._etrace_compiler import CompiledGraph
 from ._etrace_debug_jaxpr2code import jaxpr_to_python_code
 from ._etrace_operators import (
     is_etrace_op,
@@ -67,14 +72,13 @@ from ._etrace_operators import (
 from ._misc import (
     git_issue_addr,
     NotSupportedError,
-    CompilationError
+    CompilationError,
+    unknown_state_path,
 )
 from ._state_managment import sequence_split_state_values
 from ._typing import (
     PyTree,
     StateID,
-    WeightXVar,
-    WeightYVar,
     HiddenInVar,
     HiddenOutVar,
     Path
@@ -86,12 +90,10 @@ else:
     from jax.extend.core import Var, Literal, JaxprEqn, Jaxpr, ClosedJaxpr
 
 __all__ = [
-    'compile_graph_vjp',
+    'compile_vjp_graph',
     'HiddenTransition',
-    'CompiledVJPGraph',
+    'CompiledVjpGraph',
 ]
-
-unknown_state_path = '_unknown_path_{i}'
 
 
 # TODO
@@ -1507,7 +1509,6 @@ class HiddenTransition(NamedTuple):
         return new_hidden_vals
 
 
-
 def check_consistent_states_between_model_and_compiler(
     compiled_model_states: Sequence[bst.State],
     retrieved_model_states: Dict[Path, bst.State],
@@ -1534,7 +1535,7 @@ def check_consistent_states_between_model_and_compiler(
             if verbose:
                 print(f"Warning: the state {st} is not found in the retrieved model. "
                       f"We have added this state.")
-            retrieved_model_states[(unknown_state_path.format(i=i_unknown),)] = st
+            retrieved_model_states[(unknown_state_path(i=i_unknown),)] = st
             i_unknown += 1
 
 
@@ -1545,7 +1546,7 @@ def order_hidden_group_index(
         group.index = i
 
 
-class CompiledVJPGraph(CompiledGraph):
+class CompiledVjpGraph(CompiledGraph):
     """
     The compiled graph for the eligibility trace.
 
@@ -1583,12 +1584,12 @@ class CompiledVJPGraph(CompiledGraph):
     num_out: int
 
 
-def compile_graph_vjp(
+def compile_vjp_graph(
     model: bst.nn.Module,
     compile_to_multi_step: bool,
     *model_args,
     **model_kwargs
-) -> CompiledVJPGraph:
+) -> CompiledVjpGraph:
     """
     Building the eligibility trace graph for the model according to the given inputs.
 
@@ -1825,7 +1826,7 @@ def compile_graph_vjp(
 
     cache_key = stateful_model.get_arg_cache_key(*model_args, **model_kwargs)
 
-    return CompiledVJPGraph(
+    return CompiledVjpGraph(
         augmented_jaxpr=augmented_jaxpr,
         jaxpr_perturb_hidden=jaxpr_with_hidden_perturb,
         model_retrieved_states=model_retrieved_states,

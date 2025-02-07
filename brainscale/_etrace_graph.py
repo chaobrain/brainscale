@@ -40,13 +40,8 @@ from __future__ import annotations
 from typing import (Dict, Tuple)
 
 import brainstate as bst
-import jax.core
-from jax.tree_util import register_pytree_node_class
 
-from ._etrace_compiler import (
-    CompiledGraph,
-    HiddenGroup,
-)
+from ._etrace_compiler import CompiledGraph
 from ._typing import (
     Outputs,
     HiddenVals,
@@ -57,75 +52,11 @@ from ._typing import (
 )
 
 __all__ = [
-    'ETraceGraph',
+    'ETraceGraphExecutor',
 ]
 
 
-@register_pytree_node_class
-class Residuals:
-    """
-    The residuals for storing the backward pass data in a VJP function.
-
-    Args:
-      jaxpr: The jaxpr for the backward pass.
-      in_tree: The input tree structure.
-      out_tree: The output tree structure.
-      consts: The constants for the backward pass.
-    """
-
-    def __init__(
-        self,
-        jaxpr,
-        in_tree,
-        out_tree,
-        consts
-    ):
-        self.jaxpr = jaxpr
-        self.in_tree = in_tree
-        self.out_tree = out_tree
-        self.consts = consts
-
-    def __iter__(self):
-        return iter((self.jaxpr, self.in_tree, self.out_tree, self.consts))
-
-    def tree_flatten(self):
-        return self.consts, (self.jaxpr, self.in_tree, self.out_tree)
-
-    @classmethod
-    def tree_unflatten(cls, aux, consts):
-        jaxpr, in_tree, out_tree = aux
-        return cls(jaxpr, in_tree, out_tree, consts)
-
-
-@bst.util.dataclass
-class HiddenGroupJacobian:
-    """
-    The hidden-to-hidden Jacobian for the hidden group.
-    """
-
-    hidden_group: HiddenGroup
-    jac: jax.Array
-
-
-@bst.util.dataclass
-class HG2WeightJacobian:
-    """
-    The hidden-to-weight Jacobian for the hidden group.
-    """
-    hidden_group: HiddenGroup
-    jac: jax.Array
-
-
-@bst.util.dataclass
-class HG2YJacobian:
-    """
-    The hidden-to-weight Jacobian for the hidden group.
-    """
-    hidden_group: HiddenGroup
-    jac: jax.Array
-
-
-class ETraceGraph:
+class ETraceGraphExecutor:
     r"""
     The eligibility trace graph, tracking the relationship between the etrace weights
     :py:class:`ETraceParam`, the etrace variables :py:class:`ETraceState`, and the etrace
@@ -142,12 +73,6 @@ class ETraceGraph:
     ----------
     model: brainstate.nn.Module
         The model to build the eligibility trace graph. The models should only define the one-step behavior.
-    vjp_method: str
-        The method for computing the VJP. It should be either "single-step" or "multi-step".
-
-        - "single-step": The VJP is computed at the current time step, i.e., $\partial L^t/\partial h^t$.
-        - "multi-step": The VJP is computed at multiple time steps, i.e., $\partial L^t/\partial h^{t-k}$,
-          where $k$ is determined by the data input.
     """
     __module__ = 'brainscale'
 
@@ -174,7 +99,7 @@ class ETraceGraph:
         The compiled graph for the model.
 
         It is the most important data structure for the eligibility trace graph.
-        The instance of :py:class:`CompiledVJPGraph`.
+        The instance of :py:class:`CompiledVjpGraph`.
 
         It contains the following attributes:
 
@@ -364,7 +289,7 @@ class ETraceGraph:
 
     def solve_h2w_h2h_jacobian_and_l2h_vjp(
         self, *args,
-    ) -> Tuple[Outputs, HiddenVals, StateVals, Hid2WeightJacobian, Hid2HidJacobian, Residuals]:
+    ) -> Tuple[Outputs, HiddenVals, StateVals, Hid2WeightJacobian, Hid2HidJacobian, ...]:
         r"""
         Solving the hidden-to-weight and hidden-to-hidden Jacobian and the VJP transformed loss-to-hidden
         gradients according to the given inputs.

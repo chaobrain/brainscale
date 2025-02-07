@@ -75,7 +75,6 @@ We are building the `Brain Dynamics Programming ecosystem <https://ecosystem-for
 ----
 
 
-
 .. toctree::
    :hidden:
    :maxdepth: 1
@@ -89,13 +88,6 @@ We are building the `Brain Dynamics Programming ecosystem <https://ecosystem-for
    quickstart/rnn_online_learning-zh.ipynb
 
 
-.. toctree::
-   :hidden:
-   :maxdepth: 1
-   :caption: 快速入门
-
-
-
 
 .. toctree::
    :hidden:
@@ -104,13 +96,6 @@ We are building the `Brain Dynamics Programming ecosystem <https://ecosystem-for
 
    advanced/limitations-en.ipynb
    advanced/limitations-zh.ipynb
-
-
-
-.. toctree::
-   :hidden:
-   :maxdepth: 2
-   :caption: 高级教程
 
 
 

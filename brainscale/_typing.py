@@ -74,13 +74,15 @@ dG_Weight = Sequence[PyTree]  # gradients of weights
 dG_Hidden = Sequence[PyTree]  # gradients of hidden states
 dG_State = Sequence[PyTree]  # gradients of other states
 
+
+HiddenGroupName = str
 ETraceX_Key = Var
 ETraceY_Key = Var
-ETraceDF_Key = Tuple[Var, str]
+ETraceDF_Key = Tuple[Var, HiddenGroupName]
 
 _WeightPath = Path
 _HiddenPath = Path
-ETraceWG_Key = Tuple[_WeightPath, ETraceY_Key, _HiddenPath]
+ETraceWG_Key = Tuple[_WeightPath, ETraceY_Key, HiddenGroupName]
 
 HidHidJac_Key = Tuple[Path, Path]
 

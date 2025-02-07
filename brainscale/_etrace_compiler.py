@@ -65,10 +65,15 @@ class HiddenGroup(NamedTuple):
     """
 
     index: int  # the index of the hidden group
-    hidden_invars: List[HiddenInVar]  # the input hidden states
-    hidden_outvars: List[HiddenOutVar]  # the output hidden states
+
     hidden_paths: List[Path]  # the hidden state paths
     hidden_states: List[ETraceState]  # the hidden states
+
+    # the jax Var at the last time step
+    hidden_invars: List[HiddenInVar]  # the input hidden states
+
+    # the jax Var at the current time step
+    hidden_outvars: List[HiddenOutVar]  # the output hidden states
 
     # the jaxpr for computing hidden state transitions
     #
@@ -81,10 +86,16 @@ class HiddenGroup(NamedTuple):
 
     @property
     def varshape(self) -> Tuple[int, ...]:
+        """
+        The shape of each state variable.
+        """
         return self.hidden_states[0].varshape
 
     @property
     def num_state(self) -> int:
+        """
+        The number of hidden states.
+        """
         return sum([st.num_state for st in self.hidden_states])
 
     def state_transition(
@@ -93,7 +104,7 @@ class HiddenGroup(NamedTuple):
         input_vals: PyTree,
     ) -> List[jax.Array]:
         """
-        Computing the hidden state transitions :math:`h^t = f(h_i^t, x)`.
+        Computing the hidden state transitions $h_1^t, h_2^t, \cdots = f(h_1^{t-1}, h_2^{t-1}, \cdots, x^t)$.
 
         Args:
             hidden_vals: The old hidden state value.
@@ -126,6 +137,11 @@ class HiddenParamOpRelation(NamedTuple):
     - ``y``: the jax Var for the weight output.
     - ``jaxpr_y2hid``: the jaxpr to evaluate y --> eligibility trace hidden states.
     - ``hidden_groups``: the hidden groups that the weight is associated with.
+
+    .. note::
+
+        :py:class:`HiddenParamOpRelation` is uniquely identified by the ``y`` variable.
+
     """
 
     weight: ETraceParam  # the weight itself
