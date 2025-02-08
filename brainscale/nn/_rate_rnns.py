@@ -21,7 +21,11 @@ from typing import Callable, Union
 import brainstate as bst
 import brainunit as u
 
-from brainscale._etrace_concepts import ETraceState, ETraceParam
+from brainscale._etrace_concepts import (
+    ETraceState,
+    ETraceParam,
+    ElemWiseParam,
+)
 from brainscale._typing import ArrayLike
 from ._linear import Linear
 
@@ -773,7 +777,7 @@ class LRUCell(bst.nn.Module):
 
         # theta parameter
         theta_log = u.math.log(max_phase * bst.random.uniform(size=d_hidden))
-        self.theta_log = ElementWiseParamOp(theta_log, op=u.math.exp)
+        self.theta_log = ElemWiseParam(theta_log)
 
         # nu parameter
         nu_log = u.math.log(
@@ -781,14 +785,14 @@ class LRUCell(bst.nn.Module):
                 bst.random.uniform(size=d_hidden) * (r_max ** 2 - r_min ** 2) + r_min ** 2
             )
         )
-        self.nu_log = ElementWiseParamOp(nu_log, op=lambda v: u.math.exp(-u.math.exp(v)))
+        self.nu_log = ElemWiseParam(nu_log)
 
         # -------- input weight matrix --------
 
         # gamma parameter
         diag_lambda = u.math.exp(-u.math.exp(nu_log) + 1j * u.math.exp(theta_log))
         gamma_log = u.math.log(u.math.sqrt(1 - u.math.abs(diag_lambda) ** 2))
-        self.gamma_log = ElementWiseParamOp(gamma_log, op=u.math.exp)
+        self.gamma_log = ElemWiseParam(gamma_log)
 
         # Glorot initialized Input/Output projection matrices
         self.B_re = Linear(d_model, d_hidden, w_init=glorot_init, b_init=None)
@@ -800,8 +804,7 @@ class LRUCell(bst.nn.Module):
         self.C_im = Linear(d_hidden, d_model, w_init=glorot_init, b_init=None)
 
         # Parameter for skip connection
-        D = bst.random.randn(d_model)
-        self.D = ETraceParam(D, lambda x, p: x * p, is_diagonal=True)
+        self.D = ElemWiseParam(bst.random.randn(d_model))
 
     def init_state(self, batch_size: int = None, **kwargs):
         self.h_re = ETraceState(bst.init.param(bst.init.ZeroInit(), self.d_hidden, batch_size))
@@ -812,12 +815,12 @@ class LRUCell(bst.nn.Module):
         self.h_im.value = bst.init.param(bst.init.ZeroInit(), self.d_hidden, batch_size)
 
     def update(self, inputs):
-        a = self.nu_log.execute()
-        b = self.theta_log.execute()
-        c = self.gamma_log.execute()
+        a = u.math.exp(-u.math.exp(self.nu_log.execute()))
+        b = u.math.exp(self.theta_log.execute())
+        c = u.math.exp(self.gamma_log.execute())
         a_cos_b = a * u.math.cos(b)
         a_sin_b = a * u.math.sin(b)
         self.h_re.value = a_cos_b * self.h_re.value - a_sin_b * self.h_im.value + c * self.B_re(inputs)
         self.h_im.value = a_sin_b * self.h_re.value + a_cos_b * self.h_im.value + c * self.B_im(inputs)
-        r = self.C_re(self.h_re.value) - self.C_im(self.h_im.value) + self.D.execute(inputs)
+        r = self.C_re(self.h_re.value) - self.C_im(self.h_im.value) + inputs * self.D.execute()
         return r

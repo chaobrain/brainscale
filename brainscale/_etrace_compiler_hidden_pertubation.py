@@ -21,13 +21,15 @@ from typing import Dict, Set, NamedTuple, Sequence
 import brainstate as bst
 import jax.core
 
-from ._etrace_compiler_hidden_group import HiddenGroup
 from ._etrace_compiler_base import (
     JaxprEvaluation,
 )
 from ._etrace_compiler_base import (
     extract_model_info,
-ModelInfo,
+    ModelInfo,
+)
+from ._etrace_compiler_hidden_group import (
+    HiddenGroup,
 )
 from ._etrace_concepts import (
     ETraceState,
@@ -66,7 +68,7 @@ class HiddenPerturbation(NamedTuple):
         """
         return jax.core.eval_jaxpr(
             self.perturb_jaxpr.jaxpr,
-            [],
+            self.perturb_jaxpr.consts,
             tuple(inputs) + tuple(perturb_data)
         )
 
@@ -304,6 +306,7 @@ def add_hidden_perturbation_from_minfo(
         outvar_to_hidden_path=minfo.outvar_to_hidden_path,
         path_to_state=minfo.retrieved_model_states,
     )
+
 
 def add_hidden_perturbation_in_module(
     model: bst.nn.Module,

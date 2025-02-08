@@ -16,9 +16,12 @@
 
 from __future__ import annotations
 
-from typing import Dict, Sequence, NamedTuple, Tuple
+import threading
+from contextlib import contextmanager
+from typing import Dict, Sequence, NamedTuple, Tuple, Optional
 
 import brainstate as bst
+import jax
 
 from ._etrace_compiler_base import (
     extract_model_info,
@@ -36,14 +39,17 @@ from ._etrace_compiler_hidden_pertubation import (
     add_hidden_perturbation_from_minfo,
     HiddenPerturbation,
 )
-from ._typing import Path
+from ._typing import (
+    Inputs,
+    Path,
+)
 
 
 def order_hidden_group_index(
     hidden_groups: Sequence[HiddenGroup],
 ):
     for i, group in enumerate(hidden_groups):
-        group.index = i
+        assert group.index == i, f"Hidden group index {group.index} should be equal to its position {i}."
 
 
 class CompiledGraph(NamedTuple):
@@ -65,8 +71,70 @@ class CompiledGraph(NamedTuple):
     hidden_param_op_relations: Sequence[HiddenParamOpRelation]
     hidden_perturb: HiddenPerturbation | None
 
+    def call_hidden_perturb(
+        self,
+        args: Inputs,
+        perturb_data: Sequence[jax.Array],
+        old_state_vals: Optional[Sequence[jax.Array]] = None,
+    ):
+        # state checking
+        if old_state_vals is None:
+            old_state_vals = [st.value for st in self.model_info.compiled_model_states]
+
+        # calling the function
+        jaxpr_outs = self.hidden_perturb.eval_jaxpr(
+            jax.tree.leaves((args, old_state_vals)),
+            perturb_data,
+        )
+
+        return self.model_info._process(args, jaxpr_outs)
+
 
 CompiledGraph.__module__ = 'brainscale'
+
+
+class CONTEXT(threading.local):
+    """
+    The context for the eligibility trace compiler.
+
+    The context is a thread-local object, which is used to store the compiled graph
+    for the eligibility trace.
+    """
+
+    def __init__(self):
+        self.compilers = []
+
+    def add_compiler(self, name: str):
+        self.compilers.append(name)
+
+
+context = CONTEXT()
+
+
+@contextmanager
+def compiler_context(name: str) -> None:
+    """
+    The context manager for the eligibility trace compiler.
+
+    Args:
+        name: The name of the compiler.
+    """
+
+    try:
+
+        # add the compiler to the context
+        context.add_compiler(name)
+
+        # check if there is a recursive graph compilation
+        if len(context.compilers) > 1:
+            raise NotImplementedError(
+                'Detected recursive call to "compile_graph". '
+                'This is not supported currently.'
+            )
+
+        yield
+    finally:
+        context.compilers.pop()
 
 
 def compile_graph(
@@ -89,75 +157,77 @@ def compile_graph(
         include_hidden_perturb: bool. Whether to include the hidden perturbation. Default is True.
     """
 
-    assert isinstance(model_args, tuple)
-    minfo = extract_model_info(model, *model_args)
+    with compiler_context('compile_graph'):
 
-    # ---       evaluating the relationship for hidden-to-hidden        --- #
-    hidden_groups, hid_path_to_group = find_hidden_groups_from_minfo(minfo)
-    order_hidden_group_index(hidden_groups)
+        assert isinstance(model_args, tuple)
+        minfo = extract_model_info(model, *model_args)
 
-    # ---       evaluating the jaxpr for (hidden, param, op) relationships      --- #
+        # ---       evaluating the relationship for hidden-to-hidden        --- #
+        hidden_groups, hid_path_to_group = find_hidden_groups_from_minfo(minfo)
+        order_hidden_group_index(hidden_groups)
 
-    hidden_param_op_relations = find_hidden_param_op_relations_from_minfo(
-        minfo=minfo,
-        hid_path_to_group=hid_path_to_group,
-    )
+        # ---       evaluating the jaxpr for (hidden, param, op) relationships      --- #
 
-    # ---      Rewrite the jaxpr for computing the needed variables      --- #
+        hidden_param_op_relations = find_hidden_param_op_relations_from_minfo(
+            minfo=minfo,
+            hid_path_to_group=hid_path_to_group,
+        )
 
-    # Rewrite jaxpr to return all necessary variables, including
-    #
-    #   1. the original function outputs
-    #   2. the hidden states
-    #   3. the weight x   ===>  for computing the weight spatial gradients
-    #   4. the y-to-hidden variables   ===>  for computing the weight spatial gradients
-    #   5. the hidden-hidden transition variables   ===>  for computing the hidden-hidden jacobian
-    #
+        # ---      Rewrite the jaxpr for computing the needed variables      --- #
 
-    # all weight x
-    out_wx_jaxvars = list(set([
-        relation.x for relation in hidden_param_op_relations
-        if relation.x is not None
-    ]))
+        # Rewrite jaxpr to return all necessary variables, including
+        #
+        #   1. the original function outputs
+        #   2. the hidden states
+        #   3. the weight x   ===>  for computing the weight spatial gradients
+        #   4. the y-to-hidden variables   ===>  for computing the weight spatial gradients
+        #   5. the hidden-hidden transition variables   ===>  for computing the hidden-hidden jacobian
+        #
 
-    # all y-to-hidden vars
-    out_wy2hid_jaxvars = set()
-    for relation in hidden_param_op_relations:
-        for hpo_relation in relation.y_to_hidden_group_jaxprs:
-            out_wy2hid_jaxvars.update(hpo_relation.invars + hpo_relation.constvars)
-    out_wy2hid_jaxvars = list(out_wy2hid_jaxvars)
+        # all weight x
+        out_wx_jaxvars = list(set([
+            relation.x for relation in hidden_param_op_relations
+            if relation.x is not None
+        ]))
 
-    # hidden-hidden transition vars
-    hid2hid_jaxvars = set()
-    for group in hidden_groups:
-        hid2hid_jaxvars.update(group.hidden_invars)
-        hid2hid_jaxvars.update(group.transition_jaxpr_constvars)
-    hid2hid_jaxvars = list(hid2hid_jaxvars)
+        # all y-to-hidden vars
+        out_wy2hid_jaxvars = set()
+        for relation in hidden_param_op_relations:
+            for hpo_relation in relation.y_to_hidden_group_jaxprs:
+                out_wy2hid_jaxvars.update(hpo_relation.invars + hpo_relation.constvars)
+        out_wy2hid_jaxvars = list(out_wy2hid_jaxvars)
 
-    # all temporary outvars
-    temp_outvars = set(
-        minfo.jaxpr.outvars[minfo.num_var_out:] +  # all state variables
-        out_wx_jaxvars +  # all weight x
-        out_wy2hid_jaxvars +  # all y-to-hidden invars
-        hid2hid_jaxvars  # all hidden-hidden transition vars
-    ).difference(
-        minfo.jaxpr.outvars  # exclude the original function outputs
-    )
+        # hidden-hidden transition vars
+        hid2hid_jaxvars = set()
+        for group in hidden_groups:
+            hid2hid_jaxvars.update(group.hidden_invars)
+            hid2hid_jaxvars.update(group.transition_jaxpr_constvars)
+        hid2hid_jaxvars = list(hid2hid_jaxvars)
 
-    # rewrite model_info
-    minfo = minfo.add_jaxpr_outs(list(temp_outvars))
+        # all temporary outvars
+        temp_outvars = set(
+            minfo.jaxpr.outvars[minfo.num_var_out:] +  # all state variables
+            out_wx_jaxvars +  # all weight x
+            out_wy2hid_jaxvars +  # all y-to-hidden invars
+            hid2hid_jaxvars  # all hidden-hidden transition vars
+        ).difference(
+            minfo.jaxpr.outvars  # exclude the original function outputs
+        )
 
-    # ---               add perturbations to the hidden states                  --- #
-    # --- new jaxpr with hidden state perturbations for computing the residuals --- #
+        # rewrite model_info
+        minfo = minfo.add_jaxpr_outs(list(temp_outvars))
 
-    hidden_perturb = add_hidden_perturbation_from_minfo(minfo) if include_hidden_perturb else None
+        # ---               add perturbations to the hidden states                  --- #
+        # --- new jaxpr with hidden state perturbations for computing the residuals --- #
 
-    # ---              return the compiled graph               --- #
+        hidden_perturb = add_hidden_perturbation_from_minfo(minfo) if include_hidden_perturb else None
 
-    return CompiledGraph(
-        model_info=minfo,
-        hidden_groups=hidden_groups,
-        hid_path_to_group=hid_path_to_group,
-        hidden_param_op_relations=hidden_param_op_relations,
-        hidden_perturb=hidden_perturb,
-    )
+        # ---              return the compiled graph               --- #
+
+        return CompiledGraph(
+            model_info=minfo,
+            hidden_groups=hidden_groups,
+            hid_path_to_group=hid_path_to_group,
+            hidden_param_op_relations=hidden_param_op_relations,
+            hidden_perturb=hidden_perturb,
+        )

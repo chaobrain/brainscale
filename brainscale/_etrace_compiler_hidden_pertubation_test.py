@@ -114,4 +114,3 @@ class TestFindHiddenGroupsFromModule:
 
         perturb = hidden_perturb.init_perturb_data()
         assert len(states) == len(perturb)
-

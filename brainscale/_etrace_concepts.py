@@ -536,7 +536,6 @@ class ETraceParam(bst.ParamState):
         return self.op(x, self.value)
 
 
-
 class ElemWiseParam(ETraceParam):
     r"""
     The Element-wise Eligibility Trace Weight and its Associated Operator.

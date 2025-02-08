@@ -830,22 +830,21 @@ class MatMulETraceOpOld(OldStandardETraceOp):
 
 
 class Conv2DETraceOpOld(OldStandardETraceOp):
-  """
-  The etrace operator for the 2D convolution.
+    """
+    The etrace operator for the 2D convolution.
 
-  """
+    """
 
-  def __init__(
-      self,
-      weight_mask: Optional[jax.Array] = None,
-      is_diagonal: bool = False
-  ):
-    super().__init__(fun=self._operation, is_diagonal=is_diagonal)
-    self.weight_mask = weight_mask
+    def __init__(
+        self,
+        weight_mask: Optional[jax.Array] = None,
+        is_diagonal: bool = False
+    ):
+        super().__init__(fun=self._operation, is_diagonal=is_diagonal)
+        self.weight_mask = weight_mask
 
-  def _operation(self, x, w):
-    weight, bias = w
-    if self.weight_mask is not None:
-      weight = weight * self.weight_mask
-    return jax.lax.conv_general_dilated(x, weight, (1, 1), 'SAME') + bias
-
+    def _operation(self, x, w):
+        weight, bias = w
+        if self.weight_mask is not None:
+            weight = weight * self.weight_mask
+        return jax.lax.conv_general_dilated(x, weight, (1, 1), 'SAME') + bias

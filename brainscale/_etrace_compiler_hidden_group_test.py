@@ -484,4 +484,3 @@ class TestHiddenGroup_diagonal_jacobian:
             print(jax_jac)
 
             assert (u.math.allclose(diag_jac, jax_jac, atol=1e-5))
-

@@ -104,4 +104,3 @@ class Test_extract_model_info:
             bst.nn.init_all_states(layer)
             minfo = extract_model_info(layer, input)
             pprint(minfo)
-

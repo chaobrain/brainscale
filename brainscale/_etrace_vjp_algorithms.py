@@ -50,7 +50,6 @@ from ._etrace_concepts import (
 )
 from ._etrace_input_data import has_multistep_data
 from ._etrace_operators import ETraceOp
-from ._etrace_vjp_compiler_graph import CompiledVjpGraph
 from ._etrace_vjp_graph_executor import ETraceVjpGraphExecutor
 from ._misc import (
     check_dict_keys,
@@ -58,9 +57,7 @@ from ._misc import (
     etrace_param_key,
     etrace_df_key,
 )
-from ._state_managment import (
-    assign_state_values_v2
-)
+from ._state_managment import assign_state_values_v2
 from ._typing import (
     PyTree,
     Outputs,

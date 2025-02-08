@@ -16,7 +16,7 @@
 from __future__ import annotations
 
 import functools
-from typing import Dict, Sequence, Set, List, NamedTuple, Tuple, Any
+from typing import Dict, Sequence, Set, List, NamedTuple, Tuple, Any, Optional
 
 import brainstate as bst
 import jax.core
@@ -42,7 +42,7 @@ from ._typing import (
 if jax.__version_info__ < (0, 4, 38):
     from jax.core import Var, JaxprEqn, Jaxpr, ClosedJaxpr
 else:
-    from jax.extend.core import Var, JaxprEqn, ClosedJaxpr
+    from jax.extend.core import Var, JaxprEqn, Jaxpr, ClosedJaxpr
 
 
 def find_matched_vars(
@@ -364,7 +364,7 @@ class ModelInfo(NamedTuple):
         return dict(self._asdict())
 
     @property
-    def jaxpr(self) -> jax.core.Jaxpr:
+    def jaxpr(self) -> Jaxpr:
         """
         The jaxpr of the model.
         """
@@ -373,9 +373,14 @@ class ModelInfo(NamedTuple):
     def add_jaxpr_outs(
         self,
         jax_vars: Sequence[Var],
-        inplace: bool = True,
     ) -> ModelInfo:
+        """
+        Adding the jaxpr outputs to the model jaxpr, so that it can return the additional variables which
+        needed for the etrace compiler.
+        """
         assert all(isinstance(v, Var) for v in jax_vars), 'The jax_vars should be the instance of Var.'
+
+        # jaxpr
         jaxpr = Jaxpr(
             constvars=list(self.jaxpr.constvars),
             invars=list(self.jaxpr.invars),
@@ -384,16 +389,14 @@ class ModelInfo(NamedTuple):
             effects=self.jaxpr.effects,
             debug_info=self.jaxpr.debug_info,
         )
+
+        # closed jaxpr
         closed_jaxpr = ClosedJaxpr(jaxpr, self.closed_jaxpr.consts)
 
-        if inplace:
-            items = self.dict()
-            items['closed_jaxpr'] = closed_jaxpr
-            return ModelInfo(**items)
-
-        else:
-            self.closed_jaxpr = closed_jaxpr
-            return self
+        # new instance of `ModelInfo`
+        items = self.dict()
+        items['closed_jaxpr'] = closed_jaxpr
+        return ModelInfo(**items)
 
     def split_state_outvars(self):
         """
@@ -413,7 +416,8 @@ class ModelInfo(NamedTuple):
 
     def jaxpr_call(
         self,
-        *args: Inputs,
+        args: Inputs,
+        old_state_vals: Optional[Sequence[jax.Array]] = None,
     ) -> Tuple[
         Outputs,
         ETraceVals,
@@ -425,6 +429,7 @@ class ModelInfo(NamedTuple):
 
         Args:
             args: The inputs of the model.
+            old_state_vals: The old state values.
 
         Returns:
             out: The output of the model.
@@ -434,7 +439,8 @@ class ModelInfo(NamedTuple):
         """
 
         # state checking
-        old_state_vals = [st.value for st in self.compiled_model_states]
+        if old_state_vals is None:
+            old_state_vals = [st.value for st in self.compiled_model_states]
 
         # parameters
         args = jax.tree.leaves((args, old_state_vals))
@@ -446,11 +452,19 @@ class ModelInfo(NamedTuple):
             *args
         )
 
-        # intermediate values
+        return self._process(args, jaxpr_outs)
+
+    def _process(
+        self,
+        args: Inputs,
+        jaxpr_outs: Sequence[jax.Array],
+    ):
+
+        # intermediate values contain three parts:
         #
-        # "jaxpr_outs[:self.num_out]" corresponds to model original outputs
+        # 1. "jaxpr_outs[:self.num_out]" corresponds to model original outputs
         #     - Outputs
-        # "jaxpr_outs[self.num_out:]" corresponds to extra output in  "augmented_jaxpr"
+        # 2. "jaxpr_outs[self.num_out:]" corresponds to extra output in  "augmented_jaxpr"
         #     - others
         temps = {
             v: r for v, r in
@@ -459,6 +473,10 @@ class ModelInfo(NamedTuple):
                 jaxpr_outs[self.num_var_out:]
             )
         }
+        # 3. "etrace state" old values
+        for st, val in zip(self.compiled_model_states, self.state_tree_invars):
+            if isinstance(st, ETraceState):
+                temps[val] = st.value
 
         #
         # recovery outputs of ``stateful_model``
@@ -470,7 +488,7 @@ class ModelInfo(NamedTuple):
 
         #
         # check state value
-        assert len(old_state_vals) == len(new_state_vals), 'State length mismatch.'
+        assert len(self.compiled_model_states) == len(new_state_vals), 'State length mismatch.'
 
         #
         # split the state values
@@ -485,6 +503,7 @@ class ModelInfo(NamedTuple):
                 pass
             else:
                 oth_state_vals[self.state_id_to_path[id(st)]] = st_val
+
         return out, etrace_vals, oth_state_vals, temps
 
 

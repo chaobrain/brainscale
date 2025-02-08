@@ -119,6 +119,10 @@ class HiddenGroup(NamedTuple):
     # the other input variables for transition_jaxpr evaluation
     transition_jaxpr_constvars: List[Var]
 
+    def __repr__(self):
+        # TODO
+        return f'{self.__class__.__name__}({self.index}, {self.hidden_paths})'
+
     @property
     def varshape(self) -> Tuple[int, ...]:
         """

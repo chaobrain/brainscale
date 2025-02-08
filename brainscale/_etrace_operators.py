@@ -135,8 +135,10 @@ class ETraceOp:
 
         # JIT the operator function
         # This is important during compilation of eligibility trace graph
-        _call =  lambda x, weights: self.xw_to_y(x, weights)
-        self._jitted_call = jax.jit(wrap_etrace_fun(_call, name))
+        self._jitted_call = jax.jit(wrap_etrace_fun(self._define_call(), name))
+
+    def _define_call(self):
+        return lambda x, weights: self.xw_to_y(x, weights)
 
     def __call__(
         self,
@@ -412,6 +414,9 @@ class ElemWiseOp(ETraceOp):
     ):
         self._raw_fn = fn
         super().__init__(is_diagonal=True, name=_etrace_op_name_elemwise)
+
+    def _define_call(self):
+        return lambda weights: self._raw_fn(weights) * 1.0
 
     def __call__(self, weights: W) -> Y:
         return self._jitted_call(weights)

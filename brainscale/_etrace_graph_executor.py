@@ -37,7 +37,7 @@
 
 from __future__ import annotations
 
-from typing import (Dict, Tuple)
+from typing import Dict, Any
 
 import brainstate as bst
 
@@ -47,11 +47,6 @@ from ._etrace_compiler_graph import (
 )
 from ._etrace_input_data import get_single_step_data
 from ._typing import (
-    Outputs,
-    HiddenVals,
-    StateVals,
-    Hid2WeightJacobian,
-    Hid2HidJacobian,
     Path,
 )
 
@@ -272,14 +267,7 @@ class ETraceGraphExecutor:
     def solve_h2w_h2h_jacobian(
         self,
         *args,
-    ) -> Tuple[
-        Outputs,
-        HiddenVals,
-        StateVals,
-        Hid2WeightJacobian,
-        Hid2HidJacobian,
-        ...
-    ]:
+    ) -> Any:
         r"""
         Solving the hidden-to-weight and hidden-to-hidden Jacobian according to the given inputs and parameters.
 
@@ -305,14 +293,7 @@ class ETraceGraphExecutor:
 
     def solve_h2w_h2h_jacobian_and_l2h_vjp(
         self, *args,
-    ) -> Tuple[
-        Outputs,
-        HiddenVals,
-        StateVals,
-        Hid2WeightJacobian,
-        Hid2HidJacobian,
-        ...
-    ]:
+    ) -> Any:
         r"""
         Solving the hidden-to-weight and hidden-to-hidden Jacobian and the VJP transformed loss-to-hidden
         gradients according to the given inputs.

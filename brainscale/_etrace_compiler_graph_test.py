@@ -35,7 +35,6 @@ from brainscale._etrace_model_test import (
 )
 
 
-
 class TestCompileGraphRNN(unittest.TestCase):
     def test_gru_one_layer(self):
         n_in = 3

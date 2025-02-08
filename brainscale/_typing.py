@@ -17,7 +17,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Sequence, Union, FrozenSet, List, Tuple
+from typing import Dict, Sequence, Union, FrozenSet, List, Tuple
 
 import brainstate as bst
 import jax

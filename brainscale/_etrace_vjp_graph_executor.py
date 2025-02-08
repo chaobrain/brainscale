@@ -39,8 +39,7 @@
 
 from __future__ import annotations
 
-from functools import partial
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Sequence
 
 import brainstate as bst
 import brainunit as u
@@ -51,31 +50,33 @@ from jax.interpreters import partial_eval as pe
 from jax.tree_util import register_pytree_node_class
 
 from ._etrace_compiler_graph import compile_graph
-from ._etrace_concepts import ETraceState
+from ._etrace_compiler_hidden_group import HiddenGroup
 from ._etrace_graph_executor import ETraceGraphExecutor
 from ._etrace_input_data import (
     get_single_step_data,
     split_data_types,
     merge_data
 )
+from ._misc import etrace_df_key
 from ._state_managment import (
     assign_dict_state_values,
-    dict_split_state_values,
     split_dict_states_v2
 )
 from ._typing import (
-    PyTree,
-    TempData,
     Outputs,
     ETraceVals,
-    HiddenVals,
     StateVals,
     ETraceX_Key,
     ETraceDF_Key,
-    HidHidJac_Key,
     Hid2WeightJacobian,
     Hid2HidJacobian,
+    HidGroupJacobian,
 )
+
+if jax.__version_info__ < (0, 4, 38):
+    from jax.core import Var
+else:
+    from jax.extend.core import Var
 
 # TODO
 #
@@ -171,20 +172,20 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
     @property
     def is_single_step_vjp(self) -> bool:
         """
-        Whether the VJP method is single-step.
+        Whether the VJP method is ``single-step``.
 
         Returns:
-            bool: Whether the VJP method is single-step.
+            bool: Whether the VJP method is ``single-step``.
         """
         return self.vjp_method == 'single-step'
 
     @property
     def is_multi_step_vjp(self) -> bool:
         """
-        Whether the VJP method is multi-step.
+        Whether the VJP method is ``multi-step``.
 
         Returns:
-            bool: Whether the VJP method is multi-step.
+            bool: Whether the VJP method is ``multi-step``.
         """
         return self.vjp_method == 'multi-step'
 
@@ -208,29 +209,33 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
 
     def _compute_hid2weight_jacobian(
         self,
-        intermediate_values: dict
-    ) -> Tuple[Dict[ETraceX_Key, jax.Array], Dict[ETraceDF_Key, jax.Array]]:
+        intermediate_values: Dict[Var, jax.Array]
+    ) -> Tuple[
+        Dict[ETraceX_Key, jax.Array],
+        Dict[ETraceDF_Key, jax.Array]
+    ]:
         """
         Computing the weight x and df values for the spatial gradients.
 
         Args:
-          intermediate_values: The intermediate values of the model.
+            intermediate_values: The intermediate values of the model.
 
         Returns:
-          The weight x and df values.
+            The weight x and df values.
         """
-        intermediate_values = jax.lax.stop_gradient(intermediate_values)
 
         # the weight x
-        xs = {v: intermediate_values[v] for v in self.compiled.out_wx_jaxvars}
+        xs = {}
+        for relation in self.compiled.hidden_param_op_relations:
+            if relation.x is not None:
+                xs[relation.x] = intermediate_values[relation.x]
 
         # the weight df
-        dfs = dict()
+        dfs = {}
         for relation in self.compiled.hidden_param_op_relations:
-            consts = [intermediate_values[var] for var in relation.jaxpr_y2hid.constvars]
-            invars = [intermediate_values[var] for var in relation.jaxpr_y2hid.invars]  # weight y
-            assert len(invars) == 1, 'The weight y should be unique.'
+            y = intermediate_values[relation.y]
 
+            #
             # [ KEY ]
             #
             # # ---- Method 1: using ``backward_pass`` ---- #
@@ -244,62 +249,57 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
             # [df] = backward_pass(relation.jaxpr_y2hid, [], True, consts, invars, outvars)
             #
             # # ---- Method 2: using ``jax.vjp`` ---- #
-            # However, for general cases, we choose to use ``jax.vjp`` to compute the gradients.
+            # For general cases, we should use ``jax.vjp`` to compute the gradients.
             #
             # # ---- Method 3: using ``jax.jvp`` ---- #
-            primals, tangents = jax.jvp(
-                lambda x: jax.core.eval_jaxpr(relation.jaxpr_y2hid, consts, x),
-                invars,
-                [u.math.ones(invars[0].shape, invars[0].dtype)]
+            # For computational efficiency, we use ``jax.jvp`` to compute the gradients.
+            #
+            primals, tangent_hidden_groups = jax.jvp(
+                lambda y_val: relation.y_to_hidden_groups(
+                    y_val,
+                    intermediate_values,
+                    concat_hidden_vals=True,
+                ),
+                [y],
+                [u.math.ones_like(y)]
             )
 
-            # get the df we want
-            for i, hidden_var in enumerate(relation.jaxpr_y2hid.outvars):  # hidden states
-                hidden_path = self.compiled.hid_outvar_to_path[hidden_var]
-                key = (relation.y, hidden_path)
-                if key in dfs:
-                    raise ValueError(f'The key should not exist. {key}')
-                dfs[key] = tangents[i]
+            #
+            # compute the df we want
+            #
+            #    df = jvp gradient of "y -> hidden group"
+            #
+            for tangent, group in zip(tangent_hidden_groups, relation.hidden_groups):
+                dfs[etrace_df_key(relation.y, group.index)] = tangent
 
         # all x and df values
         return jax.lax.stop_gradient(xs), jax.lax.stop_gradient(dfs)
 
     def _compute_hid2hid_jacobian(
         self,
-        intermediate_values: dict
-    ) -> Dict[HidHidJac_Key, jax.Array]:
+        intermediate_values: Dict[Var, jax.Array]
+    ) -> Sequence[jax.Array]:
         """
-        Computing the hidden-to-hidden Jacobian according to the given intermediate values.
+        Computing the hidden group-to-hidden group Jacobian according to the given intermediate values.
+
+        Args:
+            intermediate_values: The intermediate values of the model.
+
+        Returns:
+            The hidden group-to-hidden group Jacobian.
         """
 
-        intermediate_values = jax.lax.stop_gradient(intermediate_values)
+        hid2hid_jacobian = []
+        for group in self.compiled.hidden_groups:
+            group: HiddenGroup
 
-        hid2hid_jacobian = dict()
-        for hid_path, transition in self.compiled.hid_path_to_transition.items():
-            transition: HiddenTransition
+            # data for jacobian computation
+            hidden_vals = [intermediate_values[v] for v in group.hidden_invars]
+            input_vals = [intermediate_values[v] for v in group.transition_jaxpr_constvars]
 
-            #
-            # "primals" is the hidden state values at the previous time step
-            primals = intermediate_values[transition.hidden_invar]
-
-            #
-            # "tangents" is the hidden-to-hidden Jacobian at the previous time step
-            tangents = u.math.ones(primals.aval.shape, primals.aval.dtype)
-
-            # JVP gradients, computing:
-            #
-            # [∂a^t/∂a^t-1, ∂b^t/∂a^t-1, ∂c^t/∂a^t-1, ...]
-            #
-            other_input_vals = [intermediate_values[v] for v in transition.other_invars]
-            fun = partial(transition.state_transition, other_input_vals=other_input_vals)
-            _, jvp_grads = jax.jvp(fun, (primals,), (tangents,))  # produce the new hidden, and the JVP gradients
-
-            # store the gradients
-            hid_path1 = transition.hidden_path
-            for hid_path2, grad_data in zip(transition.connected_hidden_paths, jvp_grads):
-                key = (hid_path1, hid_path2)
-                assert key not in hid2hid_jacobian, f'The key should not exist. {key}'
-                hid2hid_jacobian[key] = grad_data
+            # compute the jacobian
+            jac = group.diagonal_jacobian(hidden_vals, input_vals)
+            hid2hid_jacobian.append(jac)
 
         return jax.lax.stop_gradient(hid2hid_jacobian)
 
@@ -311,8 +311,7 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
         ETraceVals,
         StateVals,
         Hid2WeightJacobian,
-        Hid2HidJacobian,
-        ...
+        HidGroupJacobian,
     ]:
         r"""
         Solving the hidden-to-weight and hidden-to-hidden Jacobian according to the given inputs and parameters.
@@ -335,18 +334,18 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
             The outputs, hidden states, other states, and the spatial gradients of the weights.
         """
 
-        # --- split the states --- #
+        # --- split the states and state values --- #
         (
-            etrace_param_states,
-            hidden_states,
-            non_etrace_weight_states,
+            etrace_params,
+            etrace_states,
+            non_etrace_params,
             other_states
         ) = split_dict_states_v2(self.states)
 
-        hidden_vals = {path: st.value for path, st in hidden_states.items()}
-        other_vals = {path: st.value for path, st in other_states.items()}
-        non_etrace_weight_vals = {path: st.value for path, st in non_etrace_weight_states.items()}
-        etrace_weight_vals = {path: st.value for path, st in etrace_param_states.items()}
+        etrace_state_vals = {path: st.value for path, st in etrace_states.items()}
+        other_state_vals = {path: st.value for path, st in other_states.items()}
+        non_etrace_param_vals = {path: st.value for path, st in non_etrace_params.items()}
+        etrace_param_vals = {path: st.value for path, st in etrace_params.items()}
 
         # --- processing the inputs information --- #
         (
@@ -360,22 +359,25 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
         def scan_fn(carray, single_step_of_multistep_arg):
             args_ = merge_data(tree_def, single_step_of_multistep_arg, args_single_step)
 
-            _hidden_vals, _oth_state_vals = carray
-            for path, val in _hidden_vals.items():
+            _etrace_state_vals, _oth_state_vals = carray
+            # use "restore_value" to recover the hidden states
+            # this keeps the reading/writing operations as
+            # the same as the original model
+            for path, val in _etrace_state_vals.items():
                 self.path_to_states[path].restore_value(val)
             for path, val in _oth_state_vals.items():
                 self.path_to_states[path].restore_value(val)
-            for path, val in non_etrace_weight_vals.items():
+            for path, val in non_etrace_param_vals.items():
                 self.path_to_states[path].restore_value(val)
-            for path, val in etrace_weight_vals.items():
+            for path, val in etrace_param_vals.items():
                 self.path_to_states[path].restore_value(val)
 
             (
                 out,
-                _hidden_vals,
+                _etrace_state_vals,
                 _oth_state_vals,
                 temps
-            ) = self._jaxpr_compute_model(*args_)
+            ) = self.compiled.model_info.jaxpr_call(args_)
 
             # compute the hidden-to-weight Jacobian
             hid2weight_jac = self._compute_hid2weight_jacobian(temps)
@@ -383,7 +385,7 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
             # compute the hidden-to-hidden Jacobian
             hid2hid_jac = self._compute_hid2hid_jacobian(temps)
 
-            return (_hidden_vals, _oth_state_vals), (out, hid2weight_jac, hid2hid_jac)
+            return (_etrace_state_vals, _oth_state_vals), (out, hid2weight_jac, hid2hid_jac)
 
         def scan_over_multi_times(
             args_at_multi_times: Dict,  # the inputs for multiple time steps
@@ -403,9 +405,10 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
             if len(set(args_dim)) != 1:
                 raise ValueError(f'The sequence size should be the same for all inputs. But we got {args_dim}.')
 
+        # scan over multiple time steps
         (
             (
-                hidden_vals,
+                etrace_state_vals,
                 oth_state_vals
             ),
             (
@@ -415,17 +418,18 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
             )
         ) = scan_over_multi_times(
             args_multi_steps,
-            hidden_vals,
-            other_vals
+            etrace_state_vals,
+            other_state_vals
         )
 
         # recovering the other non-etrace weights, although the weights are not changed
-        assign_dict_state_values(non_etrace_weight_states, non_etrace_weight_vals, write=False)
-        assign_dict_state_values(etrace_param_states, etrace_weight_vals, write=False)
+        assign_dict_state_values(non_etrace_params, non_etrace_param_vals, write=False)
+        assign_dict_state_values(etrace_params, etrace_param_vals, write=False)
 
+        # return the results
         return (
             outs_multi_steps,
-            hidden_vals,
+            etrace_state_vals,
             oth_state_vals,
             hid2weight_jac_multi_steps,
             hid2hid_jac_multi_steps
@@ -441,7 +445,6 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
         Hid2WeightJacobian,
         Hid2HidJacobian,
         VjpResiduals,
-        ...
     ]:
         r"""
         Solving the hidden-to-weight and hidden-to-hidden Jacobian and the VJP transformed loss-to-hidden
@@ -479,80 +482,66 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
 
         (
             etrace_param_states,
-            hidden_states,
-            non_etrace_weight_states,
+            etrace_hidden_states,
+            non_etrace_param_states,
             other_states
         ) = split_dict_states_v2(self.states)
-        if self.vjp_method != 'multi-step':
+        if self.is_single_step_vjp:
             etrace_weight_vals = dict()
-            hidden_perturbs = [
-                u.math.zeros(v.aval.shape, v.aval.dtype)
-                for v in self.compiled.out_hidden_jaxvars
-            ]
+            hidden_perturbs = self.compiled.hidden_perturb.init_perturb_data()
             etrace_weight_vals_restore = {path: st.value for path, st in etrace_param_states.items()}
+
         else:
             etrace_weight_vals = {path: st.value for path, st in etrace_param_states.items()}
             etrace_weight_vals_restore = etrace_weight_vals
             hidden_perturbs = []
-        non_etrace_weight_vals = {path: st.value for path, st in non_etrace_weight_states.items()}
-        hidden_vals = {path: st.value for path, st in hidden_states.items()}
-        other_vals = {path: st.value for path, st in other_states.items()}
+
+        non_etrace_param_vals = {path: st.value for path, st in non_etrace_param_states.items()}
+        etrace_hidden_vals = {path: st.value for path, st in etrace_hidden_states.items()}
+        other_state_vals = {path: st.value for path, st in other_states.items()}
 
         def fun_for_vjp(
             inputs,  # functional inputs, original inputs
-            hiddens,  # etrace hidden states
-            non_etrace_weights,  # non-etrace weights
-            etrace_weights,  # etrace weights
-            oth_states,  # other states
-            perturbs  # hidden perturbations, useful when computing \partial L / \partial h
+            etrace_hidden_vals_,  # etrace hidden states
+            non_etrace_param_vals_,  # non-etrace weights
+            etrace_param_vals_,  # etrace weights
+            oth_state_vals_,  # other states
+            perturb_vals_  # hidden perturbations, useful when computing \partial L / \partial h
         ):
             # assign state values
-            if len(etrace_weights) > 0:
-                assign_dict_state_values(etrace_param_states, etrace_weights, write=False)
-            assign_dict_state_values(hidden_states, hiddens, write=False)
-            assign_dict_state_values(non_etrace_weight_states, non_etrace_weights, write=False)
-            assign_dict_state_values(other_states, oth_states, write=False)
+            if len(etrace_param_vals_) > 0:
+                assign_dict_state_values(etrace_param_states, etrace_param_vals_, write=False)
+            assign_dict_state_values(etrace_hidden_states, etrace_hidden_vals_, write=False)
+            assign_dict_state_values(non_etrace_param_states, non_etrace_param_vals_, write=False)
+            assign_dict_state_values(other_states, oth_state_vals_, write=False)
 
             # get state values by the "stateful_model", to preserve the order of states
-            old_state_vals = [st.value for st in self.compiled.compiled_model_states]
+            old_state_vals = [st.value for st in self.compiled.model_info.compiled_model_states]
 
+            # calling the function
             if self.is_single_step_vjp:
-                assert self.compiled.jaxpr_perturb_hidden is not None, (
-                    'The jaxpr_with_hidden_perturb should not be None '
-                    'when the vjp_time_ahead is 0.'
+                assert self.compiled.hidden_perturb is not None, (
+                    'The hidden_perturb should not be None '
+                    'when the vjp method is "single-step".'
                 )
-                jaxpr_outs = jax.core.eval_jaxpr(
-                    self.compiled.jaxpr_perturb_hidden.jaxpr,
-                    self.compiled.jaxpr_perturb_hidden.consts,
-                    *jax.tree.leaves((inputs, old_state_vals, perturbs))
+                (
+                    out,
+                    _etrace_state_vals,
+                    _oth_state_vals,
+                    temps
+                ) = self.compiled.call_hidden_perturb(
+                    inputs,
+                    perturb_vals_,
+                    old_state_vals,
                 )
 
             else:
-                assert self.compiled.augmented_jaxpr is not None, (
-                    'The augmented_jaxpr should not be None '
-                    'when the vjp_time_ahead > 0.'
-                )
-                # calling the function
-                jaxpr_outs = jax.core.eval_jaxpr(
-                    self.compiled.augmented_jaxpr.jaxpr,
-                    self.compiled.augmented_jaxpr.consts,
-                    *jax.tree.leaves((inputs, old_state_vals))
-                )
-
-            # --- intermediate values --- #
-            temps = {
-                v: r
-                for v, r in zip(
-                    self.compiled.out_all_jaxvars[self.compiled.num_out:],
-                    jaxpr_outs[self.compiled.num_out:]
-                )
-            }
-
-            # --- outputs  --- #
-            state_outs = [temps[v] for v in self.compiled.out_state_jaxvars]
-            out, new_state_vals = self.compiled.stateful_fn_outtree.unflatten(
-                jaxpr_outs[:self.compiled.num_out] + state_outs
-            )
+                (
+                    out,
+                    _etrace_state_vals,
+                    _oth_state_vals,
+                    temps
+                ) = self.compiled.model_info.jaxpr_call(inputs, old_state_vals)
 
             # --- compute the hidden-to-weight Jacobian --- #
             hid2weight_jac = self._compute_hid2weight_jacobian(temps)
@@ -560,18 +549,7 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
             # --- compute the hidden-to-hidden Jacobian --- #
             hid2hid_jac = self._compute_hid2hid_jacobian(temps)
 
-            # ---- compute new state values ---- #
-            # get new state values, do not return the weight values, since they are not changed
-            new_state_vals = {
-                self.state_id_to_path[id(st)]: st_val
-                for st, st_val in zip(self.compiled.compiled_model_states, new_state_vals)
-            }
-            (
-                _,  # drop weights, since they are not changed
-                new_hiddens,
-                new_others
-            ) = dict_split_state_values(self.states, new_state_vals)
-            return out, new_hiddens, new_others, hid2weight_jac, hid2hid_jac
+            return out, _etrace_state_vals, _oth_state_vals, hid2weight_jac, hid2hid_jac
 
         # ---------------------- [Part 2] ----------------------
         # Scan VJP function over multiple time steps
@@ -595,6 +573,7 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
                 if len(set(args_dim)) != 1:
                     raise ValueError(f'The sequence size should be the same for all inputs. But we got {args_dim}.')
 
+            # scan function
             def scan_fn(carray, x_single_step: Dict):
                 args_ = merge_data(tree_def, x_single_step, args_single_step)
 
@@ -619,6 +598,7 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
                     (out, hid2weight_jac, hid2hid_jac)
                 )
 
+            # scan over multiple time steps
             if len(args_multi_steps):
                 (
                     (
@@ -646,6 +626,7 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
                     _hid2hid_jac_multi_steps
                 ) = jax.tree.map(lambda x: jnp.expand_dims(x, 0), ret)
 
+            # return the results
             return (
                 (
                     _outs_multi_steps,
@@ -668,8 +649,8 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
         (
             (
                 outs_multi_steps,
-                hidden_vals,
-                other_vals
+                etrace_hidden_vals,
+                other_state_vals
             ),
             f_vjp,
             (
@@ -679,14 +660,14 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
         ) = jax.vjp(
             scan_over_multiple_inputs,  # the function
             args,  # the inputs (multiple time)
-            hidden_vals,  # the inputs (single time)
-            non_etrace_weight_vals,  # the inputs (single time)
+            etrace_hidden_vals,  # the inputs (single time)
+            non_etrace_param_vals,  # the inputs (single time)
             etrace_weight_vals,  # the inputs (single time)
-            other_vals,  # the inputs (single time)
+            other_state_vals,  # the inputs (single time)
             hidden_perturbs,  # the inputs (single time)
             has_aux=True
         )
-        out_flat, out_tree = jax.tree.flatten(((outs_multi_steps, hidden_vals, other_vals),))
+        out_flat, out_tree = jax.tree.flatten(((outs_multi_steps, etrace_hidden_vals, other_state_vals),))
         rule, in_tree = jax.api_util.flatten_fun_nokwargs(lu.wrap_init(f_vjp), out_tree)
         out_avals = [jax.core.get_aval(x).at_least_vspace() for x in out_flat]
         jaxpr, _, consts = pe.trace_to_jaxpr_dynamic(rule, out_avals)
@@ -697,13 +678,13 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
         # ---------------------------------------------------------
 
         # recovering the other non-etrace weights, although the weights are not changed
-        assign_dict_state_values(non_etrace_weight_states, non_etrace_weight_vals, write=False)
+        assign_dict_state_values(non_etrace_param_states, non_etrace_param_vals, write=False)
         assign_dict_state_values(etrace_param_states, etrace_weight_vals_restore, write=False)
 
         return (
             outs_multi_steps,
-            hidden_vals,
-            other_vals,
+            etrace_hidden_vals,
+            other_state_vals,
             hid2weight_jac_multi_steps,
             hid2hid_jac_multi_steps,
             residual

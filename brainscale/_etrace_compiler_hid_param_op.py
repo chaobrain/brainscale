@@ -23,16 +23,16 @@ import brainstate as bst
 import jax.core
 from jax.extend import source_info_util
 
-from ._etrace_compiler_hidden_group import (
-    HiddenGroup,
-    find_hidden_groups_from_minfo,
-)
 from ._etrace_compiler_base import (
     JaxprEvaluation,
     check_unsupported_op,
     find_matched_vars,
     extract_model_info,
     ModelInfo,
+)
+from ._etrace_compiler_hidden_group import (
+    HiddenGroup,
+    find_hidden_groups_from_minfo,
 )
 from ._etrace_concepts import ETraceParam
 from ._etrace_debug_jaxpr2code import jaxpr_to_python_code
@@ -105,6 +105,37 @@ class HiddenParamOpRelation(NamedTuple):
     hidden_groups: List[HiddenGroup]  # the hidden groups that the weight is associated with
     y_to_hidden_group_jaxprs: List[Jaxpr]  # the jaxpr for computing y --> hidden groups
     connected_hidden_paths: List[Path]  # the connected hidden paths
+
+    def y_to_hidden_groups(
+        self,
+        y_val: jax.Array,
+        const_vals: Dict[Var, jax.Array],
+        concat_hidden_vals: bool = True
+    ):
+        """
+        Computing the hidden groups from the weight output.
+
+        Args:
+            y_val: The value of the weight output.
+            const_vals: The constant values for the jax variables.
+            concat_hidden_vals: Whether to concatenate the hidden values.
+
+        Returns:
+            The hidden states.
+        """
+        vals_of_hidden_groups = []
+        for jaxpr, group in zip(self.y_to_hidden_group_jaxprs, self.hidden_groups):
+            assert len(jaxpr.invars) == 1, 'The weight y should be unique.'
+            consts = [const_vals[var] for var in jaxpr.constvars]
+            hidden_vals = jax.core.eval_jaxpr(
+                jaxpr,
+                consts,
+                y_val,
+            )
+            if concat_hidden_vals:
+                hidden_vals = group.concat_hidden(hidden_vals)
+            vals_of_hidden_groups.append(hidden_vals)
+        return vals_of_hidden_groups
 
 
 HiddenParamOpRelation.__module__ = 'brainscale'
