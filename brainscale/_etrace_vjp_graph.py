@@ -60,7 +60,6 @@ from ._etrace_input_data import (
     merge_data
 )
 from ._etrace_vjp_compiler import (
-    HiddenTransition,
     compile_vjp_graph,
     CompiledVjpGraph,
 )

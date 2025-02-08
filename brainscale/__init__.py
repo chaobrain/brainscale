@@ -21,9 +21,14 @@ from brainscale._etrace_algorithms import (
     ETraceAlgorithm,
     EligibilityTraceData,
 )
-from brainscale._etrace_compiler import (
-    HiddenGroup,
+from brainscale._etrace_compiler_graph import (
+    CompiledGraph,
+)
+from brainscale._etrace_compiler_hid_param_op import (
     HiddenParamOpRelation,
+)
+from brainscale._etrace_compiler_hidden_group import (
+    HiddenGroup,
 )
 from brainscale._etrace_concepts import (
     # state
@@ -58,7 +63,6 @@ from brainscale._etrace_vjp_algorithms import (
 )
 from brainscale._etrace_vjp_compiler import (
     compile_vjp_graph,
-    HiddenTransition,
     CompiledVjpGraph
 )
 from brainscale._grad_exponential import (
@@ -69,7 +73,6 @@ from brainscale._misc import (
     NotSupportedError,
 )
 from . import nn
-
 # Added 2024-10-27
 from ._misc import deprecation_getattr
 

@@ -25,7 +25,7 @@ from typing import Dict, Any, Optional
 
 import brainstate as bst
 
-from ._etrace_compiler import CompiledGraph
+from ._etrace_compiler_graph import CompiledGraph
 from ._etrace_concepts import ETraceState
 from ._etrace_graph import ETraceGraphExecutor
 from ._typing import Path

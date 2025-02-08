@@ -27,21 +27,6 @@ if jax.__version_info__ < (0, 4, 38):
 else:
     from jax.extend.core import Var
 
-__all__ = [
-    'PyTree',
-    'StateID',
-    'WeightID',
-    'Size', 'Axis', 'Axes',
-    'Inputs',
-    'Outputs',
-    'HiddenVals', 'StateVals', 'WeightVals', 'ETraceVals',
-    'HiddenInVar', 'HiddenOutVar',
-    'dG_Inputs', 'dG_Weight', 'dG_Hidden', 'dG_State',
-    'ArrayLike', 'DType', 'DTypeLike', 'WeightXVar', 'WeightYVar',
-    'WeightXs', 'WeightDfs', 'TempData', 'Current', 'Conductance', 'Spike',
-    'Hid2WeightJacobian', 'Hid2HidJacobian', 'Hid2HidDiagJacobian',
-]
-
 ArrayLike = bst.typing.ArrayLike
 DType = bst.typing.DType
 DTypeLike = bst.typing.DTypeLike
@@ -74,7 +59,6 @@ dG_Weight = Sequence[PyTree]  # gradients of weights
 dG_Hidden = Sequence[PyTree]  # gradients of hidden states
 dG_State = Sequence[PyTree]  # gradients of other states
 
-
 HiddenGroupName = str
 ETraceX_Key = Var
 ETraceY_Key = Var
@@ -103,4 +87,3 @@ Hid2WeightJacobian = Tuple[
 ]
 Hid2HidJacobian = Dict[HidHidJac_Key, jax.Array]
 HidGroupJacobian = Sequence[jax.Array]
-

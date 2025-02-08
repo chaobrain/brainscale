@@ -97,3 +97,21 @@ to the outputs.
 
    stop_param_gradients
 
+
+
+Input Data for ETrace Learning
+-------------------------------
+
+The input data for eligibility trace-based learning should be in the form of
+:class:`SingleStepData` or :class:`MultiStepData`.
+
+
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+   :template: classtemplate.rst
+
+    SingleStepData
+    MultiStepData
+

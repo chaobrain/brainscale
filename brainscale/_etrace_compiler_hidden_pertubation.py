@@ -1,0 +1,204 @@
+# Copyright 2025 BDP Ecosystem Limited. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ==============================================================================
+
+
+from __future__ import annotations
+
+from typing import Dict, Set
+
+import jax.core
+
+from ._etrace_compiler_util import (
+    JaxprEvaluation,
+    check_unsupported_op,
+)
+from ._misc import git_issue_addr
+from ._typing import (
+    HiddenInVar,
+    HiddenOutVar,
+    Path
+)
+
+if jax.__version_info__ < (0, 4, 38):
+    from jax.core import Var, JaxprEqn, Jaxpr, ClosedJaxpr
+else:
+    from jax.extend.core import Var, JaxprEqn, Jaxpr, ClosedJaxpr
+
+__all__ = [
+    'add_hidden_perturbation_in_jaxpr',
+    'JaxprEvalForHiddenPerturbation',
+]
+
+
+class JaxprEvalForHiddenPerturbation(JaxprEvaluation):
+    """
+    Adding perturbations to the hidden states in the jaxpr, and replacing the hidden states with the perturbed states.
+
+    Args:
+        closed_jaxpr: The closed jaxpr for the model.
+        outvar_to_hidden_path: The mapping from the outvar to the state id.
+        hidden_outvar_to_invar: The mapping from the hidden output variable to the hidden input variable.
+        weight_invars: The weight input variables.
+        invar_to_hidden_path: The mapping from the weight input variable to the hidden state path.
+
+    Returns:
+        The revised closed jaxpr with the perturbations.
+
+    """
+
+    def __init__(
+        self,
+        closed_jaxpr: ClosedJaxpr,
+        hidden_outvar_to_invar: Dict[HiddenOutVar, HiddenInVar],
+        weight_invars: Set[Var],
+        invar_to_hidden_path: Dict[HiddenInVar, Path],
+        outvar_to_hidden_path: Dict[Var, Path],
+    ):
+        # necessary data structures
+        self.closed_jaxpr = closed_jaxpr
+
+        # initialize the super class
+        super().__init__(
+            weight_invars=weight_invars,
+            hidden_invars=set(hidden_outvar_to_invar.values()),
+            hidden_outvars=set(hidden_outvar_to_invar.keys()),
+            invar_to_hidden_path=invar_to_hidden_path,
+            outvar_to_hidden_path=outvar_to_hidden_path
+        )
+
+    def compile(self) -> ClosedJaxpr:
+        # new invars, the var order is the same as the hidden_outvars
+        self.perturb_invars = {
+            v: self._new_var_like(v)
+            for v in self.hidden_outvars
+        }
+
+        # the hidden states that are not found in the code
+        self.hidden_jaxvars_to_remove = set(self.hidden_outvars)
+
+        # final revised equations
+        self.revised_eqns = []
+
+        # revising equations
+        self._eval_jaxpr(self.closed_jaxpr.jaxpr)
+
+        # [final checking]
+        # If there are hidden states that are not found in the code, we raise an error.
+        if len(self.hidden_jaxvars_to_remove) > 0:
+            raise ValueError(
+                f'Error: we did not found your defined hidden state '
+                f'(see the following information) in the code. \n'
+                f'Please report an issue to the developers at {git_issue_addr}. \n'
+                f'The missed hidden states are: \n'
+                f'{[self.outvar_to_hidden_path[v] for v in self.hidden_jaxvars_to_remove]}'
+            )
+
+        # new jaxpr
+        jaxpr = Jaxpr(
+            constvars=list(self.closed_jaxpr.jaxpr.constvars),
+            invars=list(self.closed_jaxpr.jaxpr.invars) + list(self.perturb_invars.values()),
+            outvars=list(self.closed_jaxpr.jaxpr.outvars),
+            eqns=self.revised_eqns
+        )
+        revised_closed_jaxpr = ClosedJaxpr(jaxpr, self.closed_jaxpr.literals)
+
+        # remove the temporal data
+        self.perturb_invars = dict()
+        self.revised_eqns = []
+        self.hidden_jaxvars_to_remove = set()
+        return revised_closed_jaxpr
+
+    def _eval_pjit(self, eqn: JaxprEqn) -> None:
+        """
+        Evaluating the pjit primitive.
+        """
+        check_unsupported_op(self, eqn, 'jit')
+        self._eval_eqn(eqn)
+
+    def _add_perturb_eqn(
+        self,
+        eqn: JaxprEqn,
+        perturb_var: Var
+    ):
+        # ------------------------------------------------
+        #
+        # For the hidden var eqn, we want to add a perturbation:
+        #    y = f(x)  =>  y = f(x) + perturb_var
+        #
+        # Particularly, we first define a new variable
+        #    new_outvar = f(x)
+        # Then, we add a new equation for the perturbation
+        #    y = new_outvar + perturb_var
+        #
+        # ------------------------------------------------
+
+        hidden_var = eqn.outvars[0]
+
+        # Frist step, define the hidden var as a new variable
+        new_outvar = self._new_var_like(perturb_var)
+        old_eqn = eqn.replace(outvars=[new_outvar])
+        self.revised_eqns.append(old_eqn)
+
+        # Second step, add the perturbation equation
+        new_eqn = jax.core.new_jaxpr_eqn(
+            [new_outvar, perturb_var],
+            [hidden_var],
+            jax.lax.add_p,
+            {},
+            set(),
+            eqn.source_info.replace()
+        )
+        self.revised_eqns.append(new_eqn)
+
+    def _eval_eqn(self, eqn: JaxprEqn):
+        if len(eqn.outvars) == 1:
+            if eqn.outvars[0] in self.hidden_jaxvars_to_remove:
+                hidden_var = eqn.outvars[0]
+                self.hidden_jaxvars_to_remove.remove(hidden_var)
+                self._add_perturb_eqn(eqn, self.perturb_invars[hidden_var])
+                return
+        self.revised_eqns.append(eqn.replace())
+
+    def _new_var_like(self, v):
+        return Var('', jax.core.ShapedArray(v.aval.shape, v.aval.dtype))
+
+
+def add_hidden_perturbation_in_jaxpr(
+    closed_jaxpr: ClosedJaxpr,
+    hidden_outvar_to_invar: Dict[HiddenOutVar, HiddenInVar],
+    weight_invars: Set[Var],
+    invar_to_hidden_path: Dict[HiddenInVar, Path],
+    outvar_to_hidden_path: Dict[Var, Path],
+) -> ClosedJaxpr:
+    """
+    Adding perturbations to the hidden states in the jaxpr, and replacing the hidden states with the perturbed states.
+
+    Args:
+        closed_jaxpr: The closed jaxpr for the model.
+        outvar_to_hidden_path: The mapping from the outvar to the state id.
+        hidden_outvar_to_invar: The mapping from the hidden output variable to the hidden input variable.
+        weight_invars: The weight input variables.
+        invar_to_hidden_path: The mapping from the weight input variable to the hidden state path.
+
+    Returns:
+        The revised closed jaxpr with the perturbations.
+    """
+    return JaxprEvalForHiddenPerturbation(
+        closed_jaxpr=closed_jaxpr,
+        hidden_outvar_to_invar=hidden_outvar_to_invar,
+        weight_invars=weight_invars,
+        invar_to_hidden_path=invar_to_hidden_path,
+        outvar_to_hidden_path=outvar_to_hidden_path,
+    ).compile()

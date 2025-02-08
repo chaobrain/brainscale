@@ -96,18 +96,10 @@ class SignedWLinear(bst.nn.Module):
         self.in_size = in_size
         self.out_size = out_size
 
-        # w_mask
-        self.w_sign = w_sign
-
         # weights
         weight = init.param(w_init, [self.in_size[-1], self.out_size[-1]], allow_none=False)
-        self.weight_op = param_type(weight, self._operation, grad='full' if full_etrace else None)
-
-    def _operation(self, x, w):
-        if self.w_sign is None:
-            return u.math.matmul(x, u.math.abs(w))
-        else:
-            return u.math.matmul(x, u.math.abs(w) * self.w_sign)
+        op = MatMulOp(weight_mask=w_sign, weight_fn=u.math.abs)
+        self.weight_op = param_type({'weight': weight}, op=op, grad='full' if full_etrace else None)
 
     def update(self, x):
         return self.weight_op.execute(x)

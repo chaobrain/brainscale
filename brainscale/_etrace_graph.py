@@ -41,7 +41,7 @@ from typing import (Dict, Tuple)
 
 import brainstate as bst
 
-from ._etrace_compiler import CompiledGraph
+from ._etrace_compiler_graph import CompiledGraph
 from ._typing import (
     Outputs,
     HiddenVals,
@@ -133,7 +133,7 @@ class ETraceGraphExecutor:
 
         - ``hidden_groups``: Sequence[HiddenGroupV1]
         - ``hidden_to_group``: Dict[Path, HiddenGroupV1]  # Path is the hidden state path
-        - ``hidden_to_transition``: Dict[Path, HiddenTransition]  # Path is the hidden state path
+        - ``hidden_to_transition``: Dict[Path, Hidden2GroupTransition]  # Path is the hidden state path
 
 
         The augmented jaxpr is nearly identical to the original jaxpr, except that

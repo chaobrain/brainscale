@@ -329,4 +329,3 @@ class TestCompileGraphSNN(unittest.TestCase):
 
 class TestStateConsistency(unittest.TestCase):
     pass
-

@@ -39,7 +39,7 @@ from ._etrace_algorithms import (
     ETraceAlgorithm,
     EligibilityTraceData,
 )
-from ._etrace_compiler import (
+from ._etrace_compiler_graph import (
     HiddenParamOpRelation,
     HiddenGroup,
 )
@@ -53,7 +53,6 @@ from ._etrace_operators import ETraceOp
 from ._etrace_vjp_compiler import CompiledVjpGraph
 from ._etrace_vjp_graph import ETraceVjpGraphExecutor
 from ._misc import (
-    remove_units,
     check_dict_keys,
     hid_group_key,
     etrace_param_key,
@@ -940,26 +939,25 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
         etrace_vals: ETraceVals,
         running_index,
     ) -> Tuple[Outputs, HiddenVals, StateVals, ETraceVals]:
-        # ----------------------------------------------------------------------------------------------
-        #
-        # The main function to update the [model] and the [eligibility trace] states.
-        #
-        # Particularly, ``self.graph.solve_h2w_h2h_jacobian()`` is called to:
-        #   - compute the model output, the hidden states, and the other states
-        #   - compute the hidden-to-weight Jacobian and the hidden-to-hidden Jacobian
-        #
-        # Then, ``self._update_etrace_data`` is called to:
-        #   - update the eligibility trace data
-        #
-        # Moreover, this function returns:
-        #   - the model output
-        #   - the updated hidden states
-        #   - the updated other states
-        #   - the updated eligibility trace states
-        #
-        # Note that the weight values are assumed not changed in this function.
-        #
-        # ----------------------------------------------------------------------------------------------
+        """
+        The main function to update the [model] and the [eligibility trace] states.
+
+        Particularly, ``self.graph.solve_h2w_h2h_jacobian()`` is called to:
+          - compute the model output, the hidden states, and the other states
+          - compute the hidden-to-weight Jacobian and the hidden-to-hidden Jacobian
+
+        Then, ``self._update_etrace_data`` is called to:
+          - update the eligibility trace data
+
+        Moreover, this function returns:
+          - the model output
+          - the updated hidden states
+          - the updated other states
+          - the updated eligibility trace states
+
+        Note that the weight values are assumed not changed in this function.
+
+        """
 
         # state value assignment
         assign_state_values_v2(self.param_states, weight_vals, write=False)
@@ -1000,35 +998,34 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
         etrace_vals: ETraceVals,
         running_index: int,
     ) -> Tuple[Tuple[Outputs, HiddenVals, StateVals, ETraceVals], Any]:
+        """
+        The forward function to update the [model] and the [eligibility trace] states when computing
+        the VJP gradients.
 
-        # ----------------------------------------------------------------------------------------------
-        #
-        # The forward function to update the [model] and the [eligibility trace] states when computing
-        # the VJP gradients.
-        #
-        # Particularly, ``self.graph.solve_h2w_h2h_jacobian_and_l2h_vjp()`` is called to:
-        #
-        #   - compute the model output, the hidden states, and the other states
-        #   - compute the hidden-to-weight Jacobian and the hidden-to-hidden Jacobian
-        #   - compute the loss-to-hidden or loss-to-weight Jacobian
-        #
-        # Then, ``self._update_etrace_data`` is called to:
-        #   - update the eligibility trace data
-        #
-        # The forward function returns two parts of data:
-        #   - The first part is the functional returns (same as "self._update()" function):
-        #       * the model output
-        #       * the updated hidden states
-        #       * the updated other states
-        #       * the updated eligibility trace states
-        #
-        #   - The second part is the data used for backward gradient computation:
-        #       * the residuals of the model
-        #       * the eligibility trace data at the current/last time step
-        #       * the weight id to its value mapping
-        #       * the running index
-        #
-        # ----------------------------------------------------------------------------------------------
+        Particularly, ``self.graph.solve_h2w_h2h_jacobian_and_l2h_vjp()`` is called to:
+
+        - compute the model output, the hidden states, and the other states
+        - compute the hidden-to-weight Jacobian and the hidden-to-hidden Jacobian
+        - compute the loss-to-hidden or loss-to-weight Jacobian
+
+        Then, ``self._update_etrace_data`` is called to:
+
+        - update the eligibility trace data
+
+        The forward function returns two parts of data:
+
+        - The first part is the functional returns (same as "self._update()" function):
+              * the model output
+              * the updated hidden states
+              * the updated other states
+              * the updated eligibility trace states
+
+        - The second part is the data used for backward gradient computation:
+              * the residuals of the model
+              * the eligibility trace data at the current/last time step
+              * the weight id to its value mapping
+              * the running index
+        """
 
         # state value assignment
         assign_state_values_v2(self.param_states, weight_vals, write=False)
@@ -1078,19 +1075,18 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
         fwd_res,
         grads,
     ) -> Tuple[dG_Inputs, dG_Weight, dG_Hidden, dG_State, None, None]:
-        # ----------------------------------------------------------------------------------------------
-        #
-        # The backward function to compute the VJP gradients when the learning signal is arrived at
-        # this time step.
-        #
-        # There are three steps:
-        #
-        # 1. Interpret the forward results (eligibility trace) and top-down gradients (learning signal)
-        # 2. Compute the gradients of input arguments
-        #    (maybe necessary, but it can be optimized away but the XLA compiler)
-        # 3. Compute the gradients of the weights
-        #
-        # ----------------------------------------------------------------------------------------------
+        """
+        The backward function to compute the VJP gradients when the learning signal is arrived at
+        this time step.
+
+        There are three steps:
+
+        1. Interpret the forward results (eligibility trace) and top-down gradients (learning signal)
+        2. Compute the gradients of input arguments
+           (maybe necessary, but it can be optimized away but the XLA compiler)
+        3. Compute the gradients of the weights
+
+        """
 
         # [1] Interpret the fwd results
         #
@@ -1159,7 +1155,7 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
             dl_to_dh_at_t
         ) = jax.tree.unflatten(in_tree, cts_out)
 
-        if not self.graph.is_multi_step_vjp:
+        if self.graph.is_single_step_vjp:
 
             # TODO: the correspondence between the hidden states and the gradients
             #        should be checked.
@@ -1225,6 +1221,11 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
         r"""
         The method to solve the weight gradients, i.e., :math:`\partial L / \partial W`.
 
+        .. note::
+
+            This is the protocol method that should be implemented in the subclass.
+
+
         Particularly, the weight gradients are computed through::
 
         .. math::
@@ -1258,12 +1259,16 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
         self,
         running_index: Optional[int],
         etrace_vals_util_t_1: ETraceVals,
-        hid2weight_jac_multi_times: ETraceVals,
-        hid2hid_jac_multi_times,
+        hid2weight_jac_multi_times: Hid2WeightJacobian,
+        hid2hid_jac_multi_times: Sequence[jax.Array],
         weight_vals: WeightVals,
     ) -> ETraceVals:
         """
         The method to update the eligibility trace data.
+
+        .. note::
+
+            This is the protocol method that should be implemented in the subclass.
 
         Args:
           running_index: Optional[int], the running index.
@@ -1281,6 +1286,10 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
         """
         Get the eligibility trace data at the last time-step.
 
+        .. note::
+
+            This is the protocol method that should be implemented in the subclass.
+
         Returns:
           ETraceVals, the eligibility trace data.
         """
@@ -1289,6 +1298,10 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
     def _assign_etrace_data(self, etrace_vals: ETraceVals) -> None:
         """
         Assign the eligibility trace data to the states at the current time-step.
+
+        .. note::
+
+            This is the protocol method that should be implemented in the subclass.
 
         Args:
           etrace_vals: ETraceVals, the eligibility trace data.
@@ -1727,7 +1740,7 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
     #     weight_id = (
     #         id(weight)
     #         if isinstance(weight, bst.ParamState) else
-    #         id(self.graph.path_to_states[weight])
+    #         id(self.graph.path_to_state[weight])
     #     )
     #
     #     etrace_xs = dict()

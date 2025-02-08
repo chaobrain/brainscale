@@ -32,6 +32,25 @@ else:
     from jax.extend.core import Var
 
 
+def _remove_quantity(tree):
+    """
+    Remove the quantity from the tree.
+
+    Args:
+      tree: The tree.
+
+    Returns:
+      The tree without the quantity.
+    """
+
+    def fn(x):
+        if isinstance(x, u.Quantity):
+            return x.magnitude
+        return x
+
+    return jax.tree.map(fn, tree, is_leaf=lambda x: isinstance(x, u.Quantity))
+
+
 def check_dict_keys(
     d1: dict,
     d2: dict,
