@@ -281,18 +281,84 @@ def abstractify_model(
 
 
 class ModelInfo(NamedTuple):
+    """
+    The model information for the etrace compiler.
+
+    The model information contains the at least five categories of information:
+
+    1. The stateful model.
+
+         - ``stateful_model``: The stateful model is the model that compiles the model
+           into abstract jaxpr representation.
+
+    2. The jaxpr.
+
+         The jaxpr is the abstract representation of the model.
+
+         - ``closed_jaxpr``: The closed jaxpr is the closed jaxpr representation of the model.
+         - ``jaxpr``: The jaxpr is the open jaxpr representation of the model.
+
+    3. The states.
+
+        - ``retrieved_model_states``: The model states that are retrieved from the ``model.states()`` function,
+           which has well-defined paths and structures.
+        - ``compiled_model_states``: The model states that are compiled from the stateful model, which is
+           accurate and consistent with the model jaxpr, but loss the path information.
+        - ``state_id_to_path``: The mapping from the state id to the state path.
+
+    4. The hidden states.
+
+        - ``hidden_path_to_invar``: The mapping from the hidden path to the input variable.
+        - ``hidden_path_to_outvar``: The mapping from the hidden path to the output variable.
+        - ``invar_to_hidden_path``: The mapping from the input variable to the hidden path.
+        - ``outvar_to_hidden_path``: The mapping from the output variable to the hidden path.
+        - ``hidden_outvar_to_invar``: The mapping from the output variable to the input variable.
+
+    5. The parameter weights.
+
+        - ``weight_invars``: The weight input variables.
+        - ``weight_path_to_invars``: The mapping from the weight path to the input variables.
+        - ``invar_to_weight_path``: The mapping from the input variable to the weight path.
+
+    Args:
+        stateful_model: The stateful model.
+        closed_jaxpr: The closed jaxpr.
+        jaxpr: The jaxpr.
+        retrieved_model_states: The retrieved model states.
+        compiled_model_states: The compiled model states.
+        state_id_to_path: The mapping from the state id to the state path.
+        hidden_path_to_invar: The mapping from the hidden path to the input variable.
+        hidden_path_to_outvar: The mapping from the hidden path to the output variable.
+        invar_to_hidden_path: The mapping from the input variable to the hidden path.
+        outvar_to_hidden_path: The mapping from the output variable to the hidden path.
+        hidden_outvar_to_invar: The mapping from the output variable to the input variable.
+        weight_invars: The weight input variables.
+        weight_path_to_invars: The mapping from the weight path to the input variables.
+        invar_to_weight_path: The mapping from the input variable to the weight path.
+    """
+    # stateful model
     stateful_model: bst.compile.StatefulFunction
+
+    # jaxpr
+    closed_jaxpr: jax.core.ClosedJaxpr
+    jaxpr: jax.core.Jaxpr
+
+    # states
     retrieved_model_states: Dict[Path, bst.State]
     compiled_model_states: Sequence[bst.State]
     state_id_to_path: Dict[StateID, Path]
-    closed_jaxpr: jax.core.ClosedJaxpr
-    jaxpr: jax.core.Jaxpr
+
+    # hidden states
     hidden_path_to_invar: Dict[Path, Var]
-    invar_to_hidden_path: Dict[Var, Path]
     hidden_path_to_outvar: Dict[Path, Var]
+    invar_to_hidden_path: Dict[Var, Path]
     outvar_to_hidden_path: Dict[Var, Path]
     hidden_outvar_to_invar: Dict[Var, Var]
+
+    # parameter weights
     weight_invars: Set[Var]
+    weight_path_to_invars: Dict[Path, List[Var]]
+    invar_to_weight_path: Dict[Var, Path]
 
 
 def extract_model_info(
@@ -300,6 +366,17 @@ def extract_model_info(
     *model_args,
     **model_kwargs
 ) -> ModelInfo:
+    """
+    Extracting the model information for the etrace compiler.
+
+    Args:
+        model: The model to extract the information.
+        model_args: The arguments of the model.
+        model_kwargs: The keyword arguments of the model.
+
+    Returns:
+        The model information.
+    """
     (
         stateful_model,
         model_retrieved_states
@@ -335,7 +412,7 @@ def extract_model_info(
     outvars_with_state_tree = _remove_quantity(outvars_with_state_tree)
 
     # -- checking weights as invar -- #
-    weight_path_to_invar = {
+    weight_path_to_invars = {
         state_id_to_path[id(st)]: jax.tree.leaves(invar)
         for invar, st in zip(invars_with_state_tree, compiled_states)
         if isinstance(st, ETraceParam)
@@ -348,6 +425,11 @@ def extract_model_info(
     invar_to_hidden_path = {
         invar: path
         for path, invar in hidden_path_to_invar.items()
+    }
+    invar_to_weight_path = {  # many-to-one mapping
+        v: k
+        for k, vs in weight_path_to_invars.items()
+        for v in vs
     }
 
     # -- checking states as outvar -- #
@@ -364,19 +446,30 @@ def extract_model_info(
         outvar: hidden_path_to_invar[hid]
         for hid, outvar in hidden_path_to_outvar.items()
     }
-    weight_invars = set([v for vs in weight_path_to_invar.values() for v in vs])
+    weight_invars = set([v for vs in weight_path_to_invars.values() for v in vs])
 
     return ModelInfo(
+        # stateful model
         stateful_model=stateful_model,
+
+        # jaxpr
+        closed_jaxpr=closed_jaxpr,
+        jaxpr=jaxpr,
+
+        # states
         retrieved_model_states=model_retrieved_states,
         compiled_model_states=compiled_states,
         state_id_to_path=state_id_to_path,
-        closed_jaxpr=closed_jaxpr,
-        jaxpr=jaxpr,
+
+        # hidden states
         hidden_path_to_invar=hidden_path_to_invar,
         invar_to_hidden_path=invar_to_hidden_path,
         hidden_path_to_outvar=hidden_path_to_outvar,
         outvar_to_hidden_path=outvar_to_hidden_path,
         hidden_outvar_to_invar=hidden_outvar_to_invar,
-        weight_invars=weight_invars
+
+        # parameter weights
+        weight_invars=weight_invars,
+        weight_path_to_invars=weight_path_to_invars,
+        invar_to_weight_path=invar_to_weight_path,
     )

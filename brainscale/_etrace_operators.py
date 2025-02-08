@@ -93,7 +93,7 @@ def is_etrace_op_enable_gradient(jit_param_name: str):
     return jit_param_name.startswith(_etrace_op_name_enable_grad)
 
 
-def is_etrace_op_name_elemwise(jit_param_name: str):
+def is_etrace_op_elemwise(jit_param_name: str):
     """
     Check whether the jitted parameter name is the element-wise operator.
     """

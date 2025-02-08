@@ -1,4 +1,4 @@
-# Copyright 2025 BDP Ecosystem Limited. All Rights Reserved.
+# Copyright 2024 BDP Ecosystem Limited. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,7 +13,6 @@
 # limitations under the License.
 # ==============================================================================
 
-
 from pprint import pprint
 
 import brainstate as bst
@@ -21,8 +20,8 @@ import brainunit as u
 import pytest
 
 import brainscale
-from brainscale._etrace_compiler_hid_param_op import (
-    find_hidden_param_op_relations_from_module,
+from brainscale._etrace_compiler_util import (
+    extract_model_info,
 )
 from brainscale._etrace_model_test import (
     IF_Delta_Dense_Layer,
@@ -38,7 +37,7 @@ from brainscale._etrace_model_test import (
 )
 
 
-class TestFindRelationsFromModule:
+class Test_extract_model_info:
     def test_gru_one_layer(self):
         n_in = 3
         n_out = 4
@@ -47,14 +46,7 @@ class TestFindRelationsFromModule:
         bst.nn.init_all_states(gru)
 
         input = bst.random.rand(n_in)
-        relations = find_hidden_param_op_relations_from_module(gru, input)
-
-        print()
-        pprint(relations)
-        assert (len(relations) == 2)
-        for relation in relations:
-            assert len(relation.connected_hidden_paths) == 1
-            assert relation.connected_hidden_paths[0] == ('h',)
+        minfo = extract_model_info(gru, input)
 
     @pytest.mark.parametrize(
         'cls,',
@@ -81,8 +73,8 @@ class TestFindRelationsFromModule:
         with bst.environ.context(dt=0.1 * u.ms):
             layer = cls(n_in, n_out)
             bst.nn.init_all_states(layer)
-            relations = find_hidden_param_op_relations_from_module(layer, input)
-            pprint(relations)
+            minfo = extract_model_info(layer, input)
+            pprint(minfo)
 
     @pytest.mark.parametrize(
         'cls,',
@@ -110,5 +102,6 @@ class TestFindRelationsFromModule:
         with bst.environ.context(dt=0.1 * u.ms):
             layer = bst.nn.Sequential(cls(n_in, n_out), cls(n_out, n_out))
             bst.nn.init_all_states(layer)
-            relations = find_hidden_param_op_relations_from_module(layer, input)
-            pprint(relations)
+            minfo = extract_model_info(layer, input)
+            pprint(minfo)
+

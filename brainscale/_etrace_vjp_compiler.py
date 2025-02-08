@@ -55,7 +55,7 @@ from ._etrace_compiler_graph import (
     CompiledGraph,
 )
 from ._etrace_compiler_hid_param_op import (
-    find_hidden_param_op_relations,
+    find_hidden_param_op_relations_from_jaxpr,
     HiddenParamOpRelation,
 )
 from ._etrace_compiler_hidden_group import (
@@ -257,7 +257,7 @@ def compile_vjp_graph(
     order_hidden_group_index(hidden_groups)
 
     # -- evaluating the jaxpr for (hidden, weight, op) relationships -- #
-    hidden_param_op_relations = find_hidden_param_op_relations(
+    hidden_param_op_relations = find_hidden_param_op_relations_from_jaxpr(
         jaxpr=jaxpr,
         hidden_outvar_to_invar=hidden_outvar_to_invar,
         weight_path_to_vars=weight_path_to_invar,
