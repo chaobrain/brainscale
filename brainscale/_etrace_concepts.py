@@ -732,7 +732,7 @@ class FakeElemWiseParam(object):
                 f'op should be ElemWiseOp. '
                 f'But we got {type(op)}.'
             )
-            op = op.xy_to_w
+            op = op.xw_to_y
         self.op = op
         self.value = weight
         self.name = name

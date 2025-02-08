@@ -17,11 +17,9 @@ import os
 
 os.environ['JAX_TRACEBACK_FILTERING'] = 'off'
 
-import unittest
-
 import brainstate as bst
 import brainunit as u
-
+import pytest
 from pprint import pprint
 import brainscale
 from brainscale._etrace_model_test import (
@@ -38,16 +36,97 @@ from brainscale._etrace_model_test import (
 )
 
 
-class TestDiagOn(unittest.TestCase):
+class TestDiagOn:
 
-    def test_rnn_no_bptt(self):
-        for cls in [
+    @pytest.mark.parametrize(
+        "cls",
+        [
             brainscale.nn.GRUCell,
             brainscale.nn.LSTMCell,
             brainscale.nn.LRUCell,
             brainscale.nn.MGUCell,
             brainscale.nn.MinimalRNNCell,
-        ]:
+        ]
+    )
+    def test_rnn_no_bptt(self, cls):
+        n_in = 4
+        n_rec = 5
+        n_seq = 10
+        model = cls(n_in, n_rec)
+        model = bst.nn.init_all_states(model)
+
+        inputs = bst.random.randn(n_seq, n_in)
+        algorithm = brainscale.DiagIODimAlgorithm(model, decay_or_rank=0.9)
+        algorithm.compile_graph(inputs[0])
+
+        outs = bst.compile.for_loop(algorithm, inputs)
+        print(outs.shape)
+
+        @bst.compile.jit
+        def grad_no_bptt(inp):
+            return bst.augment.grad(
+                lambda inp: algorithm(inp).sum(),
+                model.states(bst.ParamState)
+            )(inp)
+
+        grads = grad_no_bptt(inputs[0])
+        grads = grad_no_bptt(inputs[1])
+        pprint(grads)
+
+    @pytest.mark.parametrize(
+        "cls",
+        [
+            brainscale.nn.GRUCell,
+            brainscale.nn.LSTMCell,
+            brainscale.nn.LRUCell,
+            brainscale.nn.MGUCell,
+            brainscale.nn.MinimalRNNCell,
+        ]
+    )
+    def test_rnn_has_bptt(self, cls):
+        n_in = 4
+        n_rec = 5
+        n_seq = 10
+        model = cls(n_in, n_rec)
+        model = bst.nn.init_all_states(model)
+
+        inputs = bst.random.randn(n_seq, n_in)
+        algorithm = brainscale.DiagIODimAlgorithm(model, decay_or_rank=0.9, vjp_method='multi-step')
+        algorithm.compile_graph(inputs[0])
+
+        outs = algorithm(brainscale.MultiStepData(inputs))
+        print(outs.shape)
+
+        @bst.compile.jit
+        def grad_no_bptt(inp):
+            return bst.augment.grad(
+                lambda inp: algorithm(brainscale.MultiStepData(inp)).sum(),
+                model.states(bst.ParamState)
+            )(inp)
+
+        grads = grad_no_bptt(inputs[:1])
+        pprint(grads)
+        print()
+        grads = grad_no_bptt(inputs[1:2])
+        pprint(grads)
+
+    @pytest.mark.parametrize(
+        "cls",
+        [
+            IF_Delta_Dense_Layer,
+            LIF_ExpCo_Dense_Layer,
+            ALIF_ExpCo_Dense_Layer,
+            LIF_ExpCu_Dense_Layer,
+            LIF_STDExpCu_Dense_Layer,
+            LIF_STPExpCu_Dense_Layer,
+            ALIF_ExpCu_Dense_Layer,
+            ALIF_Delta_Dense_Layer,
+            ALIF_STDExpCu_Dense_Layer,
+            ALIF_STPExpCu_Dense_Layer,
+        ]
+    )
+    def test_snn_no_bptt(self, cls):
+        with bst.environ.context(dt=0.1 * u.ms):
             n_in = 4
             n_rec = 5
             n_seq = 10
@@ -72,14 +151,25 @@ class TestDiagOn(unittest.TestCase):
             grads = grad_no_bptt(inputs[1])
             pprint(grads)
 
-    def test_rnn_has_bptt(self):
-        for cls in [
-            brainscale.nn.GRUCell,
-            brainscale.nn.LSTMCell,
-            brainscale.nn.LRUCell,
-            brainscale.nn.MGUCell,
-            brainscale.nn.MinimalRNNCell,
-        ]:
+    @pytest.mark.parametrize(
+        "cls",
+        [
+            IF_Delta_Dense_Layer,
+            LIF_ExpCo_Dense_Layer,
+            ALIF_ExpCo_Dense_Layer,
+            LIF_ExpCu_Dense_Layer,
+            LIF_STDExpCu_Dense_Layer,
+            LIF_STPExpCu_Dense_Layer,
+            ALIF_ExpCu_Dense_Layer,
+            ALIF_Delta_Dense_Layer,
+            ALIF_STDExpCu_Dense_Layer,
+            ALIF_STPExpCu_Dense_Layer,
+        ]
+    )
+    def test_snn_has_bptt(self, cls):
+        with bst.environ.context(dt=0.1 * u.ms):
+            print(cls)
+
             n_in = 4
             n_rec = 5
             n_seq = 10
@@ -106,163 +196,83 @@ class TestDiagOn(unittest.TestCase):
             grads = grad_no_bptt(inputs[1:2])
             pprint(grads)
 
-    def test_snn_no_bptt(self):
-        bst.environ.set(dt=0.1 * u.ms)
 
-        for cls in [
-            IF_Delta_Dense_Layer,
-            LIF_ExpCo_Dense_Layer,
-            ALIF_ExpCo_Dense_Layer,
-            LIF_ExpCu_Dense_Layer,
-            LIF_STDExpCu_Dense_Layer,
-            LIF_STPExpCu_Dense_Layer,
-            ALIF_ExpCu_Dense_Layer,
-            ALIF_Delta_Dense_Layer,
-            ALIF_STDExpCu_Dense_Layer,
-            ALIF_STPExpCu_Dense_Layer,
-        ]:
-            print(cls)
-
-            n_in = 4
-            n_rec = 5
-            n_seq = 10
-            model = cls(n_in, n_rec)
-            model = bst.nn.init_all_states(model)
-
-            inputs = bst.random.randn(n_seq, n_in)
-            algorithm = brainscale.DiagIODimAlgorithm(model, decay_or_rank=0.9)
-            algorithm.compile_graph(inputs[0])
-
-            outs = bst.compile.for_loop(algorithm, inputs)
-            print(outs.shape)
-
-            @bst.compile.jit
-            def grad_no_bptt(inp):
-                return bst.augment.grad(
-                    lambda inp: algorithm(inp).sum(),
-                    model.states(bst.ParamState)
-                )(inp)
-
-            grads = grad_no_bptt(inputs[0])
-            grads = grad_no_bptt(inputs[1])
-            pprint(grads)
-
-    def test_snn_has_bptt(self):
-        bst.environ.set(dt=0.1 * u.ms)
-
-        for cls in [
-            IF_Delta_Dense_Layer,
-            LIF_ExpCo_Dense_Layer,
-            ALIF_ExpCo_Dense_Layer,
-            LIF_ExpCu_Dense_Layer,
-            LIF_STDExpCu_Dense_Layer,
-            LIF_STPExpCu_Dense_Layer,
-            ALIF_ExpCu_Dense_Layer,
-            ALIF_Delta_Dense_Layer,
-            ALIF_STDExpCu_Dense_Layer,
-            ALIF_STPExpCu_Dense_Layer,
-        ]:
-            print(cls)
-
-            n_in = 4
-            n_rec = 5
-            n_seq = 10
-            model = cls(n_in, n_rec)
-            model = bst.nn.init_all_states(model)
-
-            inputs = bst.random.randn(n_seq, n_in)
-            algorithm = brainscale.DiagIODimAlgorithm(model, decay_or_rank=0.9, vjp_method='multi-step')
-            algorithm.compile_graph(inputs[0])
-
-            outs = algorithm(brainscale.MultiStepData(inputs))
-            print(outs.shape)
-
-            @bst.compile.jit
-            def grad_no_bptt(inp):
-                return bst.augment.grad(
-                    lambda inp: algorithm(brainscale.MultiStepData(inp)).sum(),
-                    model.states(bst.ParamState)
-                )(inp)
-
-            grads = grad_no_bptt(inputs[:1])
-            pprint(grads)
-            print()
-            grads = grad_no_bptt(inputs[1:2])
-            pprint(grads)
-
-
-class TestDiagOn2(unittest.TestCase):
-
-    def test_rnn_no_bptt(self):
-        for cls in [
+class TestDiagOn2:
+    @pytest.mark.parametrize(
+        "cls",
+        [
             brainscale.nn.GRUCell,
             brainscale.nn.LSTMCell,
             brainscale.nn.LRUCell,
             brainscale.nn.MGUCell,
             brainscale.nn.MinimalRNNCell,
-        ]:
-            n_in = 4
-            n_rec = 5
-            n_seq = 10
-            model = cls(n_in, n_rec)
-            model = bst.nn.init_all_states(model)
+        ]
+    )
+    def test_rnn_no_bptt(self, cls):
+        n_in = 4
+        n_rec = 5
+        n_seq = 10
+        model = cls(n_in, n_rec)
+        model = bst.nn.init_all_states(model)
 
-            inputs = bst.random.randn(n_seq, n_in)
-            algorithm = brainscale.DiagParamDimAlgorithm(model)
-            algorithm.compile_graph(inputs[0])
+        inputs = bst.random.randn(n_seq, n_in)
+        algorithm = brainscale.DiagParamDimAlgorithm(model)
+        algorithm.compile_graph(inputs[0])
 
-            outs = bst.compile.for_loop(algorithm, inputs)
-            print(outs.shape)
+        outs = bst.compile.for_loop(algorithm, inputs)
+        print(outs.shape)
 
-            @bst.compile.jit
-            def grad_no_bptt(inp):
-                return bst.augment.grad(
-                    lambda inp: algorithm(inp).sum(),
-                    model.states(bst.ParamState)
-                )(inp)
+        @bst.compile.jit
+        def grad_no_bptt(inp):
+            return bst.augment.grad(
+                lambda inp: algorithm(inp).sum(),
+                model.states(bst.ParamState)
+            )(inp)
 
-            grads = grad_no_bptt(inputs[0])
-            grads = grad_no_bptt(inputs[1])
-            pprint(grads)
+        grads = grad_no_bptt(inputs[0])
+        grads = grad_no_bptt(inputs[1])
+        pprint(grads)
 
-    def test_rnn_has_bptt(self):
-        for cls in [
+    @pytest.mark.parametrize(
+        "cls",
+        [
             brainscale.nn.GRUCell,
             brainscale.nn.LSTMCell,
             brainscale.nn.LRUCell,
             brainscale.nn.MGUCell,
             brainscale.nn.MinimalRNNCell,
-        ]:
-            n_in = 4
-            n_rec = 5
-            n_seq = 10
-            model = cls(n_in, n_rec)
-            model = bst.nn.init_all_states(model)
+        ]
+    )
+    def test_rnn_has_bptt(self, cls):
+        n_in = 4
+        n_rec = 5
+        n_seq = 10
+        model = cls(n_in, n_rec)
+        model = bst.nn.init_all_states(model)
 
-            inputs = bst.random.randn(n_seq, n_in)
-            algorithm = brainscale.DiagParamDimAlgorithm(model, vjp_method='multi-step')
-            algorithm.compile_graph(inputs[0])
+        inputs = bst.random.randn(n_seq, n_in)
+        algorithm = brainscale.DiagParamDimAlgorithm(model, vjp_method='multi-step')
+        algorithm.compile_graph(inputs[0])
 
-            outs = algorithm(brainscale.MultiStepData(inputs))
-            print(outs.shape)
+        outs = algorithm(brainscale.MultiStepData(inputs))
+        print(outs.shape)
 
-            @bst.compile.jit
-            def grad_no_bptt(inp):
-                return bst.augment.grad(
-                    lambda inp: algorithm(brainscale.MultiStepData(inp)).sum(),
-                    model.states(bst.ParamState)
-                )(inp)
+        @bst.compile.jit
+        def grad_no_bptt(inp):
+            return bst.augment.grad(
+                lambda inp: algorithm(brainscale.MultiStepData(inp)).sum(),
+                model.states(bst.ParamState)
+            )(inp)
 
-            grads = grad_no_bptt(inputs[:1])
-            pprint(grads)
-            print()
-            grads = grad_no_bptt(inputs[1:2])
-            pprint(grads)
+        grads = grad_no_bptt(inputs[:1])
+        pprint(grads)
+        print()
+        grads = grad_no_bptt(inputs[1:2])
+        pprint(grads)
 
-    def test_snn_no_bptt(self):
-        bst.environ.set(dt=0.1 * u.ms)
-
-        for cls in [
+    @pytest.mark.parametrize(
+        "cls",
+        [
             IF_Delta_Dense_Layer,
             LIF_ExpCo_Dense_Layer,
             ALIF_ExpCo_Dense_Layer,
@@ -273,7 +283,10 @@ class TestDiagOn2(unittest.TestCase):
             ALIF_Delta_Dense_Layer,
             ALIF_STDExpCu_Dense_Layer,
             ALIF_STPExpCu_Dense_Layer,
-        ]:
+        ]
+    )
+    def test_snn_no_bptt(self, cls):
+        with bst.environ.context(dt=0.1 * u.ms):
             print(cls)
 
             n_in = 4
@@ -305,10 +318,9 @@ class TestDiagOn2(unittest.TestCase):
             for k in grads:
                 assert u.get_unit(param_states[k]) == u.get_unit(grads[k])
 
-    def test_snn_has_bptt(self):
-        bst.environ.set(dt=0.1 * u.ms)
-
-        for cls in [
+    @pytest.mark.parametrize(
+        "cls",
+        [
             IF_Delta_Dense_Layer,
             LIF_ExpCo_Dense_Layer,
             ALIF_ExpCo_Dense_Layer,
@@ -319,7 +331,10 @@ class TestDiagOn2(unittest.TestCase):
             ALIF_Delta_Dense_Layer,
             ALIF_STDExpCu_Dense_Layer,
             ALIF_STPExpCu_Dense_Layer,
-        ]:
+        ]
+    )
+    def test_snn_has_bptt(self, cls):
+        with bst.environ.context(dt=0.1 * u.ms):
             print(cls)
 
             n_in = 4

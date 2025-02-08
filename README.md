@@ -1,7 +1,10 @@
-# Scalable Online Learning in Biological Neural Networks
+<h1 align="center">BrainScale</h1>
+<h2 align="center">Scalable Online Learning in Biological Neural Networks</h2>
+
+[//]: # (# Scalable Online Learning in Biological Neural Networks)
 
 <p align="center">
-  	<img alt="Header image of brainscale." src="https://raw.githubusercontent.com/chaobrain/brainscale/main/docs/_static/brainscale.jpg" width=50%>
+  	<img alt="Header image of brainscale." src="https://raw.githubusercontent.com/chaobrain/brainscale/main/docs/_static/brainscale.jpg" width=40%>
 </p> 
 
 
