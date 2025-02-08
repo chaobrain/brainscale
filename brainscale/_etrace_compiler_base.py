@@ -16,7 +16,7 @@
 from __future__ import annotations
 
 import functools
-from typing import Dict, Sequence, Set, List, NamedTuple
+from typing import Dict, Sequence, Set, List, NamedTuple, Tuple, Any
 
 import brainstate as bst
 import jax.core
@@ -28,12 +28,21 @@ from ._etrace_concepts import (
 from ._etrace_operators import is_etrace_op, is_etrace_op_enable_gradient
 from ._misc import NotSupportedError, unknown_state_path
 from ._misc import _remove_quantity
-from ._typing import Path, StateID
+from ._state_managment import sequence_split_state_values
+from ._typing import (
+    Path,
+    StateID,
+    Inputs,
+    Outputs,
+    ETraceVals,
+    StateVals,
+    TempData,
+)
 
 if jax.__version_info__ < (0, 4, 38):
-    from jax.core import Var, JaxprEqn
+    from jax.core import Var, JaxprEqn, Jaxpr, ClosedJaxpr
 else:
-    from jax.extend.core import Var, JaxprEqn
+    from jax.extend.core import Var, JaxprEqn, ClosedJaxpr
 
 
 def find_matched_vars(
@@ -110,6 +119,7 @@ class JaxprEvaluation(object):
         invar_to_hidden_path: The mapping from the input variables to the hidden states.
         outvar_to_hidden_path: The mapping from the output variables to the hidden states.
     """
+    __module__ = 'brainscale'
 
     def __init__(
         self,
@@ -320,33 +330,19 @@ class ModelInfo(NamedTuple):
         - ``weight_path_to_invars``: The mapping from the weight path to the input variables.
         - ``invar_to_weight_path``: The mapping from the input variable to the weight path.
 
-    Args:
-        stateful_model: The stateful model.
-        closed_jaxpr: The closed jaxpr.
-        jaxpr: The jaxpr.
-        retrieved_model_states: The retrieved model states.
-        compiled_model_states: The compiled model states.
-        state_id_to_path: The mapping from the state id to the state path.
-        hidden_path_to_invar: The mapping from the hidden path to the input variable.
-        hidden_path_to_outvar: The mapping from the hidden path to the output variable.
-        invar_to_hidden_path: The mapping from the input variable to the hidden path.
-        outvar_to_hidden_path: The mapping from the output variable to the hidden path.
-        hidden_outvar_to_invar: The mapping from the output variable to the input variable.
-        weight_invars: The weight input variables.
-        weight_path_to_invars: The mapping from the weight path to the input variables.
-        invar_to_weight_path: The mapping from the input variable to the weight path.
     """
     # stateful model
     stateful_model: bst.compile.StatefulFunction
 
     # jaxpr
     closed_jaxpr: jax.core.ClosedJaxpr
-    jaxpr: jax.core.Jaxpr
 
     # states
-    retrieved_model_states: Dict[Path, bst.State]
+    retrieved_model_states: bst.util.FlattedDict[Path, bst.State]
     compiled_model_states: Sequence[bst.State]
     state_id_to_path: Dict[StateID, Path]
+    state_tree_invars: bst.typing.PyTree[Var]
+    state_tree_outvars: bst.typing.PyTree[Var]
 
     # hidden states
     hidden_path_to_invar: Dict[Path, Var]
@@ -359,6 +355,140 @@ class ModelInfo(NamedTuple):
     weight_invars: Set[Var]
     weight_path_to_invars: Dict[Path, List[Var]]
     invar_to_weight_path: Dict[Var, Path]
+
+    # output
+    num_var_out: int  # number of original output variables
+    num_var_state: int  # number of state variable outputs
+
+    def dict(self) -> Dict[str, Any]:
+        return dict(self._asdict())
+
+    @property
+    def jaxpr(self) -> jax.core.Jaxpr:
+        """
+        The jaxpr of the model.
+        """
+        return self.closed_jaxpr.jaxpr
+
+    def add_jaxpr_outs(
+        self,
+        jax_vars: Sequence[Var],
+        inplace: bool = True,
+    ) -> ModelInfo:
+        assert all(isinstance(v, Var) for v in jax_vars), 'The jax_vars should be the instance of Var.'
+        jaxpr = Jaxpr(
+            constvars=list(self.jaxpr.constvars),
+            invars=list(self.jaxpr.invars),
+            outvars=list(jax_vars),
+            eqns=list(self.jaxpr.eqns),
+            effects=self.jaxpr.effects,
+            debug_info=self.jaxpr.debug_info,
+        )
+        closed_jaxpr = ClosedJaxpr(jaxpr, self.closed_jaxpr.consts)
+
+        if inplace:
+            items = self.dict()
+            items['closed_jaxpr'] = closed_jaxpr
+            return ModelInfo(**items)
+
+        else:
+            self.closed_jaxpr = closed_jaxpr
+            return self
+
+    def split_state_outvars(self):
+        """
+        Splitting the state outvars into three parts: weight, hidden, and other states.
+
+        Returns:
+            weight_jaxvar_tree: The weight tree of jax Var.
+            hidden_jaxvar: The hidden tree of jax Var.
+            other_state_jaxvar_tree: The other state tree of jax Var.
+        """
+        (
+            weight_jaxvar_tree,
+            hidden_jaxvar,
+            other_state_jaxvar_tree
+        ) = sequence_split_state_values(self.compiled_model_states, self.state_tree_outvars)
+        return weight_jaxvar_tree, hidden_jaxvar, other_state_jaxvar_tree
+
+    def jaxpr_call(
+        self,
+        *args: Inputs,
+    ) -> Tuple[
+        Outputs,
+        ETraceVals,
+        StateVals,
+        TempData,
+    ]:
+        """
+        Computing the model according to the given inputs and parameters by using the compiled jaxpr.
+
+        Args:
+            args: The inputs of the model.
+
+        Returns:
+            out: The output of the model.
+            etrace_vals: The values for etrace states.
+            oth_state_vals: The other state values.
+            temps: The temporary intermediate values.
+        """
+
+        # state checking
+        old_state_vals = [st.value for st in self.compiled_model_states]
+
+        # parameters
+        args = jax.tree.leaves((args, old_state_vals))
+
+        # calling the function
+        jaxpr_outs = jax.core.eval_jaxpr(
+            self.closed_jaxpr.jaxpr,
+            self.closed_jaxpr.consts,
+            *args
+        )
+
+        # intermediate values
+        #
+        # "jaxpr_outs[:self.num_out]" corresponds to model original outputs
+        #     - Outputs
+        # "jaxpr_outs[self.num_out:]" corresponds to extra output in  "augmented_jaxpr"
+        #     - others
+        temps = {
+            v: r for v, r in
+            zip(
+                self.jaxpr.outvars[self.num_var_out:],
+                jaxpr_outs[self.num_var_out:]
+            )
+        }
+
+        #
+        # recovery outputs of ``stateful_model``
+        #
+        cache_key = self.stateful_model.get_arg_cache_key(*args)
+        i_start = self.num_var_out
+        i_end = i_start + self.num_var_state
+        out, new_state_vals = self.stateful_model.get_out_treedef(cache_key).unflatten(jaxpr_outs[:i_end])
+
+        #
+        # check state value
+        assert len(old_state_vals) == len(new_state_vals), 'State length mismatch.'
+
+        #
+        # split the state values
+        #
+        etrace_vals = dict()
+        oth_state_vals = dict()
+        for st, st_val in zip(self.compiled_model_states, new_state_vals):
+            if isinstance(st, ETraceState):
+                etrace_vals[self.state_id_to_path[id(st)]] = st_val
+            elif isinstance(st, bst.ParamState):
+                # assume they are not changed
+                pass
+            else:
+                oth_state_vals[self.state_id_to_path[id(st)]] = st_val
+        return out, etrace_vals, oth_state_vals, temps
+
+
+ModelInfo.__module__ = 'brainscale'
 
 
 def extract_model_info(
@@ -377,6 +507,8 @@ def extract_model_info(
     Returns:
         The model information.
     """
+
+    # abstract the model
     (
         stateful_model,
         model_retrieved_states
@@ -386,6 +518,7 @@ def extract_model_info(
         **model_kwargs
     )
 
+    # state information
     cache_key = stateful_model.get_arg_cache_key(*model_args, **model_kwargs)
     compiled_states = stateful_model.get_states(cache_key)
 
@@ -397,6 +530,7 @@ def extract_model_info(
     closed_jaxpr = stateful_model.get_jaxpr(cache_key)
     jaxpr = closed_jaxpr.jaxpr
 
+    # out information
     out_shapes = stateful_model.get_out_shapes(cache_key)[0]
     state_vals = [state.value for state in compiled_states]
     in_avals, _ = jax.tree.flatten((model_args, model_kwargs))
@@ -404,22 +538,22 @@ def extract_model_info(
     num_in = len(in_avals)
     num_out = len(out_avals)
     state_avals, state_tree = jax.tree.flatten(state_vals)
-    invars_with_state_tree = jax.tree.unflatten(state_tree, jaxpr.invars[num_in:])
-    outvars_with_state_tree = jax.tree.unflatten(state_tree, jaxpr.outvars[num_out:])
+    state_tree_invars = jax.tree.unflatten(state_tree, jaxpr.invars[num_in:])
+    state_tree_outvars = jax.tree.unflatten(state_tree, jaxpr.outvars[num_out:])
 
     # remove the quantity from the invars and outvars
-    invars_with_state_tree = _remove_quantity(invars_with_state_tree)
-    outvars_with_state_tree = _remove_quantity(outvars_with_state_tree)
+    state_tree_invars = _remove_quantity(state_tree_invars)
+    state_tree_outvars = _remove_quantity(state_tree_outvars)
 
     # -- checking weights as invar -- #
     weight_path_to_invars = {
         state_id_to_path[id(st)]: jax.tree.leaves(invar)
-        for invar, st in zip(invars_with_state_tree, compiled_states)
+        for invar, st in zip(state_tree_invars, compiled_states)
         if isinstance(st, ETraceParam)
     }
     hidden_path_to_invar = {  # one-to-many mapping
         state_id_to_path[id(st)]: invar  # ETraceState only contains one Array, "invar" is the jaxpr var
-        for invar, st in zip(invars_with_state_tree, compiled_states)
+        for invar, st in zip(state_tree_invars, compiled_states)
         if isinstance(st, ETraceState)
     }
     invar_to_hidden_path = {
@@ -435,7 +569,7 @@ def extract_model_info(
     # -- checking states as outvar -- #
     hidden_path_to_outvar = {  # one-to-one mapping
         state_id_to_path[id(st)]: outvar  # ETraceState only contains one Array, "outvar" is the jaxpr var
-        for outvar, st in zip(outvars_with_state_tree, compiled_states)
+        for outvar, st in zip(state_tree_outvars, compiled_states)
         if isinstance(st, ETraceState)
     }
     outvar_to_hidden_path = {  # one-to-one mapping
@@ -454,12 +588,13 @@ def extract_model_info(
 
         # jaxpr
         closed_jaxpr=closed_jaxpr,
-        jaxpr=jaxpr,
 
         # states
         retrieved_model_states=model_retrieved_states,
         compiled_model_states=compiled_states,
         state_id_to_path=state_id_to_path,
+        state_tree_invars=state_tree_invars,
+        state_tree_outvars=state_tree_outvars,
 
         # hidden states
         hidden_path_to_invar=hidden_path_to_invar,
@@ -472,4 +607,8 @@ def extract_model_info(
         weight_invars=weight_invars,
         weight_path_to_invars=weight_path_to_invars,
         invar_to_weight_path=invar_to_weight_path,
+
+        # output parameters
+        num_var_out=num_out,
+        num_var_state=len(jaxpr.outvars[num_out:]),
     )

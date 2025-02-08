@@ -335,7 +335,6 @@ class _ScaledWSConv(_BaseConv):
         w_init: Union[Callable, ArrayLike] = init.XavierNormal(),
         b_init: Optional[Union[Callable, ArrayLike]] = None,
         w_mask: Optional[Union[ArrayLike, Callable]] = None,
-        as_etrace_weight: bool = True,
         full_etrace: bool = False,
         name: Optional[str] = None,
         param_type: type = ETraceParam,

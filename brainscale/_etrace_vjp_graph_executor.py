@@ -31,7 +31,7 @@
 #                advantage of etrace learning and backpropagation through time.
 #   [2024-11] version 0.0.3, a complete new revision for better model debugging.
 #   [2025-02-06]
-#       - [x] split into "_etrace_graph.py" and "_etrace_vjp_graph.py"
+#       - [x] split into "_etrace_graph_executor.py" and "_etrace_vjp_graph_executor.py"
 #
 # ==============================================================================
 
@@ -40,7 +40,7 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import (Dict, Tuple)
+from typing import Dict, Tuple
 
 import brainstate as bst
 import brainunit as u
@@ -50,18 +50,13 @@ from jax.extend import linear_util as lu
 from jax.interpreters import partial_eval as pe
 from jax.tree_util import register_pytree_node_class
 
+from ._etrace_compiler_graph import compile_graph
 from ._etrace_concepts import ETraceState
-from ._etrace_graph import (
-    ETraceGraphExecutor,
-)
+from ._etrace_graph_executor import ETraceGraphExecutor
 from ._etrace_input_data import (
     get_single_step_data,
     split_data_types,
     merge_data
-)
-from ._etrace_vjp_compiler import (
-    compile_vjp_graph,
-    CompiledVjpGraph,
 )
 from ._state_managment import (
     assign_dict_state_values,
@@ -72,6 +67,7 @@ from ._typing import (
     PyTree,
     TempData,
     Outputs,
+    ETraceVals,
     HiddenVals,
     StateVals,
     ETraceX_Key,
@@ -94,34 +90,6 @@ from ._typing import (
 __all__ = [
     'ETraceVjpGraphExecutor',
 ]
-
-
-# @bst.util.dataclass
-# class HiddenGroupJacobian:
-#     """
-#     The hidden-to-hidden Jacobian for the hidden group.
-#     """
-#
-#     hidden_group: HiddenGroup
-#     jac: jax.Array
-#
-#
-# @bst.util.dataclass
-# class HG2WeightJacobian:
-#     """
-#     The hidden-to-weight Jacobian for the hidden group.
-#     """
-#     hidden_group: HiddenGroup
-#     jac: jax.Array
-#
-#
-# @bst.util.dataclass
-# class HG2YJacobian:
-#     """
-#     The hidden-to-weight Jacobian for the hidden group.
-#     """
-#     hidden_group: HiddenGroup
-#     jac: jax.Array
 
 
 @register_pytree_node_class
@@ -185,7 +153,6 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
            where $k$ is determined by the data input.
     """
     __module__ = 'brainscale'
-    compiled: CompiledVjpGraph
 
     def __init__(
         self,
@@ -237,71 +204,7 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
         args = get_single_step_data(*args)
 
         # compile the graph
-        self._compiled_graph = compile_vjp_graph(self.model, self.is_multi_step_vjp, *args)
-
-    def _jaxpr_compute_model(
-        self, *args,
-    ) -> Tuple[
-        PyTree,
-        HiddenVals,
-        StateVals,
-        TempData
-    ]:
-        """
-        Computing the model according to the given inputs and parameters by using the compiled jaxpr.
-        """
-
-        # state checking
-        old_state_vals = [st.value for st in self.compiled.compiled_model_states]
-
-        # parameters
-        args = jax.tree.flatten((args, old_state_vals))[0]
-
-        # calling the function
-        jaxpr_outs = jax.core.eval_jaxpr(
-            self.compiled.augmented_jaxpr.jaxpr,
-            self.compiled.augmented_jaxpr.consts,
-            *args
-        )
-
-        # intermediate values
-        #
-        # "jaxpr_outs[:self.num_out]" corresponds to model original outputs
-        # "jaxpr_outs[self.num_out:]" corresponds to extra output in  "augmented_jaxpr"
-        temps = {
-            v: r for v, r in
-            zip(
-                self.compiled.out_all_jaxvars[self.compiled.num_out:],
-                jaxpr_outs[self.compiled.num_out:]
-            )
-        }
-
-        #
-        # recovery outputs of ``stateful_model``
-        state_outs = [temps[v] for v in self.compiled.out_state_jaxvars]
-        out, new_state_vals = self.compiled.stateful_fn_outtree.unflatten(
-            jaxpr_outs[:self.compiled.num_out] + state_outs
-        )
-
-        # state value assignment
-        assert len(old_state_vals) == len(new_state_vals), 'State length mismatch.'
-
-        # split the state values
-        # Assume that weights are not changed.
-        #
-        hidden_vals = dict()
-        oth_state_vals = dict()
-        for st, st_val in zip(self.compiled.compiled_model_states, new_state_vals):
-            if isinstance(st, ETraceState):
-                hidden_vals[self.state_id_to_path[id(st)]] = st_val
-            elif isinstance(st, bst.ParamState):
-                pass
-            else:
-                if id(st) not in self.state_id_to_path:
-                    raise ValueError(f'This state {st} can not be accessed by the model {self.model}. \n'
-                                     f'Please assign the state as the attribute of the model.')
-                oth_state_vals[self.state_id_to_path[id(st)]] = st_val
-        return out, hidden_vals, oth_state_vals, temps
+        self._compiled_graph = compile_graph(self.model, *args, include_hidden_perturb=self.is_multi_step_vjp)
 
     def _compute_hid2weight_jacobian(
         self,
@@ -405,10 +308,11 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
         *args,
     ) -> Tuple[
         Outputs,
-        HiddenVals,
+        ETraceVals,
         StateVals,
         Hid2WeightJacobian,
         Hid2HidJacobian,
+        ...
     ]:
         r"""
         Solving the hidden-to-weight and hidden-to-hidden Jacobian according to the given inputs and parameters.
@@ -430,17 +334,6 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
         Returns:
             The outputs, hidden states, other states, and the spatial gradients of the weights.
         """
-        # --- compile the model --- #
-        if self.is_single_step_vjp:
-            assert self.compiled.jaxpr_perturb_hidden is not None, (
-                'The jaxpr_with_hidden_perturb should not be None '
-                'when the vjp_time_ahead is 0.'
-            )
-
-        assert self.compiled.augmented_jaxpr is not None, (
-            'The augmented_jaxpr should not be None '
-            'when the vjp_time_ahead > 0.'
-        )
 
         # --- split the states --- #
         (
@@ -541,7 +434,15 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
     def solve_h2w_h2h_jacobian_and_l2h_vjp(
         self,
         *args,
-    ) -> Tuple[Outputs, HiddenVals, StateVals, Hid2WeightJacobian, Hid2HidJacobian, VjpResiduals]:
+    ) -> Tuple[
+        Outputs,
+        ETraceVals,
+        StateVals,
+        Hid2WeightJacobian,
+        Hid2HidJacobian,
+        VjpResiduals,
+        ...
+    ]:
         r"""
         Solving the hidden-to-weight and hidden-to-hidden Jacobian and the VJP transformed loss-to-hidden
         gradients according to the given inputs.

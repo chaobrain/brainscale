@@ -34,7 +34,6 @@ from brainscale._etrace_model_test import (
     ALIF_STPExpCu_Dense_Layer,
 )
 
-pprint
 
 
 class TestCompileGraphRNN(unittest.TestCase):
@@ -46,7 +45,7 @@ class TestCompileGraphRNN(unittest.TestCase):
         bst.nn.init_all_states(gru)
 
         input = bst.random.rand(n_in)
-        graph = brainscale.compile_vjp_graph(gru, False, input)
+        graph = brainscale.compile_graph(gru, input, include_hidden_perturb=False)
 
         self.assertTrue(isinstance(graph, brainscale.CompiledVjpGraph))
         self.assertTrue(graph.num_out == 1)
@@ -57,7 +56,7 @@ class TestCompileGraphRNN(unittest.TestCase):
         self.assertTrue(len(param_states) == 3)
         self.assertTrue(len(graph.hidden_param_op_relations) == 2)
 
-        # pprint(graph)
+        pprint(graph)
 
     def test_lru_one_layer(self):
         n_in = 3
@@ -67,7 +66,7 @@ class TestCompileGraphRNN(unittest.TestCase):
         bst.nn.init_all_states(lru)
 
         input = bst.random.rand(n_in)
-        graph = brainscale.compile_vjp_graph(lru, False, input)
+        graph = brainscale.compile_graph(lru, input, include_hidden_perturb=False)
 
         self.assertTrue(len(graph.hidden_groups) == 1)
         self.assertTrue(len(graph.hidden_groups[0].hidden_paths) == 2)
@@ -86,7 +85,7 @@ class TestCompileGraphRNN(unittest.TestCase):
         bst.nn.init_all_states(lstm)
 
         input = bst.random.rand(n_in)
-        graph = brainscale.compile_vjp_graph(lstm, False, input)
+        graph = brainscale.compile_graph(lstm, input, include_hidden_perturb=False)
 
         self.assertTrue(isinstance(graph, brainscale.CompiledVjpGraph))
         self.assertTrue(graph.num_out == 1)
@@ -121,7 +120,7 @@ class TestCompileGraphRNN(unittest.TestCase):
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
-        graph = brainscale.compile_vjp_graph(net, False, input)
+        graph = brainscale.compile_graph(net, input, include_hidden_perturb=False)
 
         self.assertTrue(isinstance(graph, brainscale.CompiledVjpGraph))
         self.assertTrue(graph.num_out == 1)
@@ -154,7 +153,7 @@ class TestCompileGraphRNN(unittest.TestCase):
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
-        graph = brainscale.compile_vjp_graph(net, False, input)
+        graph = brainscale.compile_graph(net, input, include_hidden_perturb=False)
 
         self.assertTrue(len(graph.hidden_groups) == 2)
         self.assertTrue(len(graph.hidden_groups[0].hidden_paths) == 2)
@@ -182,7 +181,7 @@ class TestCompileGraphRNN(unittest.TestCase):
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
-        graph = brainscale.compile_vjp_graph(net, False, input)
+        graph = brainscale.compile_graph(net, input, include_hidden_perturb=False)
 
         self.assertTrue(len(graph.hidden_groups) == 2)
         self.assertTrue(len(graph.hidden_groups[0].hidden_paths) == 2)
@@ -213,7 +212,7 @@ class TestCompileGraphSNN(unittest.TestCase):
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
-        graph = brainscale.compile_vjp_graph(net, False, input)
+        graph = brainscale.compile_graph(net, input, include_hidden_perturb=False)
 
         pprint(graph)
         pass
@@ -226,7 +225,7 @@ class TestCompileGraphSNN(unittest.TestCase):
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
-        graph = brainscale.compile_vjp_graph(net, False, input)
+        graph = brainscale.compile_graph(net, input, include_hidden_perturb=False)
 
         pprint(graph)
 
@@ -238,7 +237,7 @@ class TestCompileGraphSNN(unittest.TestCase):
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
-        graph = brainscale.compile_vjp_graph(net, False, input)
+        graph = brainscale.compile_graph(net, input, include_hidden_perturb=False)
 
         pprint(graph)
 
@@ -250,7 +249,7 @@ class TestCompileGraphSNN(unittest.TestCase):
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
-        graph = brainscale.compile_vjp_graph(net, False, input)
+        graph = brainscale.compile_graph(net, input, include_hidden_perturb=False)
 
         pprint(graph)
 
@@ -262,7 +261,7 @@ class TestCompileGraphSNN(unittest.TestCase):
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
-        graph = brainscale.compile_vjp_graph(net, False, input)
+        graph = brainscale.compile_graph(net, input, include_hidden_perturb=False)
 
         pprint(graph)
 
@@ -274,7 +273,7 @@ class TestCompileGraphSNN(unittest.TestCase):
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
-        graph = brainscale.compile_vjp_graph(net, False, input)
+        graph = brainscale.compile_graph(net, input, include_hidden_perturb=False)
 
         pprint(graph)
 
@@ -286,7 +285,7 @@ class TestCompileGraphSNN(unittest.TestCase):
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
-        graph = brainscale.compile_vjp_graph(net, False, input)
+        graph = brainscale.compile_graph(net, input, include_hidden_perturb=False)
 
         pprint(graph)
 
@@ -298,7 +297,7 @@ class TestCompileGraphSNN(unittest.TestCase):
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
-        graph = brainscale.compile_vjp_graph(net, False, input)
+        graph = brainscale.compile_graph(net, input, include_hidden_perturb=False)
 
         pprint(graph)
 
@@ -310,7 +309,7 @@ class TestCompileGraphSNN(unittest.TestCase):
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
-        graph = brainscale.compile_vjp_graph(net, False, input)
+        graph = brainscale.compile_graph(net, input, include_hidden_perturb=False)
 
         pprint(graph)
 
@@ -322,7 +321,7 @@ class TestCompileGraphSNN(unittest.TestCase):
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
-        graph = brainscale.compile_vjp_graph(net, False, input)
+        graph = brainscale.compile_graph(net, input, include_hidden_perturb=False)
 
         pprint(graph)
 

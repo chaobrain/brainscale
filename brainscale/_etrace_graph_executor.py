@@ -41,7 +41,11 @@ from typing import (Dict, Tuple)
 
 import brainstate as bst
 
-from ._etrace_compiler_graph import CompiledGraph
+from ._etrace_compiler_graph import (
+    CompiledGraph,
+    compile_graph,
+)
+from ._etrace_input_data import get_single_step_data
 from ._typing import (
     Outputs,
     HiddenVals,
@@ -164,7 +168,7 @@ class ETraceGraphExecutor:
         Returns:
             The states for the model.
         """
-        return self.compiled.retrieved_model_states
+        return self.compiled.model_info.retrieved_model_states
 
     @property
     def path_to_states(self) -> bst.util.FlattedDict[Path, bst.State]:
@@ -188,7 +192,7 @@ class ETraceGraphExecutor:
             self._state_id_to_path = {id(state): path for path, state in self.states.items()}
         return self._state_id_to_path
 
-    def compile_graph(self, *args):
+    def compile_graph(self, *args) -> None:
         r"""
         Building the eligibility trace graph for the model according to the given inputs.
 
@@ -200,9 +204,17 @@ class ETraceGraphExecutor:
             *args: The positional arguments for the model.
         """
 
-        raise NotImplementedError('The method "compile_graph" should be implemented in the subclass.')
+        # process the inputs
+        args = get_single_step_data(*args)
 
-    def show_graph(self):
+        # compile the graph
+        self._compiled_graph = compile_graph(self.model, *args)
+
+    def show_graph(
+        self,
+        verbose: bool = True,
+        return_msg: bool = False,
+    ) -> None | str:
         """
         Showing the graph about the relationship between weight, operator, and hidden states.
         """
@@ -252,7 +264,10 @@ class ETraceGraphExecutor:
                 msg += f'   Weight {i}: {path}\n'
             msg += '\n\n'
 
-        print(msg)
+        if verbose:
+            print(msg)
+        if return_msg:
+            return msg
 
     def solve_h2w_h2h_jacobian(
         self,
@@ -263,6 +278,7 @@ class ETraceGraphExecutor:
         StateVals,
         Hid2WeightJacobian,
         Hid2HidJacobian,
+        ...
     ]:
         r"""
         Solving the hidden-to-weight and hidden-to-hidden Jacobian according to the given inputs and parameters.
@@ -289,7 +305,14 @@ class ETraceGraphExecutor:
 
     def solve_h2w_h2h_jacobian_and_l2h_vjp(
         self, *args,
-    ) -> Tuple[Outputs, HiddenVals, StateVals, Hid2WeightJacobian, Hid2HidJacobian, ...]:
+    ) -> Tuple[
+        Outputs,
+        HiddenVals,
+        StateVals,
+        Hid2WeightJacobian,
+        Hid2HidJacobian,
+        ...
+    ]:
         r"""
         Solving the hidden-to-weight and hidden-to-hidden Jacobian and the VJP transformed loss-to-hidden
         gradients according to the given inputs.

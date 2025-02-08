@@ -50,8 +50,8 @@ from ._etrace_concepts import (
 )
 from ._etrace_input_data import has_multistep_data
 from ._etrace_operators import ETraceOp
-from ._etrace_vjp_compiler import CompiledVjpGraph
-from ._etrace_vjp_graph import ETraceVjpGraphExecutor
+from ._etrace_vjp_compiler_graph import CompiledVjpGraph
+from ._etrace_vjp_graph_executor import ETraceVjpGraphExecutor
 from ._misc import (
     check_dict_keys,
     hid_group_key,

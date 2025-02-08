@@ -32,7 +32,7 @@ DType = bst.typing.DType
 DTypeLike = bst.typing.DTypeLike
 
 # --- types --- #
-PyTree = Any
+PyTree = bst.typing.PyTree
 StateID = int
 WeightID = int
 Size = bst.typing.Size

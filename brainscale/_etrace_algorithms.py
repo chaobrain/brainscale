@@ -27,7 +27,7 @@ import brainstate as bst
 
 from ._etrace_compiler_graph import CompiledGraph
 from ._etrace_concepts import ETraceState
-from ._etrace_graph import ETraceGraphExecutor
+from ._etrace_graph_executor import ETraceGraphExecutor
 from ._typing import Path
 
 __all__ = [
@@ -40,7 +40,7 @@ class EligibilityTraceData(bst.ShortTermState):
     """
     The temporary data for the eligibility trace algorithm computation.
     """
-    pass
+    __module__ = 'brainscale'
 
 
 class ETraceAlgorithm(bst.nn.Module):

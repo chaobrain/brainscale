@@ -27,11 +27,12 @@ from ._etrace_compiler_hidden_group import (
     HiddenGroup,
     find_hidden_groups_from_minfo,
 )
-from ._etrace_compiler_util import (
+from ._etrace_compiler_base import (
     JaxprEvaluation,
     check_unsupported_op,
     find_matched_vars,
     extract_model_info,
+    ModelInfo,
 )
 from ._etrace_concepts import ETraceParam
 from ._etrace_debug_jaxpr2code import jaxpr_to_python_code
@@ -104,6 +105,9 @@ class HiddenParamOpRelation(NamedTuple):
     hidden_groups: List[HiddenGroup]  # the hidden groups that the weight is associated with
     y_to_hidden_group_jaxprs: List[Jaxpr]  # the jaxpr for computing y --> hidden groups
     connected_hidden_paths: List[Path]  # the connected hidden paths
+
+
+HiddenParamOpRelation.__module__ = 'brainscale'
 
 
 def _trace_simplify(
@@ -347,6 +351,7 @@ class JaxprEvalForWeightOpHiddenRelation(JaxprEvaluation):
     Returns:
         The list of the traced weight operations.
     """
+    __module__ = 'brainscale'
 
     def __init__(
         self,
@@ -686,6 +691,34 @@ def find_hidden_param_op_relations_from_jaxpr(
         invar_to_hidden_path=invar_to_hidden_path,
         outvar_to_hidden_path=outvar_to_hidden_path,
     ).compile()
+
+
+def find_hidden_param_op_relations_from_minfo(
+    minfo: ModelInfo,
+    hid_path_to_group: Dict[Path, HiddenGroup],
+) -> Sequence[HiddenParamOpRelation]:
+    """
+    Finding the hidden-param-op relations from the model information.
+
+    Args:
+        minfo: The model information.
+        hid_path_to_group: The mapping from the hidden path to the hidden group.
+
+    Returns:
+        The hidden-param-op relations.
+    """
+    return find_hidden_param_op_relations_from_jaxpr(
+        jaxpr=minfo.jaxpr,
+        hidden_outvar_to_invar=minfo.hidden_outvar_to_invar,
+        weight_path_to_invars=minfo.weight_path_to_invars,
+        invar_to_weight_path=minfo.invar_to_weight_path,
+        weight_invars=minfo.weight_invars,
+        invar_to_hidden_path=minfo.invar_to_hidden_path,
+        outvar_to_hidden_path=minfo.outvar_to_hidden_path,
+        path_to_state=minfo.retrieved_model_states,
+        state_id_to_path=minfo.state_id_to_path,
+        hid_path_to_group=hid_path_to_group,
+    )
 
 
 def find_hidden_param_op_relations_from_module(

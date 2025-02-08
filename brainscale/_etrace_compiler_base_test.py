@@ -20,7 +20,7 @@ import brainunit as u
 import pytest
 
 import brainscale
-from brainscale._etrace_compiler_util import (
+from brainscale._etrace_compiler_base import (
     extract_model_info,
 )
 from brainscale._etrace_model_test import (

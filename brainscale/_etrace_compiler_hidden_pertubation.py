@@ -22,11 +22,12 @@ import brainstate as bst
 import jax.core
 
 from ._etrace_compiler_hidden_group import HiddenGroup
-from ._etrace_compiler_util import (
+from ._etrace_compiler_base import (
     JaxprEvaluation,
 )
-from ._etrace_compiler_util import (
+from ._etrace_compiler_base import (
     extract_model_info,
+ModelInfo,
 )
 from ._etrace_concepts import (
     ETraceState,
@@ -100,6 +101,9 @@ class HiddenPerturbation(NamedTuple):
         ]
 
 
+HiddenPerturbation.__module__ = 'brainscale'
+
+
 class JaxprEvalForHiddenPerturbation(JaxprEvaluation):
     """
     Adding perturbations to the hidden states in the jaxpr, and replacing the hidden states with the perturbed states.
@@ -115,6 +119,7 @@ class JaxprEvalForHiddenPerturbation(JaxprEvaluation):
         The revised closed jaxpr with the perturbations.
 
     """
+    __module__ = 'brainscale'
 
     def __init__(
         self,
@@ -277,6 +282,28 @@ def add_hidden_perturbation_in_jaxpr(
         path_to_state=path_to_state,
     ).compile()
 
+
+def add_hidden_perturbation_from_minfo(
+    minfo: ModelInfo,
+) -> HiddenPerturbation:
+    """
+    Adding perturbations to the hidden states in the module,
+    and replacing the hidden states with the perturbed states.
+
+    Args:
+        minfo: The model information.
+
+    Returns:
+        The hidden perturbation information.
+    """
+    return add_hidden_perturbation_in_jaxpr(
+        closed_jaxpr=minfo.closed_jaxpr,
+        hidden_outvar_to_invar=minfo.hidden_outvar_to_invar,
+        weight_invars=minfo.weight_invars,
+        invar_to_hidden_path=minfo.invar_to_hidden_path,
+        outvar_to_hidden_path=minfo.outvar_to_hidden_path,
+        path_to_state=minfo.retrieved_model_states,
+    )
 
 def add_hidden_perturbation_in_module(
     model: bst.nn.Module,

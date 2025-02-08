@@ -28,7 +28,11 @@ from brainscale._etrace_operators import MatMulOp
 from brainscale._typing import ArrayLike
 
 __all__ = [
-    'Linear', 'ScaledWSLinear', 'SignedWLinear', 'SparseLinear', 'LoRA',
+    'Linear',
+    'ScaledWSLinear',
+    'SignedWLinear',
+    'SparseLinear',
+    'LoRA',
 ]
 
 

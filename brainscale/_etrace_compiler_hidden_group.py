@@ -38,7 +38,7 @@
 #             and compiled states (brainstate.compile.StatefulFunction)
 #       - [x] add the support for the "ETraceGroupState" and "ETraceTreeState"
 #       - [x] add the support for the "ElemWiseParam"
-#       - [x] split into "_etrace_compiler.py", "_etrace_vjp_compiler.py", and "_etrace_compiler_hidden_group.py",
+#       - [x] split into "_etrace_compiler.py", "_etrace_vjp_compiler_graph.py", and "_etrace_compiler_hidden_group.py",
 #
 # ==============================================================================
 
@@ -54,7 +54,7 @@ import brainunit as u
 import jax.core
 import numpy as np
 
-from ._etrace_compiler_util import (
+from ._etrace_compiler_base import (
     JaxprEvaluation,
     find_matched_vars,
     extract_model_info,
@@ -210,6 +210,9 @@ class HiddenGroup(NamedTuple):
             for val, st in zip(splitted_hid_vals, self.hidden_states)
         ]
         return splitted_hid_vals
+
+
+HiddenGroup.__module__ = 'brainscale'
 
 
 def jacrev_last_dim(
@@ -401,6 +404,7 @@ class JaxprEvalForHiddenGroup(JaxprEvaluation):
         outvar_to_hidden_path: The mapping from the hidden output variable to the hidden state path.
         path_to_state: The mapping from the hidden state path to the state.
     """
+    __module__ = 'brainscale'
 
     def __init__(
         self,
