@@ -49,28 +49,37 @@ from __future__ import annotations
 from typing import List, Dict, Sequence
 
 import brainstate as bst
-import brainunit as u
 import jax.core
 
 from ._etrace_compiler_graph import (
     CompiledGraph,
-    HiddenGroup,
+)
+from ._etrace_compiler_hid_param_op import (
+    find_hidden_param_op_relations,
     HiddenParamOpRelation,
 )
-from ._etrace_compiler_util import abstractify_model
-from ._etrace_compiler_hid_param_op import find_hidden_param_op_relations
-from ._etrace_compiler_hidden_group import find_hidden_groups_from_jaxpr
-from ._etrace_compiler_hidden_pertubation import add_hidden_perturbation_in_jaxpr
+from ._etrace_compiler_hidden_group import (
+    find_hidden_groups_from_jaxpr,
+    HiddenGroup,
+)
+from ._etrace_compiler_hidden_pertubation import (
+    add_hidden_perturbation_in_jaxpr,
+)
+from ._etrace_compiler_util import (
+    abstractify_model,
+)
 from ._etrace_concepts import (
     ETraceParam,
     ETraceState,
 )
-from ._state_managment import sequence_split_state_values
+from ._misc import _remove_quantity
+from ._state_managment import (
+    sequence_split_state_values,
+)
 from ._typing import (
     StateID,
     Path
 )
-from ._misc import _remove_quantity
 
 if jax.__version_info__ < (0, 4, 38):
     from jax.core import Var, Jaxpr, ClosedJaxpr
@@ -78,7 +87,6 @@ else:
     from jax.extend.core import Var, Jaxpr, ClosedJaxpr
 
 __all__ = [
-    'compile_vjp_graph',
     'CompiledVjpGraph',
 ]
 
@@ -98,12 +106,13 @@ class CompiledVjpGraph(CompiledGraph):
 
     - augmented_jaxpr: the jaxpr that return necessary intermediate variables
     - jaxpr_perturb_hidden: the jaxpr the add hidden perturbation
-    - stateful_fn_states: the states of the stateful function
+    - compiled_model_states: the states of the stateful function
     - stateful_fn_outtree: the output tree of the stateful function
     - hidden_param_op_relations: the hidden-to-weight relation
     - hid_invar_to_path: the mapping from the hidden input variable to the hidden state path
     - hid_outvar_to_path: the mapping from the hidden output variable to the hidden state path
-    - hid_path_to_transition: the mapping from the hidden state path to the hidden state transition
+    - hidden_groups: the hidden groups, a sequence of :class:`HiddenGroup` instances
+    - hid_path_to_hid_group: the mapping from the hidden state path to the associated hidden group
     - out_hidden_jaxvars: the output hidden jax variables
     - out_wx_jaxvars: the output weight x jax variables
     - out_all_jaxvars: the output all jax variables
@@ -113,12 +122,12 @@ class CompiledVjpGraph(CompiledGraph):
     """
     augmented_jaxpr: ClosedJaxpr  # the jaxpr which returns necessary intermediate variables
     jaxpr_perturb_hidden: ClosedJaxpr  # the jaxpr which adds the hidden perturbation
-    model_retrieved_states: bst.util.FlattedDict[Path, bst.State]  # the states retrieved by ``module.states()``
-    stateful_fn_states: Sequence[bst.State]  # the states compiled by the stateful function
+    retrieved_model_states: bst.util.FlattedDict[Path, bst.State]  # the states retrieved by ``module.states()``
+    compiled_model_states: Sequence[bst.State]  # the states compiled by the stateful function
     stateful_fn_outtree: jax.tree_util.PyTreeDef
     hidden_groups: Sequence[HiddenGroup]
+    hid_path_to_hid_group: Dict[Path, HiddenGroup]
     hidden_param_op_relations: Sequence[HiddenParamOpRelation]
-    # hid_path_to_transition: Dict[Path, Hidden2GroupTransition]
     hid_invar_to_path: Dict[Var, Path]
     hid_outvar_to_path: Dict[Var, Path]
     out_hidden_jaxvars: List[Var]
@@ -235,7 +244,6 @@ def compile_vjp_graph(
     (
         hidden_groups,
         hid_path_to_group,
-        hid_path_to_transition
     ) = find_hidden_groups_from_jaxpr(
         jaxpr=jaxpr,
         hidden_outvar_to_invar=hidden_outvar_to_invar,
@@ -344,12 +352,12 @@ def compile_vjp_graph(
     return CompiledVjpGraph(
         augmented_jaxpr=augmented_jaxpr,
         jaxpr_perturb_hidden=jaxpr_with_hidden_perturb,
-        model_retrieved_states=model_retrieved_states,
-        stateful_fn_states=stateful_model.get_states(cache_key),
+        retrieved_model_states=model_retrieved_states,
+        compiled_model_states=stateful_model.get_states(cache_key),
         stateful_fn_outtree=stateful_model.get_out_treedef(cache_key),
         hidden_groups=hidden_groups,
+        hid_path_to_hid_group=hid_path_to_group,
         hidden_param_op_relations=hidden_param_op_relations,
-        hid_path_to_transition=hid_path_to_transition,
         hid_invar_to_path=invar_to_hidden_path,
         hid_outvar_to_path=outvar_to_hidden_path,
         out_hidden_jaxvars=out_hidden_jaxvars,

@@ -30,6 +30,9 @@ from brainscale._etrace_compiler_hid_param_op import (
 from brainscale._etrace_compiler_hidden_group import (
     HiddenGroup,
 )
+from brainscale._etrace_compiler_hidden_pertubation import (
+    HiddenPerturbation,
+)
 from brainscale._etrace_concepts import (
     # state
     ETraceState,
@@ -62,7 +65,6 @@ from brainscale._etrace_vjp_algorithms import (
     HybridDimVjpAlgorithm,
 )
 from brainscale._etrace_vjp_compiler import (
-    compile_vjp_graph,
     CompiledVjpGraph
 )
 from brainscale._grad_exponential import (

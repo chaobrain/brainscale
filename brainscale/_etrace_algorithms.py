@@ -152,7 +152,7 @@ class ETraceAlgorithm(bst.nn.Module):
             self._param_states,
             self._hidden_states,
             self._other_states
-        ) = self.compiled.model_retrieved_states.split(bst.ParamState, ETraceState, ...)
+        ) = self.compiled.retrieved_model_states.split(bst.ParamState, ETraceState, ...)
 
     def compile_graph(self, *args) -> None:
         r"""

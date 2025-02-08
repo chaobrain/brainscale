@@ -13,6 +13,8 @@ The following classes are the base classes for the online learning compilation.
   Each hidden state group contains multiple hidden state, and the hidden state transition function.
 - :class:`HiddenParamOpRelation` summarizes the relation between hidden state groups,
   the associated parameter weights, and the operations that use them.
+- :class:`HiddenPerturbation` summarizes the perturbation of hidden state groups.
+  It contains the perturbation function, and the perturbation hidden target.
 - :class:`CompiledGraph` contains the compiled graph of the model, including the
   hidden state groups, the operations, the parameter weights, the jaxpr of compiled models,
   and others.
@@ -27,6 +29,7 @@ The following classes are the base classes for the online learning compilation.
 
     HiddenGroup
     HiddenParamOpRelation
+    HiddenPerturbation
     CompiledGraph
     ETraceGraphExecutor
 

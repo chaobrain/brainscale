@@ -16,12 +16,12 @@
 import unittest
 from pprint import pprint
 
+import brainstate as bst
 import brainunit as u
 import jax
 import pytest
 
 import brainscale
-import brainstate as bst
 from brainscale._etrace_compiler_hidden_group import find_hidden_groups_from_module
 from brainscale._etrace_compiler_hidden_group import group_merging
 from brainscale._etrace_model_test import (
@@ -132,7 +132,6 @@ class TestFindHiddenGroupsFromModule:
         pprint(hid_path_to_group)
         print()
 
-    @classmethod
     @pytest.mark.parametrize(
         'cls,',
         [
@@ -167,7 +166,6 @@ class TestFindHiddenGroupsFromModule:
         assert (len(hidden_groups) == 1)
         print()
 
-    @classmethod
     @pytest.mark.parametrize(
         'cls,',
         [
@@ -222,7 +220,6 @@ class TestHiddenGroup_state_transition:
             out_vals = group.transition(hidden_vals, input_vals)
             print(out_vals)
 
-    @classmethod
     @pytest.mark.parametrize(
         'cls,',
         [
@@ -258,7 +255,6 @@ class TestHiddenGroup_state_transition:
             out_vals = group.transition(hidden_vals, input_vals)
             print(out_vals)
 
-    @classmethod
     @pytest.mark.parametrize(
         'cls,',
         [
@@ -329,13 +325,12 @@ class TestHiddenGroup_diagonal_jacobian:
             diag_jac = group.diagonal_jacobian(hidden_vals, input_vals)
             print(diag_jac)
 
-            fn = lambda hid: group._concat_hidden(group.transition(group._split_hidden(hid), input_vals))
-            jax_jac = jax.jacrev(fn)(group._concat_hidden(hidden_vals))
+            fn = lambda hid: group.concat_hidden(group.transition(group.split_hidden(hid), input_vals))
+            jax_jac = jax.jacrev(fn)(group.concat_hidden(hidden_vals))
             print(jax_jac)
 
             assert (u.math.allclose(u.math.squeeze(diag_jac), u.math.squeeze(jax_jac), atol=1e-5))
 
-    @classmethod
     @pytest.mark.parametrize(
         'cls,',
         [
@@ -371,7 +366,6 @@ class TestHiddenGroup_diagonal_jacobian:
             diag_jac = group.diagonal_jacobian(hidden_vals, input_vals)
             print(diag_jac)
 
-    @classmethod
     @pytest.mark.parametrize(
         'cls,',
         [
@@ -408,14 +402,13 @@ class TestHiddenGroup_diagonal_jacobian:
             diag_jac = u.math.squeeze(diag_jac)
             print(diag_jac)
 
-            fn = lambda hid: group._concat_hidden(group.transition(group._split_hidden(hid), input_vals))
-            jax_jac = jax.jacrev(fn)(group._concat_hidden(hidden_vals))
+            fn = lambda hid: group.concat_hidden(group.transition(group.split_hidden(hid), input_vals))
+            jax_jac = jax.jacrev(fn)(group.concat_hidden(hidden_vals))
             jax_jac = u.math.squeeze(jax_jac)
             print(jax_jac)
 
             assert (u.math.allclose(diag_jac, jax_jac, atol=1e-5))
 
-    @classmethod
     @pytest.mark.parametrize(
         'cls,',
         [
@@ -450,7 +443,6 @@ class TestHiddenGroup_diagonal_jacobian:
             diag_jac = group.diagonal_jacobian(hidden_vals, input_vals)
             print(diag_jac)
 
-    @classmethod
     @pytest.mark.parametrize(
         'cls,',
         [
@@ -486,19 +478,10 @@ class TestHiddenGroup_diagonal_jacobian:
             diag_jac = u.math.squeeze(diag_jac)
             print(diag_jac)
 
-            fn = lambda hid: group._concat_hidden(group.transition(group._split_hidden(hid), input_vals))
-            jax_jac = jax.jacrev(fn)(group._concat_hidden(hidden_vals))
+            fn = lambda hid: group.concat_hidden(group.transition(group.split_hidden(hid), input_vals))
+            jax_jac = jax.jacrev(fn)(group.concat_hidden(hidden_vals))
             jax_jac = u.math.squeeze(jax_jac)
             print(jax_jac)
 
             assert (u.math.allclose(diag_jac, jax_jac, atol=1e-5))
 
-
-class TestMath:
-    @classmethod
-    @pytest.mark.parametrize("x, expected", [
-        (3, 9),
-        (4, 16)
-    ])
-    def test_square(cls, x, expected):
-        assert x * x == expected

@@ -16,27 +16,24 @@
 from __future__ import annotations
 
 import functools
-from typing import Dict, Sequence, Set, List
+from typing import Dict, Sequence, Set, List, NamedTuple
 
 import brainstate as bst
 import jax.core
 
+from ._etrace_concepts import (
+    ETraceParam,
+    ETraceState,
+)
 from ._etrace_operators import is_etrace_op, is_etrace_op_enable_gradient
 from ._misc import NotSupportedError, unknown_state_path
-from ._typing import Path
+from ._misc import _remove_quantity
+from ._typing import Path, StateID
 
 if jax.__version_info__ < (0, 4, 38):
     from jax.core import Var, JaxprEqn
 else:
     from jax.extend.core import Var, JaxprEqn
-
-__all__ = [
-    'find_matched_vars',
-    'find_element_exist_in_the_set',
-    'check_unsupported_op',
-    'JaxprEvaluation',
-    'abstractify_model',
-]
 
 
 def find_matched_vars(
@@ -85,7 +82,7 @@ def check_unsupported_op(
         raise NotImplementedError(
             f'Currently, we do not support the weight states are used within a {op_name} function. \n'
             f'Please remove your {op_name} on the intermediate steps. \n\n'
-            f'The weight state is: {self.invar_to_state_path[invar]}. \n'  # TODO
+            f'The weight state is: {self.invar_to_hidden_path[invar]}. \n'
             f'The Jaxpr of the {op_name} function is: \n\n'
             f'{eqn} \n\n'
         )
@@ -281,3 +278,105 @@ def abstractify_model(
     )
 
     return stateful_model, model_retrieved_states
+
+
+class ModelInfo(NamedTuple):
+    stateful_model: bst.compile.StatefulFunction
+    retrieved_model_states: Dict[Path, bst.State]
+    compiled_model_states: Sequence[bst.State]
+    state_id_to_path: Dict[StateID, Path]
+    closed_jaxpr: jax.core.ClosedJaxpr
+    jaxpr: jax.core.Jaxpr
+    hidden_path_to_invar: Dict[Path, Var]
+    invar_to_hidden_path: Dict[Var, Path]
+    hidden_path_to_outvar: Dict[Path, Var]
+    outvar_to_hidden_path: Dict[Var, Path]
+    hidden_outvar_to_invar: Dict[Var, Var]
+    weight_invars: Set[Var]
+
+
+def extract_model_info(
+    model: bst.nn.Module,
+    *model_args,
+    **model_kwargs
+) -> ModelInfo:
+    (
+        stateful_model,
+        model_retrieved_states
+    ) = abstractify_model(
+        model,
+        *model_args,
+        **model_kwargs
+    )
+
+    cache_key = stateful_model.get_arg_cache_key(*model_args, **model_kwargs)
+    compiled_states = stateful_model.get_states(cache_key)
+
+    state_id_to_path: Dict[StateID, Path] = {
+        id(state): path
+        for path, state in model_retrieved_states.items()
+    }
+
+    closed_jaxpr = stateful_model.get_jaxpr(cache_key)
+    jaxpr = closed_jaxpr.jaxpr
+
+    out_shapes = stateful_model.get_out_shapes(cache_key)[0]
+    state_vals = [state.value for state in compiled_states]
+    in_avals, _ = jax.tree.flatten((model_args, model_kwargs))
+    out_avals, _ = jax.tree.flatten(out_shapes)
+    num_in = len(in_avals)
+    num_out = len(out_avals)
+    state_avals, state_tree = jax.tree.flatten(state_vals)
+    invars_with_state_tree = jax.tree.unflatten(state_tree, jaxpr.invars[num_in:])
+    outvars_with_state_tree = jax.tree.unflatten(state_tree, jaxpr.outvars[num_out:])
+
+    # remove the quantity from the invars and outvars
+    invars_with_state_tree = _remove_quantity(invars_with_state_tree)
+    outvars_with_state_tree = _remove_quantity(outvars_with_state_tree)
+
+    # -- checking weights as invar -- #
+    weight_path_to_invar = {
+        state_id_to_path[id(st)]: jax.tree.leaves(invar)
+        for invar, st in zip(invars_with_state_tree, compiled_states)
+        if isinstance(st, ETraceParam)
+    }
+    hidden_path_to_invar = {  # one-to-many mapping
+        state_id_to_path[id(st)]: invar  # ETraceState only contains one Array, "invar" is the jaxpr var
+        for invar, st in zip(invars_with_state_tree, compiled_states)
+        if isinstance(st, ETraceState)
+    }
+    invar_to_hidden_path = {
+        invar: path
+        for path, invar in hidden_path_to_invar.items()
+    }
+
+    # -- checking states as outvar -- #
+    hidden_path_to_outvar = {  # one-to-one mapping
+        state_id_to_path[id(st)]: outvar  # ETraceState only contains one Array, "outvar" is the jaxpr var
+        for outvar, st in zip(outvars_with_state_tree, compiled_states)
+        if isinstance(st, ETraceState)
+    }
+    outvar_to_hidden_path = {  # one-to-one mapping
+        v: state_id
+        for state_id, v in hidden_path_to_outvar.items()
+    }
+    hidden_outvar_to_invar = {
+        outvar: hidden_path_to_invar[hid]
+        for hid, outvar in hidden_path_to_outvar.items()
+    }
+    weight_invars = set([v for vs in weight_path_to_invar.values() for v in vs])
+
+    return ModelInfo(
+        stateful_model=stateful_model,
+        retrieved_model_states=model_retrieved_states,
+        compiled_model_states=compiled_states,
+        state_id_to_path=state_id_to_path,
+        closed_jaxpr=closed_jaxpr,
+        jaxpr=jaxpr,
+        hidden_path_to_invar=hidden_path_to_invar,
+        invar_to_hidden_path=invar_to_hidden_path,
+        hidden_path_to_outvar=hidden_path_to_outvar,
+        outvar_to_hidden_path=outvar_to_hidden_path,
+        hidden_outvar_to_invar=hidden_outvar_to_invar,
+        weight_invars=weight_invars
+    )

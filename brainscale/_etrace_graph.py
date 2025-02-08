@@ -164,7 +164,7 @@ class ETraceGraphExecutor:
         Returns:
             The states for the model.
         """
-        return self.compiled.model_retrieved_states
+        return self.compiled.retrieved_model_states
 
     @property
     def path_to_states(self) -> bst.util.FlattedDict[Path, bst.State]:

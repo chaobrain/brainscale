@@ -385,7 +385,7 @@ class MatMulOp(ETraceOp):
         Returns:
             The weight dimensional array.
         """
-        pass
+        raise NotImplementedError
 
 
 class ElemWiseOp(ETraceOp):
@@ -483,4 +483,4 @@ class ElemWiseOp(ETraceOp):
         Returns:
             The weight dimensional array.
         """
-        pass
+        raise NotImplementedError

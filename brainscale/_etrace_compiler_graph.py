@@ -43,7 +43,8 @@ class CompiledGraph(NamedTuple):
 
     - augmented_jaxpr: the jaxpr that return necessary intermediate variables
     - jaxpr_perturb_hidden: the jaxpr the add hidden perturbation
-    - stateful_fn_states: the states of the stateful function
+    - retrieved_model_states: the states retrieved by ``module.states()`` function
+    - compiled_model_states: the states of the stateful function
     - stateful_fn_outtree: the output tree of the stateful function
     - hidden_param_op_relations: the hidden-to-weight relation
     - hid_invar_to_path: the mapping from the hidden input variable to the hidden state path
@@ -58,8 +59,8 @@ class CompiledGraph(NamedTuple):
     """
     augmented_jaxpr: ClosedJaxpr  # the jaxpr which returns necessary intermediate variables
     jaxpr_perturb_hidden: ClosedJaxpr  # the jaxpr which adds the hidden perturbation
-    model_retrieved_states: bst.util.FlattedDict[Path, bst.State]  # the states retrieved by ``module.states()``
-    stateful_fn_states: Sequence[bst.State]  # the states compiled by the stateful function
+    retrieved_model_states: bst.util.FlattedDict[Path, bst.State]  # the states retrieved by ``module.states()``
+    compiled_model_states: Sequence[bst.State]  # the states compiled by the stateful function
     stateful_fn_outtree: jax.tree_util.PyTreeDef
     hidden_groups: Sequence[HiddenGroup]
     hidden_param_op_relations: Sequence[HiddenParamOpRelation]

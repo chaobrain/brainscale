@@ -49,31 +49,28 @@ from __future__ import annotations
 from itertools import combinations
 from typing import NamedTuple, List, Dict, Sequence, Tuple, Set, Optional, Callable
 
+import brainstate as bst
 import brainunit as u
 import jax.core
 import numpy as np
 
-import brainstate as bst
 from ._etrace_compiler_util import (
     JaxprEvaluation,
     find_matched_vars,
-    abstractify_model,
+    extract_model_info,
 )
 from ._etrace_concepts import (
-    ETraceParam,
     ETraceState,
     ETraceGroupState,
 )
 from ._misc import (
     NotSupportedError,
-    _remove_quantity,
 )
 from ._typing import (
     PyTree,
     HiddenInVar,
     HiddenOutVar,
     Path,
-    StateID,
 )
 
 if jax.__version_info__ < (0, 4, 38):
@@ -188,11 +185,11 @@ class HiddenGroup(NamedTuple):
             ``(*varshape, num_states, num_states)``.
         """
         return jacrev_last_dim(
-            lambda hid: self._concat_hidden(self.transition(self._split_hidden(hid), input_vals)),
-            self._concat_hidden(hidden_vals)
+            lambda hid: self.concat_hidden(self.transition(self.split_hidden(hid), input_vals)),
+            self.concat_hidden(hidden_vals)
         )
 
-    def _concat_hidden(self, splitted_hid_vals: Sequence[jax.Array]):
+    def concat_hidden(self, splitted_hid_vals: Sequence[jax.Array]):
         splitted_hid_vals = [
             val
             if isinstance(st, ETraceGroupState) else
@@ -201,7 +198,7 @@ class HiddenGroup(NamedTuple):
         ]
         return u.math.concatenate(splitted_hid_vals, axis=-1)
 
-    def _split_hidden(self, concated_hid_vals: jax.Array):
+    def split_hidden(self, concated_hid_vals: jax.Array):
         num_states = [st.num_state for st in self.hidden_states]
         indices = np.cumsum(num_states)
         splitted_hid_vals = u.math.split(concated_hid_vals, indices, axis=-1)
@@ -784,8 +781,7 @@ def find_hidden_groups_from_jaxpr(
 
     Returns:
         The hidden groups,
-        the mapping from the hidden state path to the hidden group,
-        and the mapping from the hidden state path to the hidden transition.
+        and the mapping from the hidden state path to the hidden group.
     """
     (
         hidden_groups,
@@ -817,89 +813,18 @@ def find_hidden_groups_from_module(
 
     Returns:
         The hidden groups,
-        the mapping from the hidden state path to the hidden group,
-        and the mapping from the hidden state path to the hidden transition.
+        and the mapping from the hidden state path to the hidden group.
     """
-    (
-        stateful_model,
-        model_retrieved_states
-    ) = abstractify_model(
-        model,
-        *model_args,
-        **model_kwargs
-    )
-
-    cache_key = stateful_model.get_arg_cache_key(*model_args, **model_kwargs)
-    compiled_states = stateful_model.get_states(cache_key)
-
-    path_to_state: Dict[Path, bst.State] = {
-        path: state
-        for path, state in model_retrieved_states.items()
-    }
-    state_id_to_path: Dict[StateID, Path] = {
-        id(state): path
-        for path, state in model_retrieved_states.items()
-    }
-
-    jaxpr = stateful_model.get_jaxpr(cache_key).jaxpr
-
-    out_shapes = stateful_model.get_out_shapes(cache_key)[0]
-    state_vals = [state.value for state in compiled_states]
-    in_avals, _ = jax.tree.flatten((model_args, model_kwargs))
-    out_avals, _ = jax.tree.flatten(out_shapes)
-    num_in = len(in_avals)
-    num_out = len(out_avals)
-    state_avals, state_tree = jax.tree.flatten(state_vals)
-    invars_with_state_tree = jax.tree.unflatten(state_tree, jaxpr.invars[num_in:])
-    outvars_with_state_tree = jax.tree.unflatten(state_tree, jaxpr.outvars[num_out:])
-
-    # remove the quantity from the invars and outvars
-    invars_with_state_tree = _remove_quantity(invars_with_state_tree)
-    outvars_with_state_tree = _remove_quantity(outvars_with_state_tree)
-
-    # -- checking weights as invar -- #
-    weight_path_to_invar = {
-        state_id_to_path[id(st)]: jax.tree.leaves(invar)
-        for invar, st in zip(invars_with_state_tree, compiled_states)
-        if isinstance(st, ETraceParam)
-    }
-    hidden_path_to_invar = {  # one-to-many mapping
-        state_id_to_path[id(st)]: invar  # ETraceState only contains one Array, "invar" is the jaxpr var
-        for invar, st in zip(invars_with_state_tree, compiled_states)
-        if isinstance(st, ETraceState)
-    }
-    invar_to_hidden_path = {
-        invar: path
-        for path, invar in hidden_path_to_invar.items()
-    }
-
-    # -- checking states as outvar -- #
-    hidden_path_to_outvar = {  # one-to-one mapping
-        state_id_to_path[id(st)]: outvar  # ETraceState only contains one Array, "outvar" is the jaxpr var
-        for outvar, st in zip(outvars_with_state_tree, compiled_states)
-        if isinstance(st, ETraceState)
-    }
-    outvar_to_hidden_path = {  # one-to-one mapping
-        v: state_id
-        for state_id, v in hidden_path_to_outvar.items()
-    }
-    hidden_outvar_to_invar = {
-        outvar: hidden_path_to_invar[hid]
-        for hid, outvar in hidden_path_to_outvar.items()
-    }
-    weight_invars = set([v for vs in weight_path_to_invar.values() for v in vs])
-
-    # -- evaluating the relationship for hidden-to-hidden -- #
+    minfo = extract_model_info(model, *model_args, **model_kwargs)
     (
         hidden_groups,
         hid_path_to_group,
     ) = find_hidden_groups_from_jaxpr(
-        jaxpr=jaxpr,
-        hidden_outvar_to_invar=hidden_outvar_to_invar,
-        weight_invars=weight_invars,
-        invar_to_hidden_path=invar_to_hidden_path,
-        outvar_to_hidden_path=outvar_to_hidden_path,
-        path_to_state=path_to_state,
+        jaxpr=minfo.jaxpr,
+        hidden_outvar_to_invar=minfo.hidden_outvar_to_invar,
+        weight_invars=minfo.weight_invars,
+        invar_to_hidden_path=minfo.invar_to_hidden_path,
+        outvar_to_hidden_path=minfo.outvar_to_hidden_path,
+        path_to_state=minfo.retrieved_model_states,
     )
-
     return hidden_groups, hid_path_to_group

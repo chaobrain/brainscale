@@ -252,7 +252,7 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
         """
 
         # state checking
-        old_state_vals = [st.value for st in self.compiled.stateful_fn_states]
+        old_state_vals = [st.value for st in self.compiled.compiled_model_states]
 
         # parameters
         args = jax.tree.flatten((args, old_state_vals))[0]
@@ -291,7 +291,7 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
         #
         hidden_vals = dict()
         oth_state_vals = dict()
-        for st, st_val in zip(self.compiled.stateful_fn_states, new_state_vals):
+        for st, st_val in zip(self.compiled.compiled_model_states, new_state_vals):
             if isinstance(st, ETraceState):
                 hidden_vals[self.state_id_to_path[id(st)]] = st_val
             elif isinstance(st, bst.ParamState):
@@ -613,7 +613,7 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
             assign_dict_state_values(other_states, oth_states, write=False)
 
             # get state values by the "stateful_model", to preserve the order of states
-            old_state_vals = [st.value for st in self.compiled.stateful_fn_states]
+            old_state_vals = [st.value for st in self.compiled.compiled_model_states]
 
             if self.is_single_step_vjp:
                 assert self.compiled.jaxpr_perturb_hidden is not None, (
@@ -663,7 +663,7 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
             # get new state values, do not return the weight values, since they are not changed
             new_state_vals = {
                 self.state_id_to_path[id(st)]: st_val
-                for st, st_val in zip(self.compiled.stateful_fn_states, new_state_vals)
+                for st, st_val in zip(self.compiled.compiled_model_states, new_state_vals)
             }
             (
                 _,  # drop weights, since they are not changed
