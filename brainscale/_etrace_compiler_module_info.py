@@ -16,11 +16,13 @@
 from __future__ import annotations
 
 import functools
-from typing import Dict, Sequence, Set, List, Tuple, Optional, NamedTuple, Any
-
-import jax
+from typing import Dict, Sequence, List, Tuple, Optional, NamedTuple, Any
 
 import brainstate as bst
+import brainunit as u
+import jax
+
+from ._compatible_imports import Var, Jaxpr, ClosedJaxpr
 from ._etrace_concepts import (
     ETraceParam,
     ETraceState,
@@ -40,11 +42,6 @@ from ._typing import (
     StateVals,
     TempData,
 )
-
-if jax.__version_info__ < (0, 4, 38):
-    from jax.core import Var, Jaxpr, ClosedJaxpr
-else:
-    from jax.extend.core import Var, Jaxpr, ClosedJaxpr
 
 __all__ = [
     'ModuleInfo',
@@ -94,6 +91,29 @@ def _check_consistent_states_between_model_and_compiler(
                       f"We have added this state.")
             retrieved_model_states[(unknown_state_path(i=i_unknown),)] = st
             i_unknown += 1
+
+
+def _check_in_out_consistent_units(
+    state_tree_invars,
+    state_tree_outvars,
+    state_tree_path,
+):
+    assert len(state_tree_invars) == len(state_tree_outvars), 'The number of invars and outvars should be the same.'
+    assert len(state_tree_invars) == len(state_tree_path), 'The number of invars and paths should be the same.'
+    for invar, outvar, path in zip(state_tree_invars, state_tree_outvars, state_tree_path):
+        in_leaves = jax.tree.leaves(invar, is_leaf=u.math.is_quantity)
+        out_leaves = jax.tree.leaves(outvar, is_leaf=u.math.is_quantity)
+        assert len(in_leaves) == len(out_leaves), 'The number of leaves should be the same.'
+        for in_leaf, out_leaf in zip(in_leaves, out_leaves):
+            if u.get_unit(in_leaf) != u.get_unit(out_leaf):
+                raise ValueError(
+                    f'The input/output unit of the state {path} does not match. \n'
+                    f'Input unit: {u.get_unit(in_leaf)}\n'
+                    f'Output unit: {u.get_unit(out_leaf)}\n'
+                    f'We now only support the consistent unit between the input and output, '
+                    f'since all our eligibility trace compilation is based on the unit consistency so that '
+                    f'units can be omitted and data can be dimensionless processing. '
+                )
 
 
 def abstractify_model(
@@ -334,7 +354,7 @@ class ModuleInfo(NamedTuple):
         # 3. "etrace state" old values
         for st, val in zip(self.compiled_model_states, self.state_tree_invars):
             if isinstance(st, ETraceState):
-                temps[val] = st.value
+                temps[val] = u.get_mantissa(st.value)
 
         #
         # recovery outputs of ``stateful_model``
@@ -425,6 +445,14 @@ def extract_module_info(
     state_avals, state_tree = jax.tree.flatten(state_vals)
     state_tree_invars = jax.tree.unflatten(state_tree, jaxpr.invars[num_in:])
     state_tree_outvars = jax.tree.unflatten(state_tree, jaxpr.outvars[num_out:])
+
+    # check the consistency between the invars and outvars
+    state_tree_path = [state_id_to_path[id(st)] for st in compiled_states]
+    _check_in_out_consistent_units(
+        state_tree_invars,
+        state_tree_outvars,
+        state_tree_path,
+    )
 
     # remove the quantity from the invars and outvars
     state_tree_invars = _remove_quantity(state_tree_invars)

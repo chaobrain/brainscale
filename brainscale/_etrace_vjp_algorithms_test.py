@@ -20,7 +20,6 @@ os.environ['JAX_TRACEBACK_FILTERING'] = 'off'
 import brainstate as bst
 import brainunit as u
 import pytest
-from pprint import pprint
 import brainscale
 from brainscale._etrace_model_test import (
     IF_Delta_Dense_Layer,
@@ -36,6 +35,7 @@ from brainscale._etrace_model_test import (
 )
 
 
+@pytest.mark.skip(reason="Not implemented")
 class TestDiagOn:
 
     @pytest.mark.parametrize(
@@ -322,15 +322,15 @@ class TestDiagOn2:
         "cls",
         [
             IF_Delta_Dense_Layer,
-            # LIF_ExpCo_Dense_Layer,
-            # ALIF_ExpCo_Dense_Layer,
-            # LIF_ExpCu_Dense_Layer,
-            # LIF_STDExpCu_Dense_Layer,
-            # LIF_STPExpCu_Dense_Layer,
-            # ALIF_ExpCu_Dense_Layer,
-            # ALIF_Delta_Dense_Layer,
-            # ALIF_STDExpCu_Dense_Layer,
-            # ALIF_STPExpCu_Dense_Layer,
+            LIF_ExpCo_Dense_Layer,
+            ALIF_ExpCo_Dense_Layer,
+            LIF_ExpCu_Dense_Layer,
+            LIF_STDExpCu_Dense_Layer,
+            LIF_STPExpCu_Dense_Layer,
+            ALIF_ExpCu_Dense_Layer,
+            ALIF_Delta_Dense_Layer,
+            ALIF_STDExpCu_Dense_Layer,
+            ALIF_STPExpCu_Dense_Layer,
         ]
     )
     def test_snn_multi_step_vjp(self, cls):

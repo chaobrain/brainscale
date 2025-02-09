@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from typing import Dict, Set, Sequence, NamedTuple, Any
 
+import brainunit as u
 import brainstate as bst
 import jax.core
 
@@ -138,7 +139,11 @@ class HiddenPerturbation(NamedTuple):
         }
         return [
             group.concat_hidden(
-                [path_to_perturb_data[path] for path in group.hidden_paths]
+                [
+                    # dimensionless processing
+                    u.get_mantissa(path_to_perturb_data[path])
+                    for path in group.hidden_paths
+                ]
             )
             for group in hidden_groups
         ]

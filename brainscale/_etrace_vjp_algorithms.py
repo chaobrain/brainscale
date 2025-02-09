@@ -26,7 +26,6 @@
 
 from __future__ import annotations
 
-import functools
 from collections import defaultdict
 from functools import partial
 from typing import Dict, Tuple, Any, List, Optional, Sequence
@@ -582,6 +581,10 @@ def _solve_param_dim_weight_gradients(
             w_key = etrace_param_key(weight_path, relation.y, group.index)
             etrace_data = hist_etrace_data[w_key]
             dg_hidden = dG_hidden_groups[group.index]
+            # dimensionless processing
+            etrace_data, fn_unit_restore = _remove_units(etrace_data)
+            dg_hidden, _ = _remove_units(dg_hidden)
+
             #
             # etrace_data: [n_batch, n_param, ..., n_state]
             #               or,
@@ -592,6 +595,8 @@ def _solve_param_dim_weight_gradients(
             dg_weight = _sum_last_dim(
                 jax.vmap(yw_to_w, in_axes=-1, out_axes=-1)(dg_hidden, etrace_data)
             )
+            # unit restoration
+            dg_weight = fn_unit_restore(dg_weight)
 
             # update the weight gradients
             _update_dict(temp_data, weight_path, dg_weight)
@@ -607,6 +612,26 @@ def _solve_param_dim_weight_gradients(
     # update the weight gradients
     for key, val in temp_data.items():
         _update_dict(dG_weights, key, val)
+
+
+def _remove_units(xs_maybe_quantity: bst.typing.PyTree):
+    leaves, treedef = jax.tree.flatten(xs_maybe_quantity, is_leaf=u.math.is_quantity)
+    new_leaves, units = [], []
+    for leaf in leaves:
+        leaf, unit = u.split_mantissa_unit(leaf)
+        new_leaves.append(leaf)
+        units.append(unit)
+
+    def restore_units(xs_unitless: bst.typing.PyTree):
+        leaves, treedef2 = jax.tree.flatten(xs_unitless)
+        assert treedef == treedef2, 'The tree structure should be the same. '
+        new_leaves = [
+            leaf if unit.dim.is_dimensionless else leaf * unit
+            for leaf, unit in zip(leaves, units)
+        ]
+        return jax.tree.unflatten(treedef, new_leaves)
+
+    return jax.tree.unflatten(treedef, new_leaves), restore_units
 
 
 def _sum_last_dim(xs: jax.Array):
@@ -1185,7 +1210,11 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
             )
             dl2h_at_t_or_t_minus_1 = [
                 group.concat_hidden(
-                    [dg_last_hiddens[path] for path in group.hidden_paths]
+                    [
+                        # dimensionless processing
+                        u.get_mantissa(dg_last_hiddens[path])
+                        for path in group.hidden_paths
+                    ]
                 )
                 for group in self.graph.hidden_groups
             ]
