@@ -19,10 +19,11 @@ from __future__ import annotations
 import warnings
 from typing import List, Dict, Tuple, Sequence, NamedTuple, Any
 
+import brainstate as bst
 import jax.core
 from jax.extend import source_info_util
 
-import brainstate as bst
+from ._compatible_imports import Var, Literal, JaxprEqn, Jaxpr
 from ._etrace_compiler_base import (
     JaxprEvaluation,
     check_unsupported_op,
@@ -55,11 +56,6 @@ from ._typing import (
     HiddenOutVar,
     Path
 )
-
-if jax.__version_info__ < (0, 4, 38):
-    from jax.core import Var, Literal, JaxprEqn, Jaxpr
-else:
-    from jax.extend.core import Var, Literal, JaxprEqn, Jaxpr
 
 __all__ = [
     'HiddenParamOpRelation',

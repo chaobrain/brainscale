@@ -24,6 +24,7 @@ from __future__ import annotations
 from typing import Dict, Any, Optional
 
 import brainstate as bst
+
 from ._etrace_compiler_graph import ETraceGraph
 from ._etrace_concepts import ETraceState
 from ._etrace_graph_executor import ETraceGraphExecutor

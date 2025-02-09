@@ -49,11 +49,12 @@ from __future__ import annotations
 from itertools import combinations
 from typing import List, Dict, Sequence, Tuple, Set, Optional, Callable, NamedTuple, Any
 
+import brainstate as bst
 import brainunit as u
 import jax.core
 import numpy as np
 
-import brainstate as bst
+from ._compatible_imports import Var, Literal, JaxprEqn, Jaxpr
 from ._etrace_compiler_base import (
     JaxprEvaluation,
     find_matched_vars,
@@ -75,11 +76,6 @@ from ._typing import (
     HiddenOutVar,
     Path,
 )
-
-if jax.__version_info__ < (0, 4, 38):
-    from jax.core import Var, Literal, JaxprEqn, Jaxpr
-else:
-    from jax.extend.core import Var, Literal, JaxprEqn, Jaxpr
 
 __all__ = [
     'HiddenGroup',
@@ -234,7 +230,6 @@ class HiddenGroup(NamedTuple):
         return repr(bst.util.PrettyMapping(self._asdict(), type_name=self.__class__.__name__))
 
 
-
 HiddenGroup.__module__ = 'brainscale'
 
 
@@ -263,9 +258,9 @@ class HiddenToHiddenGroupTracer(NamedTuple):
 
     def dict(self) -> Dict[str, Any]:
         return self._asdict()
+
     def __repr__(self) -> str:
         return repr(bst.util.PrettyMapping(self._asdict(), type_name=self.__class__.__name__))
-
 
 
 class Hidden2GroupTransition(NamedTuple):
@@ -317,7 +312,6 @@ class Hidden2GroupTransition(NamedTuple):
 
     def __repr__(self) -> str:
         return repr(bst.util.PrettyMapping(self._asdict(), type_name=self.__class__.__name__))
-
 
 
 def _simplify_hid2hid_tracer(

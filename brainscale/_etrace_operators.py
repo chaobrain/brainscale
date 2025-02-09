@@ -19,11 +19,10 @@ import contextlib
 import threading
 from typing import Callable, Optional, Dict
 
+import brainstate as bst
 import brainunit as u
 import jax
 import numpy as np
-
-import brainstate as bst
 
 __all__ = [
     'stop_param_gradients',  # stop weight gradients
@@ -466,7 +465,7 @@ class ElemWiseOp(ETraceOp):
             f'The shape of the hidden_dim_arr must be the same as the weight_dim_tree. '
             f'Got {hidden_dim_arr.shape} and {prim.shape}'
         )
-        return f_vjp((hidden_dim_arr,))
+        return f_vjp(hidden_dim_arr)[0]
 
     def xy_to_w(
         self,

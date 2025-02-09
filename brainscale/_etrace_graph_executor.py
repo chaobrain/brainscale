@@ -40,6 +40,7 @@ from __future__ import annotations
 from typing import Dict, Any
 
 import brainstate as bst
+
 from ._etrace_compiler_graph import (
     ETraceGraph,
     compile_etrace_graph,

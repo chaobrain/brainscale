@@ -18,9 +18,15 @@ from __future__ import annotations
 
 from typing import Dict, Set, Sequence, NamedTuple, Any
 
+import brainstate as bst
 import jax.core
 
-import brainstate as bst
+from ._compatible_imports import (
+    Var,
+    JaxprEqn,
+    Jaxpr,
+    ClosedJaxpr,
+)
 from ._etrace_compiler_base import (
     JaxprEvaluation,
 )
@@ -42,11 +48,6 @@ from ._typing import (
     HiddenOutVar,
     Path,
 )
-
-if jax.__version_info__ < (0, 4, 38):
-    from jax.core import Var, JaxprEqn, Jaxpr, ClosedJaxpr
-else:
-    from jax.extend.core import Var, JaxprEqn, Jaxpr, ClosedJaxpr
 
 __all__ = [
     'HiddenPerturbation',
@@ -121,7 +122,7 @@ class HiddenPerturbation(NamedTuple):
     def perturb_data_to_hidden_group_data(
         self,
         perturb_data: Sequence[jax.Array],
-        hidden_group: Sequence[HiddenGroup],
+        hidden_groups: Sequence[HiddenGroup],
     ) -> Sequence[jax.Array]:
         """
         Convert the perturbation data to the hidden group data.
@@ -139,7 +140,7 @@ class HiddenPerturbation(NamedTuple):
             group.concat_hidden(
                 [path_to_perturb_data[path] for path in group.hidden_paths]
             )
-            for group in hidden_group
+            for group in hidden_groups
         ]
 
     def dict(self) -> Dict[str, Any]:

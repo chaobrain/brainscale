@@ -16,10 +16,10 @@
 
 import unittest
 
+import brainstate as bst
 import jax
 
 import brainscale
-import brainstate as bst
 
 
 class TestEtraceInputData(unittest.TestCase):

@@ -19,14 +19,10 @@ from __future__ import annotations
 
 from typing import Dict, Sequence, Union, FrozenSet, List, Tuple
 
+import brainstate as bst
 import jax
 
-import brainstate as bst
-
-if jax.__version_info__ < (0, 4, 38):
-    from jax.core import Var
-else:
-    from jax.extend.core import Var
+from ._compatible_imports import Var
 
 ArrayLike = bst.typing.ArrayLike
 DType = bst.typing.DType

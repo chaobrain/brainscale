@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import brainstate as bst
+
 from brainscale._etrace_concepts import ETraceState
 
 __all__ = [

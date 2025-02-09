@@ -15,21 +15,14 @@
 
 from __future__ import annotations
 
-from typing import Dict, Sequence, Set, List, Any, NamedTuple
+from typing import Dict, Sequence, Set, List
 
-import jax
-
-import brainstate as bst
+from ._compatible_imports import Var, JaxprEqn
 from ._etrace_operators import (
     is_etrace_op,
     is_etrace_op_enable_gradient,
 )
 from ._typing import Path
-
-if jax.__version_info__ < (0, 4, 38):
-    from jax.core import Var, JaxprEqn
-else:
-    from jax.extend.core import Var, JaxprEqn
 
 
 def find_matched_vars(

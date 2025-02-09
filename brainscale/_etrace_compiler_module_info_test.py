@@ -15,11 +15,11 @@
 
 from pprint import pprint
 
+import brainstate as bst
 import brainunit as u
 import pytest
 
 import brainscale
-import brainstate as bst
 from brainscale._etrace_model_test import (
     IF_Delta_Dense_Layer,
     LIF_ExpCo_Dense_Layer,

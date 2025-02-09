@@ -18,6 +18,7 @@ from __future__ import annotations
 from typing import Sequence, Tuple, List, Hashable, Dict
 
 import brainstate as bst
+
 from ._etrace_concepts import ETraceState, ETraceParam
 from ._typing import Path, WeightVals, HiddenVals, StateVals
 
@@ -323,7 +324,7 @@ def split_dict_states_v2(
             if st.is_etrace:
                 etrace_param_states[key] = st
             else:
-                # The ETraceParam is not set to "is_etrace" since
+                # The ETraceParam is set to "is_etrace = False" since
                 # no hidden state is associated with it,
                 # so it should be treated as a normal parameter state
                 # and be trained with spatial gradients only

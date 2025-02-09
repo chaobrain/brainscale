@@ -26,15 +26,16 @@
 
 from __future__ import annotations
 
+import functools
 from collections import defaultdict
 from functools import partial
 from typing import Dict, Tuple, Any, List, Optional, Sequence
 
+import brainstate as bst
 import brainunit as u
 import jax
 import jax.numpy as jnp
 
-import brainstate as bst
 from ._etrace_algorithms import (
     ETraceAlgorithm,
     EligibilityTrace,
@@ -164,8 +165,11 @@ def _update_dict(
         the_dict[key] = jax.tree.map(u.math.add, old_value, value, is_leaf=lambda x: isinstance(x, u.Quantity))
 
 
-def _batched_zeros_like(batch_size: Optional[int],
-                        x: jax.Array):
+def _batched_zeros_like(
+    batch_size: Optional[int],
+    num_state: int,  # the number of hidden states
+    x: jax.Array  # the input array
+):
     """
     Create a batched zeros array like the input array.
 
@@ -177,9 +181,9 @@ def _batched_zeros_like(batch_size: Optional[int],
       jax.Array, the batched zeros array.
     """
     if batch_size is None:
-        return u.math.zeros_like(x)
+        return u.math.zeros((*x.shape, num_state), x.dtype)
     else:
-        return u.math.zeros((batch_size,) + x.shape, x.dtype)
+        return u.math.zeros((batch_size, *x.shape, num_state), x.dtype)
 
 
 def _init_IO_dim_state(
@@ -409,8 +413,10 @@ def _init_param_dim_state(
         if bwg_key in etrace_bwg:  # The key should be unique
             raise ValueError(f'The relation {bwg_key} has been added. ')
         etrace_bwg[bwg_key] = EligibilityTrace(
-            jax.tree.map(partial(_batched_zeros_like, batch_size),
-                         relation.weight.value)
+            jax.tree.map(
+                partial(_batched_zeros_like, batch_size, group.num_state),
+                relation.weight.value
+            )
         )
 
 
@@ -470,12 +476,12 @@ def _update_param_dim_etrace_scan_fn(
         weight_path = relation.path
         weight_val = weight_path_to_vals[weight_path]
         etrace_op: ETraceOp = relation.weight.op
-        if isinstance(etrace_op, ElemWiseParam):
+        if isinstance(relation.weight, ElemWiseParam):
             x = None
-            fn_dw = lambda df: jax.vjp(etrace_op.xw_to_y, weight_val)[1]((df,))
+            fn_dw = lambda df_: jax.vjp(lambda w: u.get_mantissa(etrace_op.xw_to_y(w)), weight_val)[1](df_)[0]
         else:
             x = etrace_xs_at_t[relation.x]
-            fn_dw = lambda x, df: jax.vjp(etrace_op.xw_to_y, x, weight_val)[1]((df,))
+            fn_dw = lambda df_: jax.vjp(lambda w: u.get_mantissa(etrace_op.xw_to_y(x, w)), weight_val)[1](df_)[0]
         if mode.has(bst.mixin.Batching):
             fn_dw = jax.vmap(fn_dw)
 
@@ -496,10 +502,7 @@ def _update_param_dim_etrace_scan_fn(
             # x: (n_input, ..., )
             # df: (n_hidden, ..., n_state)
             # phg_to_pw: (n_param, ..., n_state)
-            if isinstance(etrace_op, ElemWiseParam):
-                phg_to_pw = jax.vmap(fn_dw, in_axes=-1, out_axes=-1)(df)
-            else:
-                phg_to_pw = jax.vmap(fn_dw, in_axes=(None, -1), out_axes=-1)(x, df)
+            phg_to_pw = jax.vmap(fn_dw, in_axes=-1, out_axes=-1)(df)
 
             #
             # Step 3:
@@ -519,14 +522,17 @@ def _update_param_dim_etrace_scan_fn(
             #
             # diag: (n_hidden, ..., n_state, [n_state])
             # old_bwg: (n_param, ..., [n_state])
-            fn_bwg_pre = lambda d: jax.vmap(etrace_op.yw_to_w, in_axes=-1, out_axes=-1)(d, old_bwg).sum(axis=-1)
+            fn_bwg_pre = lambda d: _sum_last_dim(
+                jax.vmap(etrace_op.yw_to_w, in_axes=-1, out_axes=-1)(d, old_bwg)
+            )
+
             #
             # vmap over i, over the different hidden states \partial h_i^t / \partial h_j^t
             #
             # diag: (n_hidden, ..., [n_state], n_state)
             # old_bwg: (n_param, ..., n_state)
             # new_bwg_pre: (n_param, ..., n_state)
-            new_bwg_pre = jax.vmap(fn_bwg_pre, in_axes=-2)(diag)
+            new_bwg_pre = jax.vmap(fn_bwg_pre, in_axes=-2, out_axes=-1)(diag)
 
             #
             # Step 4:
@@ -583,7 +589,9 @@ def _solve_param_dim_weight_gradients(
             # dg_hidden:   [n_batch, n_hidden, ..., n_state]
             #               or,
             #              [n_hidden, ..., n_state]
-            dg_weight = jax.vmap(yw_to_w, in_axes=-1, out_axes=-1)(dg_hidden, etrace_data).sum(axis=-1)
+            dg_weight = _sum_last_dim(
+                jax.vmap(yw_to_w, in_axes=-1, out_axes=-1)(dg_hidden, etrace_data)
+            )
 
             # update the weight gradients
             _update_dict(temp_data, weight_path, dg_weight)
@@ -599,6 +607,10 @@ def _solve_param_dim_weight_gradients(
     # update the weight gradients
     for key, val in temp_data.items():
         _update_dict(dG_weights, key, val)
+
+
+def _sum_last_dim(xs: jax.Array):
+    return jax.tree_map(lambda x: u.math.sum(x, axis=-1), xs)
 
 
 def _zeros_like_batch_or_not(
@@ -1146,33 +1158,37 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
             dg_non_etrace_params,
             dg_etrace_params,
             dg_oth_states,
-            dl_to_dh_at_t
+            dg_hid_perturb_or_dl2h
         ) = jax.tree.unflatten(in_tree, cts_out)
 
+        #
+        # get the gradients of the hidden states at the last time step
+        #
         if self.graph_executor.is_single_step_vjp:
-
             # TODO: the correspondence between the hidden states and the gradients
-            #        should be checked.
+            #       should be checked.
             #
-            assert len(self.graph_executor.out_hidden_jaxvars) == len(dl_to_dh_at_t)
-            for hid_var, dg in zip(self.graph_executor.out_hidden_jaxvars, dl_to_dh_at_t):
-                assert hid_var.aval.shape == dg.shape, (
-                    'The shape of the hidden states and its gradients should be the same. '
-                )
-            dl_to_dh_at_t_or_t_minus_1 = {
-                self.graph_executor.hid_outvar_to_path[hid_var]: dg
-                for hid_var, dg in
-                zip(self.graph_executor.out_hidden_jaxvars, dl_to_dh_at_t)
-            }
             assert len(dg_etrace_params) == 0  # gradients all etrace weights are updated by the RTRL algorithm
+            assert len(self.graph.hidden_perturb.perturb_vars) == len(dg_hid_perturb_or_dl2h)
+            dl2h_at_t_or_t_minus_1 = self.graph.hidden_perturb.perturb_data_to_hidden_group_data(
+                dg_hid_perturb_or_dl2h,
+                self.graph.hidden_groups,
+            )
 
         else:
-
             assert len(dg_last_hiddens) == len(self.hidden_states)
             assert set(dg_last_hiddens.keys()) == set(self.hidden_states.keys()), (
-                f'The hidden states should be the same. '
+                f'The hidden states should be the same. Bug got \n'
+                f'{set(dg_last_hiddens.keys())}\n'
+                f'!=\n'
+                f'{set(self.hidden_states.keys())}'
             )
-            dl_to_dh_at_t_or_t_minus_1 = dg_last_hiddens
+            dl2h_at_t_or_t_minus_1 = [
+                group.concat_hidden(
+                    [dg_last_hiddens[path] for path in group.hidden_paths]
+                )
+                for group in self.graph.hidden_groups
+            ]
 
         #
         # [4] Compute the gradients of the weights
@@ -1185,7 +1201,7 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
         dg_weights = self._solve_weight_gradients(
             running_index,
             etrace_vals_at_t_or_t_minus_1,
-            dl_to_dh_at_t_or_t_minus_1,
+            dl2h_at_t_or_t_minus_1,
             weight_vals,
             dg_non_etrace_params,
             dg_etrace_params,

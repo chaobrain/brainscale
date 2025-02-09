@@ -15,11 +15,11 @@
 
 from pprint import pprint
 
+import brainstate as bst
 import brainunit as u
 import pytest
 
 import brainscale
-import brainstate as bst
 from brainscale._etrace_compiler_hidden_pertubation import add_hidden_perturbation_in_module
 from brainscale._etrace_model_test import (
     IF_Delta_Dense_Layer,

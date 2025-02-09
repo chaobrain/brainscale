@@ -35,11 +35,11 @@ from __future__ import annotations
 from enum import Enum
 from typing import Callable, Optional, Dict, Tuple, Sequence
 
+import brainstate as bst
 import brainunit as u
 import jax
 import numpy as np
 
-import brainstate as bst
 from ._etrace_operators import (
     ETraceOp,
     ElemWiseOp,
@@ -551,9 +551,9 @@ class ElemWiseParam(ETraceParam):
     It supports all element-wise operations for the eligibility trace-based learning.
     For example, if the parameter weight has the shape with the same as the hidden state,
 
-        $$
-        I = \theta_1 * h_1
-        $$
+    $$
+    I = \theta_1 * h_1
+    $$
 
     where $\theta_1 \in \mathbb{R}^H$ is the weight and $h_1 \in \mathbb{R}^H$ is the
     hidden state. The element-wise operation is defined as:
@@ -564,9 +564,9 @@ class ElemWiseParam(ETraceParam):
 
     If the parameter weight is a scalar,
 
-        $$
-        I = \theta * h
-        $$
+    $$
+    I = \theta * h
+    $$
 
     where $\theta \in \mathbb{R}$ is the weight and $h \in \mathbb{R}^H$ is the hidden state.
     Then the element-wise operation can be defined as:
@@ -581,9 +581,9 @@ class ElemWiseParam(ETraceParam):
     Moreover, :py:class:`ElemWiseParam` support a pytree of element-wise parameters. For example,
     if the mathematical operation is defined as:
 
-        $$
-        I = \theta_1 * h_1 + \theta_2 * h_2
-        $$
+    $$
+    I = \theta_1 * h_1 + \theta_2 * h_2
+    $$
 
     where $\theta_1 \in \mathbb{R}^H$ and $\theta_2 \in \mathbb{R}^H$ are the weights and
     $h_1 \in \mathbb{R}^H$ and $h_2 \in \mathbb{R}^H$ are the hidden states. The element-wise
@@ -637,16 +637,16 @@ class NonTempParam(bst.ParamState):
     learning task, the weight gradient can only be computed with the spatial gradients.
     That is,
 
-        $$
-        \nabla \theta = \sum_t \partial L^t / \partial \theta^t
-        $$
+    $$
+    \nabla \theta = \sum_t \partial L^t / \partial \theta^t
+    $$
 
     Instead, the gradient of the weight $\theta$ which is labeled as :py:class:`ETraceParam` is
     computed as:
 
-        $$
-        \nabla \theta = \sum_t \partial L^t / \partial \theta = \sum_t \sum_i^t \partial L^t / \partial \theta^i
-        $$
+    $$
+    \nabla \theta = \sum_t \partial L^t / \partial \theta = \sum_t \sum_i^t \partial L^t / \partial \theta^i
+    $$
 
     Args:
       value: The value of the parameter.

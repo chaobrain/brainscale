@@ -16,10 +16,9 @@
 
 from typing import Any
 
+import brainstate as bst
 import jax
 from jax.tree_util import register_pytree_node_class
-
-import brainstate as bst
 
 __all__ = [
     'SingleStepData',
@@ -85,7 +84,7 @@ def is_input(x):
     return isinstance(x, (SingleStepData, MultiStepData))
 
 
-def split_data_types(*args) -> tuple[dict[int, SingleStepData], dict[int, MultiStepData], dict]:
+def split_input_data_types(*args) -> tuple[dict[int, SingleStepData], dict[int, MultiStepData], dict]:
     leaves, tree_def = jax.tree.flatten(args, is_leaf=is_input)
     data_at_single_step = dict()
     data_at_multi_step = dict()

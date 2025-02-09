@@ -14,11 +14,11 @@
 # ==============================================================================
 
 
+import brainstate as bst
 import brainunit as u
 import jax.numpy as jnp
 
 import brainscale
-import brainstate as bst
 
 
 class IF_Delta_Dense_Layer(bst.nn.Module):

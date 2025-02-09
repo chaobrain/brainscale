@@ -21,9 +21,10 @@ from functools import partial
 from typing import Callable, Union, Sequence, Optional, Any
 
 import brainstate as bst
+from brainstate.nn._interaction._normalizations import _BatchNorm
+
 from brainscale._etrace_concepts import ETraceParam, NonTempParam, ETraceState
 from brainscale._typing import ArrayLike, Size, Axes
-from brainstate.nn._interaction._normalizations import _BatchNorm
 
 __all__ = [
     'BatchNorm0d', 'BatchNorm1d', 'BatchNorm2d', 'BatchNorm3d',

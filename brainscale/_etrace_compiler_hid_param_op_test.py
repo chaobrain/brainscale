@@ -16,11 +16,11 @@
 
 from pprint import pprint
 
+import brainstate as bst
 import brainunit as u
 import pytest
 
 import brainscale
-import brainstate as bst
 from brainscale._etrace_compiler_hid_param_op import (
     find_hidden_param_op_relations_from_module,
 )

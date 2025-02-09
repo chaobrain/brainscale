@@ -17,11 +17,11 @@ from __future__ import annotations
 
 import unittest
 
+import brainstate as bst
 import brainunit as u
 import jax.numpy as jnp
 
 import brainscale
-import brainstate as bst
 from brainscale._etrace_model_test import (
     ALIF_STPExpCu_Dense_Layer,
 )

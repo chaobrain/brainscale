@@ -16,10 +16,9 @@
 
 from __future__ import annotations
 
+import brainstate as bst
 import brainunit as u
 import jax.tree
-
-import brainstate as bst
 
 __all__ = [
     'GradExpon',

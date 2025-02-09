@@ -20,15 +20,15 @@ from __future__ import annotations
 import numbers
 from typing import Callable, Optional
 
+import brainstate as bst
 import brainunit as u
 import jax
 import jax.numpy as jnp
+from brainstate import init, surrogate, nn
 
-import brainstate as bst
 from brainscale._etrace_concepts import ETraceParam, ETraceState
 from brainscale._etrace_operators import MatMulOp
 from brainscale._typing import Size, ArrayLike, Spike
-from brainstate import init, surrogate, nn
 
 __all__ = [
     'LeakyRateReadout',

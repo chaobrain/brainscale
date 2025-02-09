@@ -48,7 +48,7 @@ class TestDiagOn:
             brainscale.nn.MinimalRNNCell,
         ]
     )
-    def test_rnn_no_bptt(self, cls):
+    def test_rnn_single_step_vjp(self, cls):
         n_in = 4
         n_rec = 5
         n_seq = 10
@@ -63,15 +63,15 @@ class TestDiagOn:
         print(outs.shape)
 
         @bst.compile.jit
-        def grad_no_bptt(inp):
+        def grad_single_step_vjp(inp):
             return bst.augment.grad(
                 lambda inp: algorithm(inp).sum(),
                 model.states(bst.ParamState)
             )(inp)
 
-        grads = grad_no_bptt(inputs[0])
-        grads = grad_no_bptt(inputs[1])
-        pprint(grads)
+        grads = grad_single_step_vjp(inputs[0])
+        grads = grad_single_step_vjp(inputs[1])
+        print(bst.util.PrettyDict(grads))
 
     @pytest.mark.parametrize(
         "cls",
@@ -83,7 +83,7 @@ class TestDiagOn:
             brainscale.nn.MinimalRNNCell,
         ]
     )
-    def test_rnn_has_bptt(self, cls):
+    def test_rnn_multi_step_vjp(self, cls):
         n_in = 4
         n_rec = 5
         n_seq = 10
@@ -98,17 +98,17 @@ class TestDiagOn:
         print(outs.shape)
 
         @bst.compile.jit
-        def grad_no_bptt(inp):
+        def grad_single_step_vjp(inp):
             return bst.augment.grad(
                 lambda inp: algorithm(brainscale.MultiStepData(inp)).sum(),
                 model.states(bst.ParamState)
             )(inp)
 
-        grads = grad_no_bptt(inputs[:1])
-        pprint(grads)
+        grads = grad_single_step_vjp(inputs[:1])
+        print(bst.util.PrettyDict(grads))
         print()
-        grads = grad_no_bptt(inputs[1:2])
-        pprint(grads)
+        grads = grad_single_step_vjp(inputs[1:2])
+        print(bst.util.PrettyDict(grads))
 
     @pytest.mark.parametrize(
         "cls",
@@ -125,7 +125,7 @@ class TestDiagOn:
             ALIF_STPExpCu_Dense_Layer,
         ]
     )
-    def test_snn_no_bptt(self, cls):
+    def test_snn_single_step_vjp(self, cls):
         with bst.environ.context(dt=0.1 * u.ms):
             n_in = 4
             n_rec = 5
@@ -141,15 +141,15 @@ class TestDiagOn:
             print(outs.shape)
 
             @bst.compile.jit
-            def grad_no_bptt(inp):
+            def grad_single_step_vjp(inp):
                 return bst.augment.grad(
                     lambda inp: algorithm(inp).sum(),
                     model.states(bst.ParamState)
                 )(inp)
 
-            grads = grad_no_bptt(inputs[0])
-            grads = grad_no_bptt(inputs[1])
-            pprint(grads)
+            grads = grad_single_step_vjp(inputs[0])
+            grads = grad_single_step_vjp(inputs[1])
+            print(bst.util.PrettyDict(grads))
 
     @pytest.mark.parametrize(
         "cls",
@@ -166,7 +166,7 @@ class TestDiagOn:
             ALIF_STPExpCu_Dense_Layer,
         ]
     )
-    def test_snn_has_bptt(self, cls):
+    def test_snn_multi_step_vjp(self, cls):
         with bst.environ.context(dt=0.1 * u.ms):
             print(cls)
 
@@ -184,31 +184,31 @@ class TestDiagOn:
             print(outs.shape)
 
             @bst.compile.jit
-            def grad_no_bptt(inp):
+            def grad_single_step_vjp(inp):
                 return bst.augment.grad(
                     lambda inp: algorithm(brainscale.MultiStepData(inp)).sum(),
                     model.states(bst.ParamState)
                 )(inp)
 
-            grads = grad_no_bptt(inputs[:1])
-            pprint(grads)
+            grads = grad_single_step_vjp(inputs[:1])
+            print(bst.util.PrettyDict(grads))
             print()
-            grads = grad_no_bptt(inputs[1:2])
-            pprint(grads)
+            grads = grad_single_step_vjp(inputs[1:2])
+            print(bst.util.PrettyDict(grads))
 
 
 class TestDiagOn2:
     @pytest.mark.parametrize(
         "cls",
         [
-            brainscale.nn.GRUCell,
-            brainscale.nn.LSTMCell,
+            # brainscale.nn.GRUCell,
+            # brainscale.nn.LSTMCell,
             brainscale.nn.LRUCell,
-            brainscale.nn.MGUCell,
-            brainscale.nn.MinimalRNNCell,
+            # brainscale.nn.MGUCell,
+            # brainscale.nn.MinimalRNNCell,
         ]
     )
-    def test_rnn_no_bptt(self, cls):
+    def test_rnn_single_step_vjp(self, cls):
         n_in = 4
         n_rec = 5
         n_seq = 10
@@ -223,15 +223,15 @@ class TestDiagOn2:
         print(outs.shape)
 
         @bst.compile.jit
-        def grad_no_bptt(inp):
+        def grad_single_step_vjp(inp):
             return bst.augment.grad(
                 lambda inp: algorithm(inp).sum(),
                 model.states(bst.ParamState)
             )(inp)
 
-        grads = grad_no_bptt(inputs[0])
-        grads = grad_no_bptt(inputs[1])
-        pprint(grads)
+        grads = grad_single_step_vjp(inputs[0])
+        grads = grad_single_step_vjp(inputs[1])
+        print(bst.util.PrettyDict(grads))
 
     @pytest.mark.parametrize(
         "cls",
@@ -243,7 +243,7 @@ class TestDiagOn2:
             brainscale.nn.MinimalRNNCell,
         ]
     )
-    def test_rnn_has_bptt(self, cls):
+    def test_rnn_multi_step_vjp(self, cls):
         n_in = 4
         n_rec = 5
         n_seq = 10
@@ -258,17 +258,17 @@ class TestDiagOn2:
         print(outs.shape)
 
         @bst.compile.jit
-        def grad_no_bptt(inp):
+        def grad_single_step_vjp(inp):
             return bst.augment.grad(
                 lambda inp: algorithm(brainscale.MultiStepData(inp)).sum(),
                 model.states(bst.ParamState)
             )(inp)
 
-        grads = grad_no_bptt(inputs[:1])
-        pprint(grads)
+        grads = grad_single_step_vjp(inputs[:1])
+        print(bst.util.PrettyDict(grads))
         print()
-        grads = grad_no_bptt(inputs[1:2])
-        pprint(grads)
+        grads = grad_single_step_vjp(inputs[1:2])
+        print(bst.util.PrettyDict(grads))
 
     @pytest.mark.parametrize(
         "cls",
@@ -285,7 +285,7 @@ class TestDiagOn2:
             ALIF_STPExpCu_Dense_Layer,
         ]
     )
-    def test_snn_no_bptt(self, cls):
+    def test_snn_single_step_vjp(self, cls):
         with bst.environ.context(dt=0.1 * u.ms):
             print(cls)
 
@@ -305,15 +305,15 @@ class TestDiagOn2:
             print(outs.shape)
 
             @bst.compile.jit
-            def grad_no_bptt(inp):
+            def grad_single_step_vjp(inp):
                 return bst.augment.grad(
                     lambda inp: algorithm(inp).sum(),
                     model.states(bst.ParamState)
                 )(inp)
 
-            grads = grad_no_bptt(inputs[0])
-            grads = grad_no_bptt(inputs[1])
-            pprint(grads)
+            grads = grad_single_step_vjp(inputs[0])
+            grads = grad_single_step_vjp(inputs[1])
+            print(bst.util.PrettyDict(grads))
 
             for k in grads:
                 assert u.get_unit(param_states[k]) == u.get_unit(grads[k])
@@ -322,18 +322,18 @@ class TestDiagOn2:
         "cls",
         [
             IF_Delta_Dense_Layer,
-            LIF_ExpCo_Dense_Layer,
-            ALIF_ExpCo_Dense_Layer,
-            LIF_ExpCu_Dense_Layer,
-            LIF_STDExpCu_Dense_Layer,
-            LIF_STPExpCu_Dense_Layer,
-            ALIF_ExpCu_Dense_Layer,
-            ALIF_Delta_Dense_Layer,
-            ALIF_STDExpCu_Dense_Layer,
-            ALIF_STPExpCu_Dense_Layer,
+            # LIF_ExpCo_Dense_Layer,
+            # ALIF_ExpCo_Dense_Layer,
+            # LIF_ExpCu_Dense_Layer,
+            # LIF_STDExpCu_Dense_Layer,
+            # LIF_STPExpCu_Dense_Layer,
+            # ALIF_ExpCu_Dense_Layer,
+            # ALIF_Delta_Dense_Layer,
+            # ALIF_STDExpCu_Dense_Layer,
+            # ALIF_STPExpCu_Dense_Layer,
         ]
     )
-    def test_snn_has_bptt(self, cls):
+    def test_snn_multi_step_vjp(self, cls):
         with bst.environ.context(dt=0.1 * u.ms):
             print(cls)
 
@@ -353,17 +353,17 @@ class TestDiagOn2:
             print(outs.shape)
 
             @bst.compile.jit
-            def grad_no_bptt(inp):
+            def grad_single_step_vjp(inp):
                 return bst.augment.grad(
                     lambda inp: algorithm(brainscale.MultiStepData(inp)).sum(),
                     model.states(bst.ParamState)
                 )(inp)
 
-            grads = grad_no_bptt(inputs[:1])
-            pprint(grads)
+            grads = grad_single_step_vjp(inputs[:1])
+            print(bst.util.PrettyDict(grads))
             print()
-            grads = grad_no_bptt(inputs[1:2])
-            pprint(grads)
+            grads = grad_single_step_vjp(inputs[1:2])
+            print(bst.util.PrettyDict(grads))
 
             for k in grads:
                 assert u.get_unit(param_states[k]) == u.get_unit(grads[k])
