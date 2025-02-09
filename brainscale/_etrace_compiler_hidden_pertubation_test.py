@@ -36,11 +36,21 @@ from brainscale._etrace_model_test import (
 
 
 class TestFindHiddenGroupsFromModule:
-    def test_gru_one_layer(self):
+    @pytest.mark.parametrize(
+        "cls",
+        [
+            brainscale.nn.GRUCell,
+            brainscale.nn.LSTMCell,
+            brainscale.nn.LRUCell,
+            brainscale.nn.MGUCell,
+            brainscale.nn.MinimalRNNCell,
+        ]
+    )
+    def test_rnn_one_layer(self, cls):
         n_in = 3
         n_out = 4
 
-        gru = brainscale.nn.GRUCell(n_in, n_out)
+        gru = cls(n_in, n_out)
         bst.nn.init_all_states(gru)
         states = bst.graph.states(gru, brainscale.ETraceState)
 

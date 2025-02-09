@@ -18,6 +18,7 @@ from typing import Any
 
 import brainstate as bst
 import jax
+from jax.tree_util import register_pytree_node_class
 
 __all__ = [
     'SingleStepData',
@@ -25,14 +26,57 @@ __all__ = [
 ]
 
 
-@bst.util.dataclass
-class SingleStepData:
-    data: Any
+class ETraceData:
+    def __init__(self, data: Any):
+        self.data = data
+
+    def tree_flatten(self):
+        return self.data, ()
+
+    @classmethod
+    def tree_unflatten(cls, aux, data):
+        return cls(data)
 
 
-@bst.util.dataclass
-class MultiStepData:
-    data: Any
+@register_pytree_node_class
+class SingleStepData(ETraceData):
+    """
+    The data at a single time step.
+
+    Examples::
+
+        >>> import brainstate as bst
+        >>> data = SingleStepData(bst.random.randn(2, 3))
+
+    """
+    pass
+
+
+@register_pytree_node_class
+class MultiStepData(ETraceData):
+    """
+    The data at multiple time steps.
+
+    The first dimension of the data represents the time steps.
+
+    Examples::
+
+        >>> import brainstate as bst
+        # data at 10 time steps, each time step has 2 samples, each sample has 3 features
+        >>> data = MultiStepData(bst.random.randn(10, 2, 3))
+
+
+    Another example::
+
+        >>> import brainstate as bst
+        >>> data = MultiStepData(
+        ...     bst.random.randn(10, 2, 3),
+        ...     bst.random.randn(10, 5),
+        ... )
+
+
+    """
+    pass
 
 
 def is_input(x):

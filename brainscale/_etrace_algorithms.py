@@ -32,13 +32,23 @@ from ._typing import Path
 
 __all__ = [
     'ETraceAlgorithm',
-    'EligibilityTraceData',
+    'EligibilityTrace',
 ]
 
 
-class EligibilityTraceData(bst.ShortTermState):
+class EligibilityTrace(bst.ShortTermState):
     """
-    The temporary data for the eligibility trace algorithm computation.
+    The state for storing the eligibility trace during the computation of
+    online learning algorithms.
+
+    For example, when you are using :class:`brainscale.IODimVjpAlgorithm`, you can get
+    the eligibility trace of the weight by calling
+
+    .. code-block:: python
+
+        etrace = etrace_algorithm.etrace_of(weight)
+
+
     """
     __module__ = 'brainscale'
 
@@ -152,7 +162,7 @@ class ETraceAlgorithm(bst.nn.Module):
             self._param_states,
             self._hidden_states,
             self._other_states
-        ) = self.compiled.retrieved_model_states.split(bst.ParamState, ETraceState, ...)
+        ) = self.compiled.model_info.retrieved_model_states.split(bst.ParamState, ETraceState, ...)
 
     def compile_graph(self, *args) -> None:
         r"""

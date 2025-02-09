@@ -99,8 +99,8 @@ to the outputs.
 
 
 
-Input Data for ETrace Learning
--------------------------------
+ETrace Input Data
+-----------------
 
 The input data for eligibility trace-based learning should be in the form of
 :class:`SingleStepData` or :class:`MultiStepData`.

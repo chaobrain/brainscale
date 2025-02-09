@@ -131,16 +131,14 @@ class VjpResiduals:
 
 class ETraceVjpGraphExecutor(ETraceGraphExecutor):
     r"""
-    The eligibility trace graph, tracking the relationship between the etrace weights
-    :py:class:`ETraceParam`, the etrace variables :py:class:`ETraceState`, and the etrace
-    operations :py:class:`ETraceOp`.
+    The eligibility trace graph executor for the VJP-based online learning algorithms.
 
-    This class is used for computing the weight spatial gradients and the hidden state residuals.
-    It is the most foundational data structure for the ETrace algorithms.
+    This class is used for executing the eligibility trace graph for the VJP-based online learning algorithms,
+    including:
 
-    It is important to note that the graph is built no matter whether the model is
-    batched or not. This means that this graph can be applied to any kind of models.
-    However, the compilation is sensitive to the shape of hidden states.
+    - :class:`IODimVjpAlgorithm` for the algorithm with input-output dimensional complexity.
+    - :class:`ParamDimVjpAlgorithm` for the algorithm with parameter dimensional complexity.
+    - :class:`HybridDimVjpAlgorithm` for the algorithm with hybrid dimensional complexity.
 
     Parameters
     ----------
@@ -151,7 +149,7 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
 
         - "single-step": The VJP is computed at the current time step, i.e., $\partial L^t/\partial h^t$.
         - "multi-step": The VJP is computed at multiple time steps, i.e., $\partial L^t/\partial h^{t-k}$,
-           where $k$ is determined by the data input.
+          where $k$ is determined by the data input.
     """
     __module__ = 'brainscale'
 
@@ -435,7 +433,7 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
             hid2hid_jac_multi_steps
         )
 
-    def solve_h2w_h2h_jacobian_and_l2h_vjp(
+    def solve_h2w_h2h_l2h_jacobian(
         self,
         *args,
     ) -> Tuple[

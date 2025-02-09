@@ -19,7 +19,7 @@ import functools
 from typing import Dict, Sequence, Set, List, NamedTuple, Tuple, Any, Optional
 
 import brainstate as bst
-import jax.core
+import jax
 
 from ._etrace_concepts import (
     ETraceParam,
@@ -43,6 +43,12 @@ if jax.__version_info__ < (0, 4, 38):
     from jax.core import Var, JaxprEqn, Jaxpr, ClosedJaxpr
 else:
     from jax.extend.core import Var, JaxprEqn, Jaxpr, ClosedJaxpr
+
+
+__all__ = [
+    'ModuleInfo',
+    'extract_module_info',
+]
 
 
 def find_matched_vars(
@@ -203,7 +209,7 @@ class JaxprEvaluation(object):
         )
 
 
-def _model_to_check_weight_assign(model, *args_, **kwargs_):
+def _model_that_not_allow_param_assign(model, *args_, **kwargs_):
     with bst.StateTraceStack() as trace:
         out = model(*args_, **kwargs_)
 
@@ -266,7 +272,7 @@ def abstractify_model(
     #
     # wrap the model so that we can track the iteration number
     stateful_model = bst.compile.StatefulFunction(
-        functools.partial(_model_to_check_weight_assign, model)
+        functools.partial(_model_that_not_allow_param_assign, model)
     )
 
     # -- compile the model -- #
@@ -290,7 +296,7 @@ def abstractify_model(
     return stateful_model, model_retrieved_states
 
 
-class ModelInfo(NamedTuple):
+class ModuleInfo(NamedTuple):
     """
     The model information for the etrace compiler.
 
@@ -298,22 +304,21 @@ class ModelInfo(NamedTuple):
 
     1. The stateful model.
 
-         - ``stateful_model``: The stateful model is the model that compiles the model
-           into abstract jaxpr representation.
+        - ``stateful_model``: The stateful model is the model that compiles the model
+          into abstract jaxpr representation.
 
     2. The jaxpr.
 
-         The jaxpr is the abstract representation of the model.
+        The jaxpr is the abstract representation of the model.
 
-         - ``closed_jaxpr``: The closed jaxpr is the closed jaxpr representation of the model.
-         - ``jaxpr``: The jaxpr is the open jaxpr representation of the model.
+        - ``closed_jaxpr``: The closed jaxpr is the closed jaxpr representation of the model.
 
     3. The states.
 
         - ``retrieved_model_states``: The model states that are retrieved from the ``model.states()`` function,
-           which has well-defined paths and structures.
+          which has well-defined paths and structures.
         - ``compiled_model_states``: The model states that are compiled from the stateful model, which is
-           accurate and consistent with the model jaxpr, but loss the path information.
+          accurate and consistent with the model jaxpr, but loss the path information.
         - ``state_id_to_path``: The mapping from the state id to the state path.
 
     4. The hidden states.
@@ -329,6 +334,16 @@ class ModelInfo(NamedTuple):
         - ``weight_invars``: The weight input variables.
         - ``weight_path_to_invars``: The mapping from the weight path to the input variables.
         - ``invar_to_weight_path``: The mapping from the input variable to the weight path.
+
+
+    Example::
+
+        >>> import brainscale
+        >>> import brainstate
+        >>> gru = brainscale.nn.GRUCell(10, 20)
+        >>> gru.init_state()
+        >>> inputs = brainstate.random.randn(10)
+        >>> model_info = brainscale.extract_module_info(gru, inputs)
 
     """
     # stateful model
@@ -373,7 +388,7 @@ class ModelInfo(NamedTuple):
     def add_jaxpr_outs(
         self,
         jax_vars: Sequence[Var],
-    ) -> ModelInfo:
+    ) -> ModuleInfo:
         """
         Adding the jaxpr outputs to the model jaxpr, so that it can return the additional variables which
         needed for the etrace compiler.
@@ -393,10 +408,10 @@ class ModelInfo(NamedTuple):
         # closed jaxpr
         closed_jaxpr = ClosedJaxpr(jaxpr, self.closed_jaxpr.consts)
 
-        # new instance of `ModelInfo`
+        # new instance of `ModuleInfo`
         items = self.dict()
         items['closed_jaxpr'] = closed_jaxpr
-        return ModelInfo(**items)
+        return ModuleInfo(**items)
 
     def split_state_outvars(self):
         """
@@ -507,14 +522,14 @@ class ModelInfo(NamedTuple):
         return out, etrace_vals, oth_state_vals, temps
 
 
-ModelInfo.__module__ = 'brainscale'
+ModuleInfo.__module__ = 'brainscale'
 
 
-def extract_model_info(
+def extract_module_info(
     model: bst.nn.Module,
     *model_args,
     **model_kwargs
-) -> ModelInfo:
+) -> ModuleInfo:
     """
     Extracting the model information for the etrace compiler.
 
@@ -524,7 +539,7 @@ def extract_model_info(
         model_kwargs: The keyword arguments of the model.
 
     Returns:
-        The model information.
+        The model information, instance of :class:`ModuleInfo`.
     """
 
     # abstract the model
@@ -601,7 +616,7 @@ def extract_model_info(
     }
     weight_invars = set([v for vs in weight_path_to_invars.values() for v in vs])
 
-    return ModelInfo(
+    return ModuleInfo(
         # stateful model
         stateful_model=stateful_model,
 

@@ -116,11 +116,21 @@ class TestGroupMerging(unittest.TestCase):
 
 
 class TestFindHiddenGroupsFromModule:
-    def test_gru_one_layer(self):
+    @pytest.mark.parametrize(
+        "cls",
+        [
+            brainscale.nn.GRUCell,
+            brainscale.nn.LSTMCell,
+            brainscale.nn.LRUCell,
+            brainscale.nn.MGUCell,
+            brainscale.nn.MinimalRNNCell,
+        ]
+    )
+    def test_gru_one_layer(self, cls):
         n_in = 3
         n_out = 4
 
-        gru = brainscale.nn.GRUCell(n_in, n_out)
+        gru = cls(n_in, n_out)
         bst.nn.init_all_states(gru)
 
         input = bst.random.rand(n_in)
@@ -202,11 +212,21 @@ class TestFindHiddenGroupsFromModule:
 
 
 class TestHiddenGroup_state_transition:
-    def test_gru(self):
+    @pytest.mark.parametrize(
+        "cls",
+        [
+            brainscale.nn.GRUCell,
+            brainscale.nn.LSTMCell,
+            brainscale.nn.LRUCell,
+            brainscale.nn.MGUCell,
+            brainscale.nn.MinimalRNNCell,
+        ]
+    )
+    def test_gru(self, cls):
         n_in = 3
         n_out = 4
 
-        gru = brainscale.nn.GRUCell(n_in, n_out)
+        gru = cls(n_in, n_out)
         bst.nn.init_all_states(gru)
 
         input = bst.random.rand(n_in)
@@ -291,11 +311,21 @@ class TestHiddenGroup_state_transition:
 
 
 class TestHiddenGroup_diagonal_jacobian:
-    def test_gru(self):
+    @pytest.mark.parametrize(
+        "cls",
+        [
+            brainscale.nn.GRUCell,
+            brainscale.nn.LSTMCell,
+            brainscale.nn.LRUCell,
+            brainscale.nn.MGUCell,
+            brainscale.nn.MinimalRNNCell,
+        ]
+    )
+    def test_gru(self, cls):
         n_in = 3
         n_out = 4
 
-        gru = brainscale.nn.GRUCell(n_in, n_out)
+        gru = cls(n_in, n_out)
         bst.nn.init_all_states(gru)
 
         input = bst.random.rand(n_in)
@@ -308,11 +338,21 @@ class TestHiddenGroup_diagonal_jacobian:
             diag_jac = group.diagonal_jacobian(hidden_vals, input_vals)
             print(diag_jac)
 
-    def test_gru_accuracy(self):
+    @pytest.mark.parametrize(
+        "cls",
+        [
+            brainscale.nn.GRUCell,
+            brainscale.nn.LSTMCell,
+            brainscale.nn.LRUCell,
+            brainscale.nn.MGUCell,
+            brainscale.nn.MinimalRNNCell,
+        ]
+    )
+    def test_gru_accuracy(self, cls):
         n_in = 1
         n_out = 1
 
-        gru = brainscale.nn.GRUCell(n_in, n_out)
+        gru = cls(n_in, n_out)
         bst.nn.init_all_states(gru)
 
         input = bst.random.rand(n_in)
@@ -323,13 +363,15 @@ class TestHiddenGroup_diagonal_jacobian:
             hidden_vals = [bst.random.rand_like(invar.aval) for invar in group.hidden_invars]
             input_vals = [bst.random.rand_like(invar.aval) for invar in group.transition_jaxpr_constvars]
             diag_jac = group.diagonal_jacobian(hidden_vals, input_vals)
+            diag_jac = u.math.squeeze(diag_jac)
             print(diag_jac)
 
             fn = lambda hid: group.concat_hidden(group.transition(group.split_hidden(hid), input_vals))
             jax_jac = jax.jacrev(fn)(group.concat_hidden(hidden_vals))
+            jax_jac = u.math.squeeze(jax_jac)
             print(jax_jac)
 
-            assert (u.math.allclose(u.math.squeeze(diag_jac), u.math.squeeze(jax_jac), atol=1e-5))
+            assert (u.math.allclose(diag_jac, jax_jac, atol=1e-5))
 
     @pytest.mark.parametrize(
         'cls,',

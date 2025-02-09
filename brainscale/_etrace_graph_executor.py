@@ -57,12 +57,10 @@ __all__ = [
 
 class ETraceGraphExecutor:
     r"""
-    The eligibility trace graph, tracking the relationship between the etrace weights
-    :py:class:`ETraceParam`, the etrace variables :py:class:`ETraceState`, and the etrace
-    operations :py:class:`ETraceOp`.
+    The eligibility trace graph executor.
 
     This class is used for computing the weight spatial gradients and the hidden state residuals.
-    It is the most foundational data structure for the ETrace algorithms.
+    It is the most foundational class for the ETrace algorithms.
 
     It is important to note that the graph is built no matter whether the model is
     batched or not. This means that this graph can be applied to any kind of models.
@@ -291,7 +289,7 @@ class ETraceGraphExecutor:
         raise NotImplementedError('The method "solve_h2w_h2h_jacobian" should be '
                                   'implemented in the subclass.')
 
-    def solve_h2w_h2h_jacobian_and_l2h_vjp(
+    def solve_h2w_h2h_l2h_jacobian(
         self, *args,
     ) -> Any:
         r"""

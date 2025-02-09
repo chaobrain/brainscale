@@ -21,7 +21,7 @@ import pytest
 
 import brainscale
 from brainscale._etrace_compiler_base import (
-    extract_model_info,
+    extract_module_info,
 )
 from brainscale._etrace_model_test import (
     IF_Delta_Dense_Layer,
@@ -38,15 +38,26 @@ from brainscale._etrace_model_test import (
 
 
 class Test_extract_model_info:
-    def test_gru_one_layer(self):
+    @pytest.mark.parametrize(
+        "cls",
+        [
+            brainscale.nn.GRUCell,
+            brainscale.nn.LSTMCell,
+            brainscale.nn.LRUCell,
+            brainscale.nn.MGUCell,
+            brainscale.nn.MinimalRNNCell,
+        ]
+    )
+    def test_rnn_one_layer(self, cls):
         n_in = 3
         n_out = 4
 
-        gru = brainscale.nn.GRUCell(n_in, n_out)
-        bst.nn.init_all_states(gru)
+        rnn = cls(n_in, n_out)
+        bst.nn.init_all_states(rnn)
 
         input = bst.random.rand(n_in)
-        minfo = extract_model_info(gru, input)
+        minfo = extract_module_info(rnn, input)
+        pprint(minfo)
 
     @pytest.mark.parametrize(
         'cls,',
@@ -73,7 +84,7 @@ class Test_extract_model_info:
         with bst.environ.context(dt=0.1 * u.ms):
             layer = cls(n_in, n_out)
             bst.nn.init_all_states(layer)
-            minfo = extract_model_info(layer, input)
+            minfo = extract_module_info(layer, input)
             pprint(minfo)
 
     @pytest.mark.parametrize(
@@ -102,5 +113,5 @@ class Test_extract_model_info:
         with bst.environ.context(dt=0.1 * u.ms):
             layer = bst.nn.Sequential(cls(n_in, n_out), cls(n_out, n_out))
             bst.nn.init_all_states(layer)
-            minfo = extract_model_info(layer, input)
+            minfo = extract_module_info(layer, input)
             pprint(minfo)

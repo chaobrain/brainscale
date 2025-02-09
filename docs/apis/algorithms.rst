@@ -20,7 +20,7 @@ learning algorithm. The learning algorithm computes the weight updates based on 
 The weight updates are then applied to the network.
 
 
-:class:`EligibilityTraceData` provides the interface to store eligibility traces data for the learning algorithms.
+:class:`EligibilityTrace` provides the interface to store eligibility traces data for the learning algorithms.
 The eligibility traces are used to compute the weight updates.
 
 
@@ -31,7 +31,7 @@ The eligibility traces are used to compute the weight updates.
    :template: classtemplate.rst
 
     ETraceAlgorithm
-    EligibilityTraceData
+    EligibilityTrace
 
 
 

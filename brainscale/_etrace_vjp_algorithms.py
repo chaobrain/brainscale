@@ -37,7 +37,7 @@ import jax.numpy as jnp
 
 from ._etrace_algorithms import (
     ETraceAlgorithm,
-    EligibilityTraceData,
+    EligibilityTrace,
 )
 from ._etrace_compiler_graph import (
     HiddenParamOpRelation,
@@ -202,7 +202,7 @@ def _init_IO_dim_state(
         if relation.x not in etrace_xs:
             shape = relation.x.aval.shape
             dtype = relation.x.aval.dtype
-            etrace_xs[relation.x] = EligibilityTraceData(u.math.zeros(shape, dtype))
+            etrace_xs[relation.x] = EligibilityTrace(u.math.zeros(shape, dtype))
 
         # relation.x maybe repeatedly used to feed into the
         # weight operation for transforming the hidden states
@@ -232,7 +232,7 @@ def _init_IO_dim_state(
         #   [∂A^t-1/∂θ1, ∂B^t-1/∂θ1, ...]
         #
         shape = y_shape + (group.num_state,)
-        etrace_dfs[key] = EligibilityTraceData(u.math.zeros(shape, y_dtype))
+        etrace_dfs[key] = EligibilityTrace(u.math.zeros(shape, y_dtype))
 
 
 def _update_IO_dim_etrace_scan_fn(
@@ -410,7 +410,7 @@ def _init_param_dim_state(
         bwg_key = etrace_param_key(relation.path, relation.y, group.index)
         if bwg_key in etrace_bwg:  # The key should be unique
             raise ValueError(f'The relation {bwg_key} has been added. ')
-        etrace_bwg[bwg_key] = EligibilityTraceData(
+        etrace_bwg[bwg_key] = EligibilityTrace(
             jax.tree.map(partial(_batched_zeros_like, batch_size),
                          relation.weight.value)
         )
@@ -1037,7 +1037,7 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
             hid2weight_jac_multi_steps,
             hid2hid_jac_multi_steps,
             residuals
-        ) = self.graph.solve_h2w_h2h_jacobian_and_l2h_vjp(*args)
+        ) = self.graph.solve_h2w_h2h_l2h_jacobian(*args)
 
         # eligibility trace update
         #
@@ -1379,7 +1379,7 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
 #                 shape = (self.n_truncation,) + relation.x.aval.shape
 #                 dtype = relation.x.aval.dtype
 #                 # wx may be repeatedly used in the graph
-#                 self.etrace_xs[relation.x] = EligibilityTraceData(u.math.zeros(shape, dtype))
+#                 self.etrace_xs[relation.x] = EligibilityTrace(u.math.zeros(shape, dtype))
 #
 #             for group in relation.hidden_groups:
 #                 group: HiddenGroup
@@ -1398,7 +1398,7 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
 #                         raise ValueError(f'The relation {key} has been added. ')
 #                     shape = (self.n_truncation,) + relation.y.aval.shape
 #                     dtype = relation.y.aval.dtype
-#                     self.etrace_dfs[key] = EligibilityTraceData(u.math.zeros(shape, dtype))
+#                     self.etrace_dfs[key] = EligibilityTrace(u.math.zeros(shape, dtype))
 #
 #     def reset_state(self, batch_size: int = None, **kwargs):
 #         """

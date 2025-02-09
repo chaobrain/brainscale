@@ -57,8 +57,8 @@ import numpy as np
 from ._etrace_compiler_base import (
     JaxprEvaluation,
     find_matched_vars,
-    extract_model_info,
-    ModelInfo,
+    extract_module_info,
+    ModuleInfo,
 )
 from ._etrace_concepts import (
     ETraceState,
@@ -80,22 +80,37 @@ else:
     from jax.extend.core import Var, Literal, JaxprEqn, Jaxpr
 
 
+__all__ = [
+    'HiddenGroup',
+    'find_hidden_groups_from_module',
+]
+
+
 class HiddenGroup(NamedTuple):
     r"""
-    The data structure for recording the hidden-to-hidden relation.
+    The data structure for recording the hidden group relation.
 
     The following fields are included:
 
-    - hidden_paths: the path to each hidden state
+    - ``hidden_paths``: the path to each hidden state
+    - ``hidden_states``: the hidden states
+    - ``hidden_invars``: the input jax Var of hidden states
+    - ``hidden_outvars``: the output jax Var of hidden states
+    - ``transition_jaxpr``: the jaxpr for computing hidden state transitions, i.e.,
+      $h_1^t, h_2^t, ... = f(h_1^{t-1}, h_2^{t-1}, ..., x_t)$
+    - ``transition_jaxpr_constvars``: the other input variables for jaxpr evaluation of ``transition_jaxpr``
 
-    This relation is used for computing the hidden-to-hidden state transitions::
 
-        h_{t+1} = f(h_t, x_t)
+    Example::
 
-    where ``h_t`` is the hidden state defined in ``hidden_vars``, ``x_t`` is the input at time ``t``
-    defined in ``input_vars``, and ``f`` is the hidden state transition function which is defined
-    in ``jaxpr``.
-
+        >>> import brainscale
+        >>> import brainstate
+        >>> gru = brainscale.nn.GRUCell(10, 20)
+        >>> gru.init_state()
+        >>> inputs = brainstate.random.randn(10)
+        >>> hidden_groups, _ = brainscale.find_hidden_groups_from_module(gru, inputs)
+        >>> for group in hidden_groups:
+        ...     print(group.hidden_paths)
     """
 
     index: int  # the index of the hidden group
@@ -824,7 +839,7 @@ def find_hidden_groups_from_module(
         The hidden groups,
         and the mapping from the hidden state path to the hidden group.
     """
-    minfo = extract_model_info(model, *model_args, **model_kwargs)
+    minfo = extract_module_info(model, *model_args, **model_kwargs)
     (
         hidden_groups,
         hid_path_to_group,
@@ -840,7 +855,7 @@ def find_hidden_groups_from_module(
 
 
 def find_hidden_groups_from_minfo(
-    minfo: ModelInfo
+    minfo: ModuleInfo
 ):
     """
     Finding the hidden groups from the model.

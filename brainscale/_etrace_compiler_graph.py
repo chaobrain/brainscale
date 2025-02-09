@@ -24,8 +24,8 @@ import brainstate as bst
 import jax
 
 from ._etrace_compiler_base import (
-    extract_model_info,
-    ModelInfo,
+    extract_module_info,
+    ModuleInfo,
 )
 from ._etrace_compiler_hid_param_op import (
     find_hidden_param_op_relations_from_minfo,
@@ -45,6 +45,12 @@ from ._typing import (
 )
 
 
+__all__ = [
+    'CompiledGraph',
+    'compile_graph',
+]
+
+
 def order_hidden_group_index(
     hidden_groups: Sequence[HiddenGroup],
 ):
@@ -54,18 +60,33 @@ def order_hidden_group_index(
 
 class CompiledGraph(NamedTuple):
     """
-    The compiled graph for the eligibility trace.
+    The overall compiled graph for the eligibility trace.
+
+    The eligibility trace graph, tracking the relationship between the etrace weights
+    :py:class:`ETraceParam`, the etrace variables :py:class:`ETraceState`, and the etrace
+    operations :py:class:`ETraceOp`.
 
     The following fields are included:
 
-    - ``model_info``: The model information, instance of :class:`ModelInfo`.
+    - ``model_info``: The model information, instance of :class:`ModuleInfo`.
     - ``hidden_groups``: The hidden groups, sequence of :class:`HiddenGroup`.
     - ``hid_path_to_group``: The mapping from the hidden path to the hidden group :class:`HiddenGroup`.
     - ``hidden_param_op_relations``: The hidden parameter operation relations, sequence of :class:`HiddenParamOpRelation`.
     - ``hidden_perturb``: The hidden perturbation, instance of :class:`HiddenPerturbation`, or None.
+
+    Example::
+
+        >>> import brainscale
+        >>> import brainstate
+        >>> gru = brainscale.nn.GRUCell(10, 20)
+        >>> gru.init_state()
+        >>> inputs = brainstate.random.randn(10)
+        >>> compiled_graph = brainscale.compile_graph(gru, inputs)
+        >>> compiled_graph._asdict().keys()
+
     """
 
-    model_info: ModelInfo
+    model_info: ModuleInfo
     hidden_groups: Sequence[HiddenGroup]
     hid_path_to_group: Dict[Path, HiddenGroup]
     hidden_param_op_relations: Sequence[HiddenParamOpRelation]
@@ -160,7 +181,7 @@ def compile_graph(
     with compiler_context('compile_graph'):
 
         assert isinstance(model_args, tuple)
-        minfo = extract_model_info(model, *model_args)
+        minfo = extract_module_info(model, *model_args)
 
         # ---       evaluating the relationship for hidden-to-hidden        --- #
         hidden_groups, hid_path_to_group = find_hidden_groups_from_minfo(minfo)

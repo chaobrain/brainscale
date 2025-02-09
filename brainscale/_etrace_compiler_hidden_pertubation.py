@@ -25,8 +25,8 @@ from ._etrace_compiler_base import (
     JaxprEvaluation,
 )
 from ._etrace_compiler_base import (
-    extract_model_info,
-    ModelInfo,
+    extract_module_info,
+    ModuleInfo,
 )
 from ._etrace_compiler_hidden_group import (
     HiddenGroup,
@@ -48,10 +48,50 @@ if jax.__version_info__ < (0, 4, 38):
 else:
     from jax.extend.core import Var, JaxprEqn, Jaxpr, ClosedJaxpr
 
+__all__ = [
+    'HiddenPerturbation',
+    'add_hidden_perturbation_in_module',
+]
+
 
 class HiddenPerturbation(NamedTuple):
-    """
+    r"""
     The hidden perturbation information.
+
+    Hidden perturbation means that we add perturbations to the hidden states in the jaxpr,
+    and replace the hidden states with the perturbed states.
+    
+    Mathematically, we have the following equation:
+    
+    $$
+    h^t = f(x)  \Rightarrow  h^t = f(x) + \text{perturb_var}
+    $$
+    
+    where $h$ is the hidden state, $f$ is the function, $x$ is the input, and $\text{perturb_var}$
+    is the perturbation variable.
+
+    Technically, we first define a new variable $\hat{h}^t = f(x)$, and then add a new equation:
+
+    $$
+    h^t = \hat{h}^t + \text{perturb_var}
+    $$
+
+    Actually, we add the perturbation to the hidden states in the jaxpr for computing the hidden state gradients:
+
+    $$
+    \frac{\partial L^t}{\partial h^t} = \frac{\partial L^t}{\partial \text{perturb_var}}
+    $$
+
+    Example::
+
+        >>> import brainscale
+        >>> import brainstate
+        >>> gru = brainscale.nn.GRUCell(10, 20)
+        >>> gru.init_state()
+        >>> inputs = brainstate.random.randn(10)
+        >>> hidden_perturb = brainscale.add_hidden_perturbation_in_module(gru, inputs)
+
+
     """
     perturb_vars: Sequence[Var]  # the perturbation variables
     perturb_hidden_paths: Sequence[Path]  # the hidden state paths that are perturbed
@@ -286,7 +326,7 @@ def add_hidden_perturbation_in_jaxpr(
 
 
 def add_hidden_perturbation_from_minfo(
-    minfo: ModelInfo,
+    minfo: ModuleInfo,
 ) -> HiddenPerturbation:
     """
     Adding perturbations to the hidden states in the module,
@@ -317,7 +357,7 @@ def add_hidden_perturbation_in_module(
     Adding perturbations to the hidden states in the module,
     and replacing the hidden states with the perturbed states.
     """
-    minfo = extract_model_info(model, *model_args, **model_kwargs)
+    minfo = extract_module_info(model, *model_args, **model_kwargs)
     return add_hidden_perturbation_in_jaxpr(
         closed_jaxpr=minfo.closed_jaxpr,
         hidden_outvar_to_invar=minfo.hidden_outvar_to_invar,

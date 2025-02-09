@@ -27,8 +27,8 @@ from ._etrace_compiler_base import (
     JaxprEvaluation,
     check_unsupported_op,
     find_matched_vars,
-    extract_model_info,
-    ModelInfo,
+    extract_module_info,
+    ModuleInfo,
 )
 from ._etrace_compiler_hidden_group import (
     HiddenGroup,
@@ -59,6 +59,11 @@ if jax.__version_info__ < (0, 4, 38):
 else:
     from jax.extend.core import Var, Literal, JaxprEqn, Jaxpr
 
+__all__ = [
+    'HiddenParamOpRelation',
+    'find_hidden_param_op_relations_from_module',
+]
+
 
 # TODO
 #
@@ -72,21 +77,33 @@ else:
 
 
 class HiddenParamOpRelation(NamedTuple):
-    """
-    The data structure for recording the weight, operator, and hidden relationship.
+    r"""
+    The data structure for recording the hidden group, parameter, and operator relationship.
 
-    This is the most important data structure for the eligibility trace compiler.
-    It summarizes the parameter, operator, and hidden state relationship, which is used for computing
+    This is one of the most important data structures for the eligibility trace compiler.
+    It summarizes the parameter, operator, and hidden group relationship, which is used for computing
     the weight spatial gradients and the hidden state Jacobian.
 
-    The following fields are included:
+    Usually, the hidden state $h^t$, the weight $\theta$, and the operator $f$ are connected in the following way:
 
-    - ``weight``: the instance of ``ETraceParam``.
+    $$
+    h^t = f(y), \quad y = x @ \theta,
+    $$
+
+    where $x$ is the input data, $\theta$ is the weight, $y$ is the weight output,
+    and $h^t$ is the hidden state at time $t$. The operator $@$ is the operator that transforms
+    the input data $x$ into the weight output $y$. The operator $f$ is the operator that transforms
+    the weight output $y$ into the hidden state $h^t$.
+
+
+    An instance of :py:class:`HiddenParamOpRelation` records the following information:
+
+    - ``weight``: the instance of :class:`ETraceParam`, i.e., $\theta$
     - ``path``: the path to the weight.
-    - ``x``: the jax Var for the weight input. It can be None if the weight is a :class:`ElemWiseParam` instance.
-    - ``y``: the jax Var for the weight output.
-    - ``hidden_groups``: the hidden groups that the weight is associated with.
-    - ``y_to_hidden_group_jaxprs``: the jaxpr for computing y --> hidden groups.
+    - ``x``: the jax Var for the weight input, i.e., $x$. It can be None if the weight is a :class:`ElemWiseParam` instance.
+    - ``y``: the jax Var for the weight output, i.e., $y$.
+    - ``hidden_groups``: the hidden groups that the weight is associated with, i.e., $h^t$.
+    - ``y_to_hidden_group_jaxprs``: the jaxpr for computing y --> hidden groups, i.e., $f$.
     - ``connected_hidden_paths``: the connected hidden paths.
 
     .. note::
@@ -96,6 +113,16 @@ class HiddenParamOpRelation(NamedTuple):
         Each parameter weight may be accompanied by multiple :class:`HiddenParamOpRelation` instances.
         This is because the weight may be used in multiple times.
 
+    Example::
+
+        >>> import brainscale
+        >>> import brainstate
+        >>> gru = brainscale.nn.GRUCell(10, 20)
+        >>> gru.init_state()
+        >>> inputs = brainstate.random.randn(10)
+        >>> hpo_relations = brainscale.find_hidden_param_op_relations_from_module(gru, inputs)
+        >>> for relation in hpo_relations:
+        ...     print(relation)
     """
 
     weight: ETraceParam  # the weight itself
@@ -725,7 +752,7 @@ def find_hidden_param_op_relations_from_jaxpr(
 
 
 def find_hidden_param_op_relations_from_minfo(
-    minfo: ModelInfo,
+    minfo: ModuleInfo,
     hid_path_to_group: Dict[Path, HiddenGroup],
 ) -> Sequence[HiddenParamOpRelation]:
     """
@@ -768,7 +795,7 @@ def find_hidden_param_op_relations_from_module(
     Returns:
         The hidden-param-op relations.
     """
-    minfo = extract_model_info(model, *model_args, **model_kwargs)
+    minfo = extract_module_info(model, *model_args, **model_kwargs)
     hidden_groups, hid_path_to_group = find_hidden_groups_from_minfo(minfo)
 
     return find_hidden_param_op_relations_from_jaxpr(

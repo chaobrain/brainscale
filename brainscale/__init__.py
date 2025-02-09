@@ -19,7 +19,11 @@ __version__ = "0.0.4"
 
 from brainscale._etrace_algorithms import (
     ETraceAlgorithm,
-    EligibilityTraceData,
+    EligibilityTrace,
+)
+from brainscale._etrace_compiler_base import (
+    ModuleInfo,
+    extract_module_info,
 )
 from brainscale._etrace_compiler_graph import (
     CompiledGraph,
@@ -27,12 +31,15 @@ from brainscale._etrace_compiler_graph import (
 )
 from brainscale._etrace_compiler_hid_param_op import (
     HiddenParamOpRelation,
+    find_hidden_param_op_relations_from_module,
 )
 from brainscale._etrace_compiler_hidden_group import (
     HiddenGroup,
+    find_hidden_groups_from_module,
 )
 from brainscale._etrace_compiler_hidden_pertubation import (
     HiddenPerturbation,
+    add_hidden_perturbation_in_module,
 )
 from brainscale._etrace_concepts import (
     # state
@@ -49,6 +56,9 @@ from brainscale._etrace_concepts import (
 )
 from brainscale._etrace_graph_executor import (
     ETraceGraphExecutor,
+)
+from brainscale._etrace_vjp_graph_executor import (
+    ETraceVjpGraphExecutor,
 )
 from brainscale._etrace_input_data import (
     SingleStepData,
