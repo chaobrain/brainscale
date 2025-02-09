@@ -350,7 +350,7 @@ def add_hidden_perturbation_from_minfo(
     return add_hidden_perturbation_in_jaxpr(
         closed_jaxpr=minfo.closed_jaxpr,
         hidden_outvar_to_invar=minfo.hidden_outvar_to_invar,
-        weight_invars=minfo.weight_invars,
+        weight_invars=set(minfo.weight_invars),
         invar_to_hidden_path=minfo.invar_to_hidden_path,
         outvar_to_hidden_path=minfo.outvar_to_hidden_path,
         path_to_state=minfo.retrieved_model_states,
@@ -367,11 +367,4 @@ def add_hidden_perturbation_in_module(
     and replacing the hidden states with the perturbed states.
     """
     minfo = extract_module_info(model, *model_args, **model_kwargs)
-    return add_hidden_perturbation_in_jaxpr(
-        closed_jaxpr=minfo.closed_jaxpr,
-        hidden_outvar_to_invar=minfo.hidden_outvar_to_invar,
-        weight_invars=minfo.weight_invars,
-        invar_to_hidden_path=minfo.invar_to_hidden_path,
-        outvar_to_hidden_path=minfo.outvar_to_hidden_path,
-        path_to_state=minfo.retrieved_model_states,
-    )
+    return add_hidden_perturbation_from_minfo(minfo)

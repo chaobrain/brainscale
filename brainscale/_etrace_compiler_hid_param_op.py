@@ -779,7 +779,7 @@ def find_hidden_param_op_relations_from_minfo(
         hidden_outvar_to_invar=minfo.hidden_outvar_to_invar,
         weight_path_to_invars=minfo.weight_path_to_invars,
         invar_to_weight_path=minfo.invar_to_weight_path,
-        weight_invars=minfo.weight_invars,
+        weight_invars=set(minfo.weight_invars),
         invar_to_hidden_path=minfo.invar_to_hidden_path,
         outvar_to_hidden_path=minfo.outvar_to_hidden_path,
         path_to_state=minfo.retrieved_model_states,
@@ -806,16 +806,4 @@ def find_hidden_param_op_relations_from_module(
     """
     minfo = extract_module_info(model, *model_args, **model_kwargs)
     hidden_groups, hid_path_to_group = find_hidden_groups_from_minfo(minfo)
-
-    return find_hidden_param_op_relations_from_jaxpr(
-        jaxpr=minfo.jaxpr,
-        hidden_outvar_to_invar=minfo.hidden_outvar_to_invar,
-        weight_path_to_invars=minfo.weight_path_to_invars,
-        invar_to_weight_path=minfo.invar_to_weight_path,
-        weight_invars=minfo.weight_invars,
-        invar_to_hidden_path=minfo.invar_to_hidden_path,
-        outvar_to_hidden_path=minfo.outvar_to_hidden_path,
-        path_to_state=minfo.retrieved_model_states,
-        state_id_to_path=minfo.state_id_to_path,
-        hid_path_to_group=hid_path_to_group,
-    )
+    return find_hidden_param_op_relations_from_minfo(minfo, hid_path_to_group)

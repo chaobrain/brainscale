@@ -833,38 +833,6 @@ def find_hidden_groups_from_jaxpr(
     return hidden_groups, bst.util.PrettyDict(hid_path_to_group)
 
 
-def find_hidden_groups_from_module(
-    model: bst.nn.Module,
-    *model_args,
-    **model_kwargs,
-):
-    """
-    Finding the hidden groups from the model.
-
-    Args:
-        model: The model.
-        model_args: The model arguments.
-        model_kwargs: The model keyword arguments.
-
-    Returns:
-        The hidden groups,
-        and the mapping from the hidden state path to the hidden group.
-    """
-    minfo = extract_module_info(model, *model_args, **model_kwargs)
-    (
-        hidden_groups,
-        hid_path_to_group,
-    ) = find_hidden_groups_from_jaxpr(
-        jaxpr=minfo.jaxpr,
-        hidden_outvar_to_invar=minfo.hidden_outvar_to_invar,
-        weight_invars=minfo.weight_invars,
-        invar_to_hidden_path=minfo.invar_to_hidden_path,
-        outvar_to_hidden_path=minfo.outvar_to_hidden_path,
-        path_to_state=minfo.retrieved_model_states,
-    )
-    return hidden_groups, hid_path_to_group
-
-
 def find_hidden_groups_from_minfo(
     minfo: ModuleInfo
 ):
@@ -889,4 +857,29 @@ def find_hidden_groups_from_minfo(
         outvar_to_hidden_path=minfo.outvar_to_hidden_path,
         path_to_state=minfo.retrieved_model_states,
     )
+    return hidden_groups, hid_path_to_group
+
+
+def find_hidden_groups_from_module(
+    model: bst.nn.Module,
+    *model_args,
+    **model_kwargs,
+):
+    """
+    Finding the hidden groups from the model.
+
+    Args:
+        model: The model.
+        model_args: The model arguments.
+        model_kwargs: The model keyword arguments.
+
+    Returns:
+        The hidden groups,
+        and the mapping from the hidden state path to the hidden group.
+    """
+    minfo = extract_module_info(model, *model_args, **model_kwargs)
+    (
+        hidden_groups,
+        hid_path_to_group,
+    ) = find_hidden_groups_from_minfo(minfo)
     return hidden_groups, hid_path_to_group
