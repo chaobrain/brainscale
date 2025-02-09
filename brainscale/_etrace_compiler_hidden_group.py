@@ -47,16 +47,18 @@
 from __future__ import annotations
 
 from itertools import combinations
-from typing import NamedTuple, List, Dict, Sequence, Tuple, Set, Optional, Callable
+from typing import List, Dict, Sequence, Tuple, Set, Optional, Callable, NamedTuple, Any
 
-import brainstate as bst
 import brainunit as u
 import jax.core
 import numpy as np
 
+import brainstate as bst
 from ._etrace_compiler_base import (
     JaxprEvaluation,
     find_matched_vars,
+)
+from ._etrace_compiler_module_info import (
     extract_module_info,
     ModuleInfo,
 )
@@ -78,7 +80,6 @@ if jax.__version_info__ < (0, 4, 38):
     from jax.core import Var, Literal, JaxprEqn, Jaxpr
 else:
     from jax.extend.core import Var, Literal, JaxprEqn, Jaxpr
-
 
 __all__ = [
     'HiddenGroup',
@@ -133,10 +134,6 @@ class HiddenGroup(NamedTuple):
 
     # the other input variables for transition_jaxpr evaluation
     transition_jaxpr_constvars: List[Var]
-
-    def __repr__(self):
-        # TODO
-        return f'{self.__class__.__name__}({self.index}, {self.hidden_paths})'
 
     @property
     def varshape(self) -> Tuple[int, ...]:
@@ -230,6 +227,13 @@ class HiddenGroup(NamedTuple):
         ]
         return splitted_hid_vals
 
+    def dict(self) -> Dict[str, Any]:
+        return self._asdict()
+
+    def __repr__(self) -> str:
+        return repr(bst.util.PrettyMapping(self._asdict(), type_name=self.__class__.__name__))
+
+
 
 HiddenGroup.__module__ = 'brainscale'
 
@@ -256,6 +260,12 @@ class HiddenToHiddenGroupTracer(NamedTuple):
     other_invars: set[Var]
     invar_needed_in_oth_eqns: set[Var]
     trace: List[JaxprEqn]
+
+    def dict(self) -> Dict[str, Any]:
+        return self._asdict()
+    def __repr__(self) -> str:
+        return repr(bst.util.PrettyMapping(self._asdict(), type_name=self.__class__.__name__))
+
 
 
 class Hidden2GroupTransition(NamedTuple):
@@ -301,6 +311,13 @@ class Hidden2GroupTransition(NamedTuple):
         if return_index is not None:
             return new_hidden_vals[return_index]
         return new_hidden_vals
+
+    def dict(self) -> Dict[str, Any]:
+        return self._asdict()
+
+    def __repr__(self) -> str:
+        return repr(bst.util.PrettyMapping(self._asdict(), type_name=self.__class__.__name__))
+
 
 
 def _simplify_hid2hid_tracer(
@@ -819,7 +836,7 @@ def find_hidden_groups_from_jaxpr(
         path_to_state=path_to_state,
     ).compile()
 
-    return hidden_groups, hid_path_to_group
+    return hidden_groups, bst.util.PrettyDict(hid_path_to_group)
 
 
 def find_hidden_groups_from_module(
@@ -873,7 +890,7 @@ def find_hidden_groups_from_minfo(
     ) = find_hidden_groups_from_jaxpr(
         jaxpr=minfo.jaxpr,
         hidden_outvar_to_invar=minfo.hidden_outvar_to_invar,
-        weight_invars=minfo.weight_invars,
+        weight_invars=set(minfo.weight_invars),
         invar_to_hidden_path=minfo.invar_to_hidden_path,
         outvar_to_hidden_path=minfo.outvar_to_hidden_path,
         path_to_state=minfo.retrieved_model_states,

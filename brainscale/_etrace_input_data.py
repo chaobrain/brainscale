@@ -16,9 +16,10 @@
 
 from typing import Any
 
-import brainstate as bst
 import jax
 from jax.tree_util import register_pytree_node_class
+
+import brainstate as bst
 
 __all__ = [
     'SingleStepData',

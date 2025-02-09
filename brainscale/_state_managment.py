@@ -18,7 +18,6 @@ from __future__ import annotations
 from typing import Sequence, Tuple, List, Hashable, Dict
 
 import brainstate as bst
-
 from ._etrace_concepts import ETraceState, ETraceParam
 from ._typing import Path, WeightVals, HiddenVals, StateVals
 

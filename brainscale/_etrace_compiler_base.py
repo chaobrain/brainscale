@@ -15,10 +15,11 @@
 
 from __future__ import annotations
 
-from typing import Dict, Sequence, Set, List
+from typing import Dict, Sequence, Set, List, Any, NamedTuple
 
 import jax
 
+import brainstate as bst
 from ._etrace_operators import (
     is_etrace_op,
     is_etrace_op_enable_gradient,

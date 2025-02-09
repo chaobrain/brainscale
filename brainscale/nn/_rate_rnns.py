@@ -18,9 +18,9 @@ from __future__ import annotations
 
 from typing import Callable, Union
 
-import brainstate as bst
 import brainunit as u
 
+import brainstate as bst
 from brainscale._etrace_concepts import (
     ETraceState,
     ETraceParam,

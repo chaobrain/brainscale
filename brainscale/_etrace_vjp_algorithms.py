@@ -30,11 +30,11 @@ from collections import defaultdict
 from functools import partial
 from typing import Dict, Tuple, Any, List, Optional, Sequence
 
-import brainstate as bst
 import brainunit as u
 import jax
 import jax.numpy as jnp
 
+import brainstate as bst
 from ._etrace_algorithms import (
     ETraceAlgorithm,
     EligibilityTrace,

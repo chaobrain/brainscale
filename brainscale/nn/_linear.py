@@ -19,13 +19,13 @@ from __future__ import annotations
 
 from typing import Callable, Union, Sequence, Optional
 
-import brainstate as bst
 import brainunit as u
-from brainstate import functional, init
 
+import brainstate as bst
 from brainscale._etrace_concepts import ETraceParam
 from brainscale._etrace_operators import MatMulOp
 from brainscale._typing import ArrayLike
+from brainstate import functional, init
 
 __all__ = [
     'Linear',

@@ -20,11 +20,11 @@ import threading
 from functools import reduce, partial
 from typing import Callable, Optional, Dict, List, Tuple
 
-import brainstate as bst
 import brainunit as u
 import jax
 import numpy as np
 
+import brainstate as bst
 from ._misc import remove_units
 
 __all__ = [

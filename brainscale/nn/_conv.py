@@ -20,13 +20,13 @@ from __future__ import annotations
 import collections.abc
 from typing import Callable, Tuple, Union, Sequence, Optional, TypeVar
 
-import brainstate as bst
 import brainunit as u
 import jax
-from brainstate import functional, init
 
+import brainstate as bst
 from brainscale._etrace_concepts import ETraceParam, NonTempParam
 from brainscale._typing import ArrayLike
+from brainstate import functional, init
 
 __all__ = [
     'Conv1d',

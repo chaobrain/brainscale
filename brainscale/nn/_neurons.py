@@ -18,9 +18,8 @@
 from __future__ import annotations
 
 import brainstate as bst
-from brainstate import init
-
 from brainscale._etrace_concepts import ETraceState
+from brainstate import init
 
 __all__ = [
     # neuron models

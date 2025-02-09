@@ -23,7 +23,7 @@ the perturbations, and the compiled model.
 - :class:`HiddenPerturbation` summarizes the perturbation of hidden state groups.
   It contains the perturbation function, and the perturbation hidden target.
 - :class:`ModuleInfo` contains the information of the model, including the input, output, hidden, states, jaxpr, and many others.
-- :class:`CompiledGraph` contains the compiled graph of the model, including the
+- :class:`ETraceGraph` contains the compiled graph of the model, including the
   hidden state groups, the operations, the parameter weights, the jaxpr of compiled models,
   and others.
 
@@ -37,7 +37,7 @@ the perturbations, and the compiled model.
     HiddenParamOpRelation
     HiddenPerturbation
     ModuleInfo
-    CompiledGraph
+    ETraceGraph
 
 
 

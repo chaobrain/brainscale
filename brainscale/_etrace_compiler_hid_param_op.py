@@ -17,22 +17,24 @@
 from __future__ import annotations
 
 import warnings
-from typing import NamedTuple, List, Dict, Tuple, Sequence
+from typing import List, Dict, Tuple, Sequence, NamedTuple, Any
 
-import brainstate as bst
 import jax.core
 from jax.extend import source_info_util
 
+import brainstate as bst
 from ._etrace_compiler_base import (
     JaxprEvaluation,
     check_unsupported_op,
     find_matched_vars,
-    extract_module_info,
-    ModuleInfo,
 )
 from ._etrace_compiler_hidden_group import (
     HiddenGroup,
     find_hidden_groups_from_minfo,
+)
+from ._etrace_compiler_module_info import (
+    extract_module_info,
+    ModuleInfo,
 )
 from ._etrace_concepts import ETraceParam
 from ._etrace_debug_jaxpr2code import jaxpr_to_python_code
@@ -74,7 +76,6 @@ __all__ = [
 #          h = f(x1 @ w1 + x2 @ w2)
 #
 #       The `df` for w1 and w2 are the same, although them have the different weight y.
-
 
 class HiddenParamOpRelation(NamedTuple):
     r"""
@@ -163,6 +164,12 @@ class HiddenParamOpRelation(NamedTuple):
                 hidden_vals = group.concat_hidden(hidden_vals)
             vals_of_hidden_groups.append(hidden_vals)
         return vals_of_hidden_groups
+
+    def dict(self) -> Dict[str, Any]:
+        return self._asdict()
+
+    def __repr__(self) -> str:
+        return repr(bst.util.PrettyMapping(self._asdict(), type_name=self.__class__.__name__))
 
 
 HiddenParamOpRelation.__module__ = 'brainscale'
@@ -314,9 +321,9 @@ def _trace_simplify(
         path=state_id_to_path[id(tracer.weight)],
         x=tracer.x,
         y=tracer.y,
-        hidden_groups=connected_hidden_groups,
+        hidden_groups=bst.util.PrettyList(connected_hidden_groups),
         y_to_hidden_group_jaxprs=y_to_hid_group_jaxprs,
-        connected_hidden_paths=connected_hidden_paths,
+        connected_hidden_paths=bst.util.PrettyList(connected_hidden_paths),
     )
 
 
@@ -394,6 +401,12 @@ class HiddenWeightOpTracer(NamedTuple):
                                       if invar_needed_in_oth_eqns is not None
                                       else self.invar_needed_in_oth_eqns)
         )
+
+    def dict(self) -> Dict[str, Any]:
+        return self._asdict()
+
+    def __repr__(self) -> str:
+        return repr(bst.util.PrettyMapping(self._asdict(), type_name=self.__class__.__name__))
 
 
 class JaxprEvalForWeightOpHiddenRelation(JaxprEvaluation):

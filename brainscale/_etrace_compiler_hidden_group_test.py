@@ -16,12 +16,12 @@
 import unittest
 from pprint import pprint
 
-import brainstate as bst
 import brainunit as u
 import jax
 import pytest
 
 import brainscale
+import brainstate as bst
 from brainscale._etrace_compiler_hidden_group import find_hidden_groups_from_module
 from brainscale._etrace_compiler_hidden_group import group_merging
 from brainscale._etrace_model_test import (

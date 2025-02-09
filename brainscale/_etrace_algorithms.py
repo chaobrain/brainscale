@@ -24,8 +24,7 @@ from __future__ import annotations
 from typing import Dict, Any, Optional
 
 import brainstate as bst
-
-from ._etrace_compiler_graph import ETracedGraph
+from ._etrace_compiler_graph import ETraceGraph
 from ._etrace_concepts import ETraceState
 from ._etrace_graph_executor import ETraceGraphExecutor
 from ._typing import Path
@@ -116,7 +115,7 @@ class ETraceAlgorithm(bst.nn.Module):
         self._other_states = None
 
     @property
-    def graph(self) -> ETracedGraph:
+    def graph(self) -> ETraceGraph:
         """
         Get the etrace graph.
         """

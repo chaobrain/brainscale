@@ -20,10 +20,10 @@ import warnings
 from enum import Enum
 from typing import Sequence
 
-import brainstate as bst
 import brainunit as u
 import jax.tree
 
+import brainstate as bst
 from ._typing import Path
 
 if jax.__version_info__ < (0, 4, 38):

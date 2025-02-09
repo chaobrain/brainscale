@@ -17,10 +17,10 @@
 import unittest
 from pprint import pprint
 
-import brainstate as bst
 import brainunit as u
 
 import brainscale
+import brainstate as bst
 from brainscale._etrace_model_test import (
     IF_Delta_Dense_Layer,
     LIF_ExpCo_Dense_Layer,
@@ -46,7 +46,7 @@ class TestCompileGraphRNN(unittest.TestCase):
         input = bst.random.rand(n_in)
         graph = brainscale.compile_etrace_graph(gru, input, include_hidden_perturb=False)
 
-        self.assertTrue(isinstance(graph, brainscale.CompiledVjpGraph))
+        self.assertTrue(isinstance(graph, brainscale.ETraceGraph))
         self.assertTrue(graph.module_info.num_var_out == 1)
         self.assertTrue(len(graph.module_info.compiled_model_states) == 4)
         self.assertTrue(len(graph.hidden_groups) == 1)

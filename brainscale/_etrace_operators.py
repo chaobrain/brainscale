@@ -19,10 +19,11 @@ import contextlib
 import threading
 from typing import Callable, Optional, Dict
 
-import brainstate as bst
 import brainunit as u
 import jax
 import numpy as np
+
+import brainstate as bst
 
 __all__ = [
     'stop_param_gradients',  # stop weight gradients

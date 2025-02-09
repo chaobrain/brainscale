@@ -39,9 +39,8 @@
 
 from __future__ import annotations
 
-from typing import Dict, Tuple, Sequence
+from typing import Dict, Tuple
 
-import brainstate as bst
 import brainunit as u
 import jax.core
 import jax.numpy as jnp
@@ -49,6 +48,7 @@ from jax.extend import linear_util as lu
 from jax.interpreters import partial_eval as pe
 from jax.tree_util import register_pytree_node_class
 
+import brainstate as bst
 from ._etrace_compiler_graph import compile_etrace_graph
 from ._etrace_compiler_hidden_group import HiddenGroup
 from ._etrace_graph_executor import ETraceGraphExecutor
@@ -69,7 +69,6 @@ from ._typing import (
     ETraceX_Key,
     ETraceDF_Key,
     Hid2WeightJacobian,
-    Hid2HidJacobian,
     HiddenGroupJacobian,
 )
 

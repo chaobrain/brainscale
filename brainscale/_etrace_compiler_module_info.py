@@ -16,11 +16,11 @@
 from __future__ import annotations
 
 import functools
-from typing import Dict, Sequence, Set, List, NamedTuple, Tuple, Any, Optional
+from typing import Dict, Sequence, Set, List, Tuple, Optional, NamedTuple, Any
 
-import brainstate as bst
 import jax
 
+import brainstate as bst
 from ._etrace_concepts import (
     ETraceParam,
     ETraceState,
@@ -210,16 +210,13 @@ class ModuleInfo(NamedTuple):
     hidden_outvar_to_invar: Dict[Var, Var]
 
     # parameter weights
-    weight_invars: Set[Var]
+    weight_invars: List[Var]
     weight_path_to_invars: Dict[Path, List[Var]]
     invar_to_weight_path: Dict[Var, Path]
 
     # output
     num_var_out: int  # number of original output variables
     num_var_state: int  # number of state variable outputs
-
-    def dict(self) -> Dict[str, Any]:
-        return dict(self._asdict())
 
     @property
     def jaxpr(self) -> Jaxpr:
@@ -249,7 +246,10 @@ class ModuleInfo(NamedTuple):
         )
 
         # closed jaxpr
-        closed_jaxpr = ClosedJaxpr(jaxpr, self.closed_jaxpr.consts)
+        closed_jaxpr = ClosedJaxpr(
+            jaxpr=jaxpr,
+            consts=self.closed_jaxpr.consts,
+        )
 
         # new instance of `ModuleInfo`
         items = self.dict()
@@ -364,6 +364,12 @@ class ModuleInfo(NamedTuple):
 
         return out, etrace_vals, oth_state_vals, temps
 
+    def dict(self) -> Dict[str, Any]:
+        return self._asdict()
+
+    def __repr__(self) -> str:
+        return repr(bst.util.PrettyMapping(self._asdict(), type_name=self.__class__.__name__))
+
 
 ModuleInfo.__module__ = 'brainscale'
 
@@ -398,11 +404,13 @@ def extract_module_info(
     # state information
     cache_key = stateful_model.get_arg_cache_key(*model_args, **model_kwargs)
     compiled_states = stateful_model.get_states(cache_key)
+    compiled_states = bst.util.PrettyList(compiled_states)
 
     state_id_to_path: Dict[StateID, Path] = {
         id(state): path
         for path, state in model_retrieved_states.items()
     }
+    state_id_to_path = bst.util.PrettyDict(state_id_to_path)
 
     closed_jaxpr = stateful_model.get_jaxpr(cache_key)
     jaxpr = closed_jaxpr.jaxpr
@@ -421,6 +429,8 @@ def extract_module_info(
     # remove the quantity from the invars and outvars
     state_tree_invars = _remove_quantity(state_tree_invars)
     state_tree_outvars = _remove_quantity(state_tree_outvars)
+    state_tree_invars = bst.util.PrettyList(state_tree_invars)
+    state_tree_outvars = bst.util.PrettyList(state_tree_outvars)
 
     # -- checking weights as invar -- #
     weight_path_to_invars = {
@@ -428,20 +438,27 @@ def extract_module_info(
         for invar, st in zip(state_tree_invars, compiled_states)
         if isinstance(st, ETraceParam)
     }
+    weight_path_to_invars = bst.util.PrettyDict(weight_path_to_invars)
+
     hidden_path_to_invar = {  # one-to-many mapping
         state_id_to_path[id(st)]: invar  # ETraceState only contains one Array, "invar" is the jaxpr var
         for invar, st in zip(state_tree_invars, compiled_states)
         if isinstance(st, ETraceState)
     }
+    hidden_path_to_invar = bst.util.PrettyDict(hidden_path_to_invar)
+
     invar_to_hidden_path = {
         invar: path
         for path, invar in hidden_path_to_invar.items()
     }
+    invar_to_hidden_path = bst.util.PrettyDict(invar_to_hidden_path)
+
     invar_to_weight_path = {  # many-to-one mapping
         v: k
         for k, vs in weight_path_to_invars.items()
         for v in vs
     }
+    invar_to_weight_path = bst.util.PrettyDict(invar_to_weight_path)
 
     # -- checking states as outvar -- #
     hidden_path_to_outvar = {  # one-to-one mapping
@@ -449,15 +466,21 @@ def extract_module_info(
         for outvar, st in zip(state_tree_outvars, compiled_states)
         if isinstance(st, ETraceState)
     }
+    hidden_path_to_outvar = bst.util.PrettyDict(hidden_path_to_outvar)
+
     outvar_to_hidden_path = {  # one-to-one mapping
         v: state_id
         for state_id, v in hidden_path_to_outvar.items()
     }
+    outvar_to_hidden_path = bst.util.PrettyDict(outvar_to_hidden_path)
+
     hidden_outvar_to_invar = {
         outvar: hidden_path_to_invar[hid]
         for hid, outvar in hidden_path_to_outvar.items()
     }
-    weight_invars = set([v for vs in weight_path_to_invars.values() for v in vs])
+    hidden_outvar_to_invar = bst.util.PrettyDict(hidden_outvar_to_invar)
+
+    weight_invars = bst.util.PrettyList(set([v for vs in weight_path_to_invars.values() for v in vs]))
 
     return ModuleInfo(
         # stateful model

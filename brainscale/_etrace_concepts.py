@@ -35,11 +35,11 @@ from __future__ import annotations
 from enum import Enum
 from typing import Callable, Optional, Dict, Tuple, Sequence
 
-import brainstate as bst
 import brainunit as u
 import jax
 import numpy as np
 
+import brainstate as bst
 from ._etrace_operators import (
     ETraceOp,
     ElemWiseOp,

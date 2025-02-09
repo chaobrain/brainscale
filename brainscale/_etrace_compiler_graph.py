@@ -18,15 +18,11 @@ from __future__ import annotations
 
 import threading
 from contextlib import contextmanager
-from typing import Dict, Sequence, NamedTuple, Tuple, Optional
+from typing import Dict, Sequence, Tuple, Optional, NamedTuple
 
-import brainstate as bst
 import jax
 
-from ._etrace_compiler_module_info import (
-    extract_module_info,
-    ModuleInfo,
-)
+import brainstate as bst
 from ._etrace_compiler_hid_param_op import (
     find_hidden_param_op_relations_from_minfo,
     HiddenParamOpRelation,
@@ -39,14 +35,17 @@ from ._etrace_compiler_hidden_pertubation import (
     add_hidden_perturbation_from_minfo,
     HiddenPerturbation,
 )
+from ._etrace_compiler_module_info import (
+    extract_module_info,
+    ModuleInfo,
+)
 from ._typing import (
     Inputs,
     Path,
 )
 
-
 __all__ = [
-    'ETracedGraph',
+    'ETraceGraph',
     'compile_etrace_graph',
 ]
 
@@ -58,7 +57,7 @@ def order_hidden_group_index(
         assert group.index == i, f"Hidden group index {group.index} should be equal to its position {i}."
 
 
-class ETracedGraph(NamedTuple):
+class ETraceGraph(NamedTuple):
     """
     The overall compiled graph for the eligibility trace.
 
@@ -82,7 +81,7 @@ class ETracedGraph(NamedTuple):
         >>> gru.init_state()
         >>> inputs = brainstate.random.randn(10)
         >>> compiled_graph = brainscale.compile_etrace_graph(gru, inputs)
-        >>> compiled_graph._asdict().keys()
+        >>> compiled_graph.dict().keys()
 
     """
 
@@ -110,8 +109,16 @@ class ETracedGraph(NamedTuple):
 
         return self.module_info._process(args, jaxpr_outs)
 
+    def dict(self) -> Dict:
+        return self._asdict()
 
-ETracedGraph.__module__ = 'brainscale'
+    def __repr__(self) -> str:
+        return repr(bst.util.PrettyMapping(self._asdict(), type_name=self.__class__.__name__))
+
+
+
+
+ETraceGraph.__module__ = 'brainscale'
 
 
 class CONTEXT(threading.local):
@@ -162,7 +169,7 @@ def compile_etrace_graph(
     model: bst.nn.Module,
     *model_args: Tuple,
     include_hidden_perturb: bool = True,
-) -> ETracedGraph:
+) -> ETraceGraph:
     """
     Building the eligibility trace graph for the model according to the given inputs.
 
@@ -245,7 +252,7 @@ def compile_etrace_graph(
 
         # ---              return the compiled graph               --- #
 
-        return ETracedGraph(
+        return ETraceGraph(
             module_info=minfo,
             hidden_groups=hidden_groups,
             hid_path_to_group=hid_path_to_group,

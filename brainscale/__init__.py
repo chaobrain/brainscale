@@ -21,12 +21,8 @@ from brainscale._etrace_algorithms import (
     ETraceAlgorithm,
     EligibilityTrace,
 )
-from brainscale._etrace_compiler_base import (
-    ModuleInfo,
-    extract_module_info,
-)
 from brainscale._etrace_compiler_graph import (
-    ETracedGraph,
+    ETraceGraph,
     compile_etrace_graph,
 )
 from brainscale._etrace_compiler_hid_param_op import (
@@ -40,6 +36,10 @@ from brainscale._etrace_compiler_hidden_group import (
 from brainscale._etrace_compiler_hidden_pertubation import (
     HiddenPerturbation,
     add_hidden_perturbation_in_module,
+)
+from brainscale._etrace_compiler_module_info import (
+    ModuleInfo,
+    extract_module_info,
 )
 from brainscale._etrace_concepts import (
     # state

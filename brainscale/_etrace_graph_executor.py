@@ -40,9 +40,8 @@ from __future__ import annotations
 from typing import Dict, Any
 
 import brainstate as bst
-
 from ._etrace_compiler_graph import (
-    ETracedGraph,
+    ETraceGraph,
     compile_etrace_graph,
 )
 from ._etrace_input_data import get_single_step_data
@@ -89,7 +88,7 @@ class ETraceGraphExecutor:
         self._state_id_to_path = None
 
     @property
-    def graph(self) -> ETracedGraph:
+    def graph(self) -> ETraceGraph:
         r"""
         The compiled graph for the model.
 

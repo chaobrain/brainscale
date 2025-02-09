@@ -16,18 +16,20 @@
 
 from __future__ import annotations
 
-from typing import Dict, Set, NamedTuple, Sequence
+from typing import Dict, Set, Sequence, NamedTuple, Any
 
-import brainstate as bst
 import jax.core
 
+import brainstate as bst
 from ._etrace_compiler_base import (
     JaxprEvaluation,
-    extract_module_info,
-    ModuleInfo,
 )
 from ._etrace_compiler_hidden_group import (
     HiddenGroup,
+)
+from ._etrace_compiler_module_info import (
+    extract_module_info,
+    ModuleInfo,
 )
 from ._etrace_concepts import (
     ETraceState,
@@ -140,6 +142,12 @@ class HiddenPerturbation(NamedTuple):
             for group in hidden_group
         ]
 
+    def dict(self) -> Dict[str, Any]:
+        return self._asdict()
+
+    def __repr__(self) -> str:
+        return repr(bst.util.PrettyMapping(self._asdict(), type_name=self.__class__.__name__))
+
 
 HiddenPerturbation.__module__ = 'brainscale'
 
@@ -223,10 +231,12 @@ class JaxprEvalForHiddenPerturbation(JaxprEvaluation):
         revised_closed_jaxpr = ClosedJaxpr(jaxpr, self.closed_jaxpr.literals)
 
         # finalizing
+        perturb_hidden_paths = [self.outvar_to_hidden_path[v] for v in self.hidden_outvars]
+        perturb_hidden_states = [self.path_to_state[self.outvar_to_hidden_path[v]] for v in self.hidden_outvars]
         info = HiddenPerturbation(
-            perturb_vars=list(self.perturb_invars.values()),
-            perturb_hidden_paths=[self.outvar_to_hidden_path[v] for v in self.hidden_outvars],
-            perturb_hidden_states=[self.path_to_state[self.outvar_to_hidden_path[v]] for v in self.hidden_outvars],
+            perturb_vars=bst.util.PrettyList(self.perturb_invars.values()),
+            perturb_hidden_paths=bst.util.PrettyList(perturb_hidden_paths),
+            perturb_hidden_states=bst.util.PrettyList(perturb_hidden_states),
             perturb_jaxpr=revised_closed_jaxpr
         )
 

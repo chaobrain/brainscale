@@ -16,11 +16,10 @@
 
 import unittest
 
-import brainstate as bst
 import brainunit as u
-import numpy as np
 
 import brainscale
+import brainstate as bst
 from brainscale._etrace_concepts import ETraceGrad
 
 

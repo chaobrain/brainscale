@@ -16,10 +16,10 @@
 
 import unittest
 
-import brainstate as bst
 import jax.numpy as jnp
 
 import brainscale
+import brainstate as bst
 
 
 class TestMatMulETraceOp(unittest.TestCase):
