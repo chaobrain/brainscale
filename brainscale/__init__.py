@@ -26,8 +26,8 @@ from brainscale._etrace_compiler_base import (
     extract_module_info,
 )
 from brainscale._etrace_compiler_graph import (
-    CompiledGraph,
-    compile_graph,
+    ETracedGraph,
+    compile_etrace_graph,
 )
 from brainscale._etrace_compiler_hid_param_op import (
     HiddenParamOpRelation,
@@ -57,9 +57,6 @@ from brainscale._etrace_concepts import (
 from brainscale._etrace_graph_executor import (
     ETraceGraphExecutor,
 )
-from brainscale._etrace_vjp_graph_executor import (
-    ETraceVjpGraphExecutor,
-)
 from brainscale._etrace_input_data import (
     SingleStepData,
     MultiStepData,
@@ -74,6 +71,9 @@ from brainscale._etrace_vjp_algorithms import (
     IODimVjpAlgorithm,
     ParamDimVjpAlgorithm,
     HybridDimVjpAlgorithm,
+)
+from brainscale._etrace_vjp_graph_executor import (
+    ETraceVjpGraphExecutor,
 )
 from brainscale._grad_exponential import (
     GradExpon,

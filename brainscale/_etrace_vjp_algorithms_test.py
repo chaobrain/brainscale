@@ -56,7 +56,7 @@ class TestDiagOn:
         model = bst.nn.init_all_states(model)
 
         inputs = bst.random.randn(n_seq, n_in)
-        algorithm = brainscale.DiagIODimAlgorithm(model, decay_or_rank=0.9)
+        algorithm = brainscale.IODimVjpAlgorithm(model, decay_or_rank=0.9)
         algorithm.compile_graph(inputs[0])
 
         outs = bst.compile.for_loop(algorithm, inputs)
@@ -91,7 +91,7 @@ class TestDiagOn:
         model = bst.nn.init_all_states(model)
 
         inputs = bst.random.randn(n_seq, n_in)
-        algorithm = brainscale.DiagIODimAlgorithm(model, decay_or_rank=0.9, vjp_method='multi-step')
+        algorithm = brainscale.IODimVjpAlgorithm(model, decay_or_rank=0.9, vjp_method='multi-step')
         algorithm.compile_graph(inputs[0])
 
         outs = algorithm(brainscale.MultiStepData(inputs))
@@ -134,7 +134,7 @@ class TestDiagOn:
             model = bst.nn.init_all_states(model)
 
             inputs = bst.random.randn(n_seq, n_in)
-            algorithm = brainscale.DiagIODimAlgorithm(model, decay_or_rank=0.9)
+            algorithm = brainscale.IODimVjpAlgorithm(model, decay_or_rank=0.9)
             algorithm.compile_graph(inputs[0])
 
             outs = bst.compile.for_loop(algorithm, inputs)
@@ -177,7 +177,7 @@ class TestDiagOn:
             model = bst.nn.init_all_states(model)
 
             inputs = bst.random.randn(n_seq, n_in)
-            algorithm = brainscale.DiagIODimAlgorithm(model, decay_or_rank=0.9, vjp_method='multi-step')
+            algorithm = brainscale.IODimVjpAlgorithm(model, decay_or_rank=0.9, vjp_method='multi-step')
             algorithm.compile_graph(inputs[0])
 
             outs = algorithm(brainscale.MultiStepData(inputs))
@@ -216,7 +216,7 @@ class TestDiagOn2:
         model = bst.nn.init_all_states(model)
 
         inputs = bst.random.randn(n_seq, n_in)
-        algorithm = brainscale.DiagParamDimAlgorithm(model)
+        algorithm = brainscale.ParamDimVjpAlgorithm(model)
         algorithm.compile_graph(inputs[0])
 
         outs = bst.compile.for_loop(algorithm, inputs)
@@ -251,7 +251,7 @@ class TestDiagOn2:
         model = bst.nn.init_all_states(model)
 
         inputs = bst.random.randn(n_seq, n_in)
-        algorithm = brainscale.DiagParamDimAlgorithm(model, vjp_method='multi-step')
+        algorithm = brainscale.ParamDimVjpAlgorithm(model, vjp_method='multi-step')
         algorithm.compile_graph(inputs[0])
 
         outs = algorithm(brainscale.MultiStepData(inputs))
@@ -298,7 +298,7 @@ class TestDiagOn2:
             param_states = model.states(bst.ParamState).to_dict_values()
 
             inputs = bst.random.randn(n_seq, n_in)
-            algorithm = brainscale.DiagParamDimAlgorithm(model)
+            algorithm = brainscale.ParamDimVjpAlgorithm(model)
             algorithm.compile_graph(inputs[0])
 
             outs = bst.compile.for_loop(algorithm, inputs)
@@ -346,7 +346,7 @@ class TestDiagOn2:
             param_states = model.states(bst.ParamState).to_dict_values()
 
             inputs = bst.random.randn(n_seq, n_in)
-            algorithm = brainscale.DiagParamDimAlgorithm(model, vjp_method='multi-step')
+            algorithm = brainscale.ParamDimVjpAlgorithm(model, vjp_method='multi-step')
             algorithm.compile_graph(inputs[0])
 
             outs = algorithm(brainscale.MultiStepData(inputs))

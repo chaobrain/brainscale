@@ -415,20 +415,20 @@ class Trainer(object):
                 self.args.etrace_decay,
                 vjp_time=self.args.vjp_time,
             )
-            model.compile_graph(0, jax.ShapeDtypeStruct(inputs.shape[1:], inputs.dtype))
+            model.compile_etrace_graph(0, jax.ShapeDtypeStruct(inputs.shape[1:], inputs.dtype))
         elif self.args.method == 'diag':
             model = brainscale.DiagParamDimAlgorithm(
                 _single_step,
                 vjp_time=self.args.vjp_time,
             )
-            model.compile_graph(0, jax.ShapeDtypeStruct(inputs.shape[1:], inputs.dtype))
+            model.compile_etrace_graph(0, jax.ShapeDtypeStruct(inputs.shape[1:], inputs.dtype))
         elif self.args.method == 'hybrid':
             model = brainscale.DiagHybridDimAlgorithm(
                 _single_step,
                 self.args.etrace_decay,
                 vjp_time=self.args.vjp_time,
             )
-            model.compile_graph(0, jax.ShapeDtypeStruct(inputs.shape[1:], inputs.dtype))
+            model.compile_etrace_graph(0, jax.ShapeDtypeStruct(inputs.shape[1:], inputs.dtype))
         else:
             raise ValueError(f'Unknown online learning methods: {self.args.method}.')
 
@@ -493,13 +493,13 @@ class Trainer(object):
         # initialize the online learning model
         if self.args.method == 'expsm_diag':
             model = brainscale.DiagIODimAlgorithm(_single_step, self.args.etrace_decay, )
-            model.compile_graph(input_info)
+            model.compile_etrace_graph(input_info)
         elif self.args.method == 'diag':
             model = brainscale.DiagParamDimAlgorithm(_single_step, )
-            model.compile_graph(input_info)
+            model.compile_etrace_graph(input_info)
         elif self.args.method == 'hybrid':
             model = brainscale.DiagHybridDimAlgorithm(_single_step, self.args.etrace_decay, )
-            model.compile_graph(input_info)
+            model.compile_etrace_graph(input_info)
         else:
             raise ValueError(f'Unknown online learning methods: {self.args.method}.')
 

@@ -20,9 +20,6 @@ import brainunit as u
 import pytest
 
 import brainscale
-from brainscale._etrace_compiler_base import (
-    extract_module_info,
-)
 from brainscale._etrace_model_test import (
     IF_Delta_Dense_Layer,
     LIF_ExpCo_Dense_Layer,
@@ -56,7 +53,7 @@ class Test_extract_model_info:
         bst.nn.init_all_states(rnn)
 
         input = bst.random.rand(n_in)
-        minfo = extract_module_info(rnn, input)
+        minfo = brainscale.extract_module_info(rnn, input)
         pprint(minfo)
 
     @pytest.mark.parametrize(
@@ -84,7 +81,7 @@ class Test_extract_model_info:
         with bst.environ.context(dt=0.1 * u.ms):
             layer = cls(n_in, n_out)
             bst.nn.init_all_states(layer)
-            minfo = extract_module_info(layer, input)
+            minfo = brainscale.extract_module_info(layer, input)
             pprint(minfo)
 
     @pytest.mark.parametrize(
@@ -113,5 +110,5 @@ class Test_extract_model_info:
         with bst.environ.context(dt=0.1 * u.ms):
             layer = bst.nn.Sequential(cls(n_in, n_out), cls(n_out, n_out))
             bst.nn.init_all_states(layer)
-            minfo = extract_module_info(layer, input)
+            minfo = brainscale.extract_module_info(layer, input)
             pprint(minfo)

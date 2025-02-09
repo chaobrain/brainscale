@@ -26,20 +26,22 @@ __all__ = [
 ]
 
 
-class ETraceData:
+class ETraceInputData:
+    __module__ = 'brainscale'
+
     def __init__(self, data: Any):
         self.data = data
 
     def tree_flatten(self):
-        return self.data, ()
+        return (self.data,), ()
 
     @classmethod
     def tree_unflatten(cls, aux, data):
-        return cls(data)
+        return cls(*data)
 
 
 @register_pytree_node_class
-class SingleStepData(ETraceData):
+class SingleStepData(ETraceInputData):
     """
     The data at a single time step.
 
@@ -49,11 +51,11 @@ class SingleStepData(ETraceData):
         >>> data = SingleStepData(bst.random.randn(2, 3))
 
     """
-    pass
+    __module__ = 'brainscale'
 
 
 @register_pytree_node_class
-class MultiStepData(ETraceData):
+class MultiStepData(ETraceInputData):
     """
     The data at multiple time steps.
 
@@ -74,9 +76,8 @@ class MultiStepData(ETraceData):
         ...     bst.random.randn(10, 5),
         ... )
 
-
     """
-    pass
+    __module__ = 'brainscale'
 
 
 def is_input(x):

@@ -32,17 +32,15 @@ from typing import Dict, Tuple, Any, List, Optional, Sequence
 
 import brainstate as bst
 import brainunit as u
-import jax.core
+import jax
 import jax.numpy as jnp
 
 from ._etrace_algorithms import (
     ETraceAlgorithm,
     EligibilityTrace,
 )
-from ._etrace_compiler_graph import (
-    HiddenParamOpRelation,
-    HiddenGroup,
-)
+from ._etrace_compiler_hid_param_op import HiddenParamOpRelation
+from ._etrace_compiler_hidden_group import HiddenGroup
 from ._etrace_concepts import (
     ETraceParam,
     ElemWiseParam,
@@ -72,7 +70,7 @@ from ._typing import (
     ETraceWG_Key,
     Hid2WeightJacobian,
     Hid2HidJacobian,
-    HidGroupJacobian,
+    HiddenGroupJacobian,
     dG_Inputs,
     dG_Weight,
     dG_Hidden,
@@ -742,8 +740,7 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
     """
 
     __module__ = 'brainscale'
-    graph: ETraceVjpGraphExecutor
-    compiled: CompiledVjpGraph
+    graph_executor: ETraceVjpGraphExecutor
 
     def __init__(
         self,
@@ -760,10 +757,10 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
         self.vjp_method = vjp_method
 
         # graph
-        graph = ETraceVjpGraphExecutor(model, vjp_method=vjp_method)
+        graph_executor = ETraceVjpGraphExecutor(model, vjp_method=vjp_method)
 
         # super initialization
-        super().__init__(model=model, name=name, graph=graph)
+        super().__init__(model=model, name=name, graph_executor=graph_executor)
 
         # the update rule
         self._true_update_fun = jax.custom_vjp(self._update_fn)
@@ -968,7 +965,7 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
             oth_state_vals,
             hid2weight_jac_multi_steps,
             hid2hid_jac_multi_steps
-        ) = self.graph.solve_h2w_h2h_jacobian(*args)
+        ) = self.graph_executor.solve_h2w_h2h_jacobian(*args)
 
         # eligibility trace update
         #
@@ -1037,7 +1034,7 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
             hid2weight_jac_multi_steps,
             hid2hid_jac_multi_steps,
             residuals
-        ) = self.graph.solve_h2w_h2h_l2h_jacobian(*args)
+        ) = self.graph_executor.solve_h2w_h2h_l2h_jacobian(*args)
 
         # eligibility trace update
         #
@@ -1059,7 +1056,7 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
             residuals,
             (
                 old_etrace_vals
-                if self.graph.is_multi_step_vjp else
+                if self.graph_executor.is_multi_step_vjp else
                 new_etrace_vals
             ),
             weight_vals,
@@ -1152,20 +1149,20 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
             dl_to_dh_at_t
         ) = jax.tree.unflatten(in_tree, cts_out)
 
-        if self.graph.is_single_step_vjp:
+        if self.graph_executor.is_single_step_vjp:
 
             # TODO: the correspondence between the hidden states and the gradients
             #        should be checked.
             #
-            assert len(self.compiled.out_hidden_jaxvars) == len(dl_to_dh_at_t)
-            for hid_var, dg in zip(self.compiled.out_hidden_jaxvars, dl_to_dh_at_t):
+            assert len(self.graph_executor.out_hidden_jaxvars) == len(dl_to_dh_at_t)
+            for hid_var, dg in zip(self.graph_executor.out_hidden_jaxvars, dl_to_dh_at_t):
                 assert hid_var.aval.shape == dg.shape, (
                     'The shape of the hidden states and its gradients should be the same. '
                 )
             dl_to_dh_at_t_or_t_minus_1 = {
-                self.compiled.hid_outvar_to_path[hid_var]: dg
+                self.graph_executor.hid_outvar_to_path[hid_var]: dg
                 for hid_var, dg in
-                zip(self.compiled.out_hidden_jaxvars, dl_to_dh_at_t)
+                zip(self.graph_executor.out_hidden_jaxvars, dl_to_dh_at_t)
             }
             assert len(dg_etrace_params) == 0  # gradients all etrace weights are updated by the RTRL algorithm
 
@@ -1184,6 +1181,7 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
         #
         # "self._solve_weight_gradients()" is a protocol method that should be implemented in the subclass.
         # It's logic may be different for different etrace algorithms.
+        #
         dg_weights = self._solve_weight_gradients(
             running_index,
             etrace_vals_at_t_or_t_minus_1,
@@ -1210,7 +1208,7 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
         self,
         running_index: Optional[int],
         etrace_h2w_at_t: Any,
-        dl_to_dh_at_t: Sequence[jax.Array],
+        dl_to_hidden_groups: Sequence[jax.Array],
         weight_vals: Dict[WeightID, PyTree],
         dl_to_nonetws_at_t: List[PyTree],
         dl_to_etws_at_t: Optional[List[PyTree]],
@@ -1242,7 +1240,7 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
           running_index: Optional[int], the running index.
           etrace_h2w_at_t: Any, the eligibility trace data (which track the hidden-to-weight Jacobian)
               that have accumulated util the time ``t``.
-          dl_to_dh_at_t: Dict[HiddenOutVar, jax.Array], the gradients of the loss-to-hidden
+          dl_to_hidden_groups: Dict[HiddenOutVar, jax.Array], the gradients of the loss-to-hidden
               at the time ``t``.
           weight_vals: Dict[WeightID, PyTree], the weight values.
           dl_to_nonetws_at_t: List[PyTree], the gradients of the loss-to-non-etrace parameters
@@ -1564,7 +1562,7 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
 #         self,
 #         running_index: int,
 #         etrace_h2w_at_t: Tuple,
-#         dl_to_dh_at_t: Dict[HiddenOutVar, jax.Array],
+#         dl_to_hidden_groups: Dict[HiddenOutVar, jax.Array],
 #         weight_id_to_its_val: Dict[WeightID, PyTree],
 #         dl_to_nonetws_at_t: List[PyTree],
 #         dl_to_etws_at_t: Optional[List[PyTree]],
@@ -1594,7 +1592,7 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
 #             #
 #             for i, hid_var in enumerate(relation.hidden_vars):
 #                 df = dfs[(relation.y, hid_var)]  # the hidden gradients
-#                 df_hid = df * u.math.expand_dims(dl_to_dh_at_t[hid_var], axis=0)  # the hidden gradients
+#                 df_hid = df * u.math.expand_dims(dl_to_hidden_groups[hid_var], axis=0)  # the hidden gradients
 #                 #
 #                 # Compute the weight gradients according to the x and y
 #                 #
@@ -1706,13 +1704,13 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
         self.etrace_xs = dict()
         self.etrace_dfs = dict()
         self.etrace_xs_to_weights = defaultdict(list)
-        for relation in self.compiled.hidden_param_op_relations:
+        for relation in self.graph.hidden_param_op_relations:
             relation: HiddenParamOpRelation
             _init_IO_dim_state(
                 self.etrace_xs,
                 self.etrace_dfs,
                 self.etrace_xs_to_weights,
-                self.graph.state_id_to_path,
+                self.graph_executor.state_id_to_path,
                 relation,
             )
 
@@ -1724,45 +1722,45 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
         _reset_state_in_a_dict(self.etrace_xs, batch_size)
         _reset_state_in_a_dict(self.etrace_dfs, batch_size)
 
-    # def get_etrace_of(self, weight: bst.ParamState | Path) -> Tuple[Dict, Dict]:
-    #     """
-    #     Get the eligibility trace of the given weight.
-    #
-    #     The eligibility trace contains the following structures:
-    #
-    #     """
-    #     self._assert_compiled()
-    #
-    #     # the weight ID
-    #     weight_id = (
-    #         id(weight)
-    #         if isinstance(weight, bst.ParamState) else
-    #         id(self.graph.path_to_state[weight])
-    #     )
-    #
-    #     etrace_xs = dict()
-    #     etrace_dfs = dict()
-    #     find_this_weight = False
-    #     for relation in self.compiled.hidden_param_op_relations:
-    #         relation: HiddenParamOpRelation
-    #         if id(relation.weight) != weight_id:
-    #             continue
-    #         find_this_weight = True
-    #
-    #         # get the weight_op input
-    #         wx_var = relation.x
-    #         etrace_xs[wx_var] = self.etrace_xs[wx_var].value
-    #
-    #         # get the weight_op df
-    #         wy_var = relation.y
-    #         for group in relation.hidden_groups:
-    #             group: HiddenGroup
-    #             for st in group.hidden_states:
-    #                 path = self.state_id_to_path[id(st)]
-    #                 etrace_dfs[(wy_var, path)] = self.etrace_dfs[(wy_var, path)].value
-    #     if not find_this_weight:
-    #         raise ValueError(f'Do not the etrace of the given weight: {weight}.')
-    #     return etrace_xs, etrace_dfs
+    def get_etrace_of(self, weight: bst.ParamState | Path) -> Tuple[Dict, Dict]:
+        """
+        Get the eligibility trace of the given weight.
+
+        The eligibility trace contains the following structures:
+
+        """
+        self._assert_compiled()
+
+        # the weight ID
+        weight_id = (
+            id(weight)
+            if isinstance(weight, bst.ParamState) else
+            id(self.graph_executor.path_to_states[weight])
+        )
+
+        etrace_xs = dict()
+        etrace_dfs = dict()
+        find_this_weight = False
+        for relation in self.graph.hidden_param_op_relations:
+            relation: HiddenParamOpRelation
+            if id(relation.weight) != weight_id:
+                continue
+            find_this_weight = True
+
+            # get the weight_op input
+            wx_var = relation.x
+            if wx_var is not None:
+                etrace_xs[wx_var] = self.etrace_xs[wx_var].value
+
+            # get the weight_op df
+            wy_var = relation.y
+            for group in relation.hidden_groups:
+                group: HiddenGroup
+                df_key = etrace_df_key(wy_var, group.index)
+                etrace_dfs[df_key] = self.etrace_dfs[df_key].value
+        if not find_this_weight:
+            raise ValueError(f'Do not the etrace of the given weight: {weight}.')
+        return etrace_xs, etrace_dfs
 
     def _get_etrace_data(self) -> Tuple[
         Dict[ETraceX_Key, jax.Array],
@@ -1806,7 +1804,7 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
             Dict[ETraceDF_Key, jax.Array]
         ],
         hid2weight_jac_multi_times: Hid2WeightJacobian,
-        hid2hid_jac_multi_times: HidGroupJacobian,
+        hid2hid_jac_multi_times: HiddenGroupJacobian,
         weight_vals: WeightVals,
     ) -> Tuple[
         Dict[ETraceX_Key, jax.Array],
@@ -1833,7 +1831,7 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
 
         scan_fn = partial(
             _update_IO_dim_etrace_scan_fn,
-            hid_weight_op_relations=self.compiled.hidden_param_op_relations,
+            hid_weight_op_relations=self.graph.hidden_param_op_relations,
             decay=self.decay,
         )
         hist_etrace_vals, _ = jax.lax.scan(
@@ -1854,7 +1852,7 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
             Dict[ETraceX_Key, jax.Array],
             Dict[ETraceDF_Key, jax.Array]
         ],
-        dl_to_dh_at_t: Sequence[jax.Array],
+        dl_to_hidden_groups: Sequence[jax.Array],
         weight_vals: Dict[Path, PyTree],
         dl_to_nonetws_at_t: Dict[Path, PyTree],
         dl_to_etws_at_t: Optional[Dict[Path, PyTree]],
@@ -1864,7 +1862,7 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
         """
 
         #
-        # dl_to_dh_at_t:
+        # dl_to_hidden_groups:
         #         The gradients of the loss-to-hidden-group at the time "t".
         #         It has the shape of [n_hidden, ..., n_state].
         #         - `l` is the loss,
@@ -1886,8 +1884,8 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
         _solve_IO_dim_weight_gradients(
             etrace_h2w_at_t,
             dG_weights,
-            dl_to_dh_at_t,
-            self.compiled.hidden_param_op_relations,
+            dl_to_hidden_groups,
+            self.graph.hidden_param_op_relations,
             running_index,
             self.decay,
         )
@@ -1970,7 +1968,7 @@ class ParamDimVjpAlgorithm(ETraceVjpAlgorithm):
         """
         # The states of batched weight gradients
         self.etrace_bwg = dict()
-        for relation in self.compiled.hidden_param_op_relations:
+        for relation in self.graph.hidden_param_op_relations:
             _init_param_dim_state(
                 self.mode,
                 self.etrace_bwg,
@@ -1998,12 +1996,12 @@ class ParamDimVjpAlgorithm(ETraceVjpAlgorithm):
         weight_id = (
             id(weight)
             if isinstance(weight, bst.ParamState) else
-            id(self.graph.path_to_states[weight])
+            id(self.graph_executor.path_to_states[weight])
         )
 
         find_this_weight = False
         etraces = dict()
-        for relation in self.compiled.hidden_param_op_relations:
+        for relation in self.graph.hidden_param_op_relations:
             relation: HiddenParamOpRelation
             if id(relation.weight) != weight_id:
                 continue
@@ -2034,14 +2032,14 @@ class ParamDimVjpAlgorithm(ETraceVjpAlgorithm):
         running_index: Optional[int],
         hist_etrace_vals: Dict[ETraceWG_Key, PyTree],
         hid2weight_jac_multi_times: Hid2WeightJacobian,
-        hid2hid_jac_multi_times: HidGroupJacobian,
+        hid2hid_jac_multi_times: HiddenGroupJacobian,
         weight_vals: Dict[Path, PyTree],
     ) -> Dict[ETraceWG_Key, PyTree]:
 
         scan_fn = partial(
             _update_param_dim_etrace_scan_fn,
             weight_path_to_vals=weight_vals,
-            hidden_param_op_relations=self.compiled.hidden_param_op_relations,
+            hidden_param_op_relations=self.graph.hidden_param_op_relations,
             mode=self.mode,
         )
 
@@ -2061,7 +2059,7 @@ class ParamDimVjpAlgorithm(ETraceVjpAlgorithm):
         self,
         running_index: int,
         etrace_h2w_at_t: Dict[ETraceWG_Key, PyTree],
-        dl_to_dh_at_t: Dict[Path, jax.Array],
+        dl_to_hidden_groups: Sequence[jax.Array],
         weight_vals: Dict[WeightID, PyTree],
         dl_to_nonetws_at_t: Dict[Path, PyTree],
         dl_to_etws_at_t: Optional[Dict[Path, PyTree]],
@@ -2077,8 +2075,8 @@ class ParamDimVjpAlgorithm(ETraceVjpAlgorithm):
         _solve_param_dim_weight_gradients(
             etrace_h2w_at_t,
             dG_weights,
-            dl_to_dh_at_t,
-            self.compiled.hidden_param_op_relations,
+            dl_to_hidden_groups,
+            self.graph.hidden_param_op_relations,
             self.mode,
         )
 
@@ -2177,7 +2175,7 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
         self.etrace_bwg = dict()
         self.etrace_xs_to_weights = defaultdict(list)
 
-        for relation in self.compiled.hidden_param_op_relations:
+        for relation in self.graph.hidden_param_op_relations:
             if _is_weight_need_full_grad(relation, self.mode):
                 _init_param_dim_state(
                     self.mode,
@@ -2189,7 +2187,7 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
                     self.etrace_xs,
                     self.etrace_dfs,
                     self.etrace_xs_to_weights,
-                    self.graph.state_id_to_path,
+                    self.graph_executor.state_id_to_path,
                     relation,
                 )
 
@@ -2216,14 +2214,14 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
         weight_id = (
             id(weight)
             if isinstance(weight, bst.ParamState) else
-            id(self.graph.path_to_states[weight])
+            id(self.graph_executor.path_to_states[weight])
         )
 
         etrace_xs = dict()
         etrace_dfs = dict()
         etrace_bws = dict()
         find_this_weight = False
-        for relation in self.compiled.hidden_param_op_relations:
+        for relation in self.graph.hidden_param_op_relations:
             relation: HiddenParamOpRelation
             if id(relation.weight) != weight_id:
                 continue
@@ -2287,7 +2285,7 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
 
         on_weight_hidden_relations = []
         on2_weight_hidden_relations = []
-        for relation in self.compiled.hidden_param_op_relations:
+        for relation in self.graph.hidden_param_op_relations:
             if _is_weight_need_full_grad(relation, self.mode):
                 on2_weight_hidden_relations.append(relation)
             else:
@@ -2315,7 +2313,7 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
 
         scan_fn_on = partial(
             _update_IO_dim_etrace_scan_fn,
-            hid_weight_op_relations=self.compiled.hidden_param_op_relations,
+            hid_weight_op_relations=self.graph.hidden_param_op_relations,
             decay=self.decay,
         )
         new_xs, new_dfs = jax.lax.scan(
@@ -2334,7 +2332,7 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
         self,
         running_index: int,
         etrace_h2w_at_t: Tuple,
-        dl_to_dh_at_t: Sequence[jax.Array],
+        dl_to_hidden_groups: Sequence[jax.Array],
         weight_vals: Dict[Path, PyTree],
         dl_to_nonetws_at_t: Dict[Path, PyTree],
         dl_to_etws_at_t: Optional[Dict[Path, PyTree]],
@@ -2346,7 +2344,7 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
         """
 
         #
-        # dl_to_dh_at_t:
+        # dl_to_hidden_groups:
         #         The gradients of the loss-to-hidden-group at the time "t".
         #         It has the shape of [n_hidden, ..., n_state].
         #         - `l` is the loss,
@@ -2374,7 +2372,7 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
 
         on_weight_hidden_relations = []
         on2_weight_hidden_relations = []
-        for relation in self.compiled.hidden_param_op_relations:
+        for relation in self.graph.hidden_param_op_relations:
             if _is_weight_need_full_grad(relation, self.mode):
                 on2_weight_hidden_relations.append(relation)
             else:
@@ -2385,7 +2383,7 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
         _solve_IO_dim_weight_gradients(
             (xs, dfs),
             dG_weights,
-            dl_to_dh_at_t,
+            dl_to_hidden_groups,
             on_weight_hidden_relations,
             running_index,
             self.decay,
@@ -2396,7 +2394,7 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
         _solve_param_dim_weight_gradients(
             wgrads,
             dG_weights,
-            dl_to_dh_at_t,
+            dl_to_hidden_groups,
             on2_weight_hidden_relations,
             self.mode,
         )

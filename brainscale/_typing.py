@@ -86,4 +86,4 @@ Hid2WeightJacobian = Tuple[
     Dict[ETraceDF_Key, jax.Array]
 ]
 Hid2HidJacobian = Dict[HidHidJac_Key, jax.Array]
-HidGroupJacobian = Sequence[jax.Array]
+HiddenGroupJacobian = Sequence[jax.Array]

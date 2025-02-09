@@ -42,13 +42,11 @@ from typing import Dict, Any
 import brainstate as bst
 
 from ._etrace_compiler_graph import (
-    CompiledGraph,
-    compile_graph,
+    ETracedGraph,
+    compile_etrace_graph,
 )
 from ._etrace_input_data import get_single_step_data
-from ._typing import (
-    Path,
-)
+from ._typing import Path
 
 __all__ = [
     'ETraceGraphExecutor',
@@ -91,7 +89,7 @@ class ETraceGraphExecutor:
         self._state_id_to_path = None
 
     @property
-    def compiled(self) -> CompiledGraph:
+    def graph(self) -> ETracedGraph:
         r"""
         The compiled graph for the model.
 
@@ -161,7 +159,7 @@ class ETraceGraphExecutor:
         Returns:
             The states for the model.
         """
-        return self.compiled.model_info.retrieved_model_states
+        return self.graph.module_info.retrieved_model_states
 
     @property
     def path_to_states(self) -> bst.util.FlattedDict[Path, bst.State]:
@@ -201,7 +199,7 @@ class ETraceGraphExecutor:
         args = get_single_step_data(*args)
 
         # compile the graph
-        self._compiled_graph = compile_graph(self.model, *args)
+        self._compiled_graph = compile_etrace_graph(self.model, *args)
 
     def show_graph(
         self,
@@ -217,7 +215,7 @@ class ETraceGraphExecutor:
         msg += 'The hidden groups are:\n\n'
         hidden_paths = []
         group_mapping = dict()
-        for group in self.compiled.hidden_groups:
+        for group in self.graph.hidden_groups:
             msg += f'   Group {group.index}: {group.hidden_paths}\n'
             group_mapping[id(group)] = group.index
             hidden_paths.extend(group.hidden_paths)
@@ -237,9 +235,9 @@ class ETraceGraphExecutor:
 
         # etrace weights
         etratce_weight_paths = set()
-        if len(self.compiled.hidden_param_op_relations):
+        if len(self.graph.hidden_param_op_relations):
             msg += 'The weight parameters which are associated with the hidden states are:\n\n'
-            for i, hp_relation in enumerate(self.compiled.hidden_param_op_relations):
+            for i, hp_relation in enumerate(self.graph.hidden_param_op_relations):
                 etratce_weight_paths.add(hp_relation.path)
                 group = [group_mapping[id(group)] for group in hp_relation.hidden_groups]
                 if len(group) == 1:

@@ -123,7 +123,7 @@ class OnlineTrainer(Trainer):
         model = brainscale.DiagParamDimAlgorithm(self.target, mode=bst.mixin.Batching())
 
         # 使用一个样例数据编译在线学习eligibility trace
-        model.compile_graph(inputs[0])
+        model.compile_etrace_graph(inputs[0])
 
         def _etrace_loss(inp, tar):
             # call the model

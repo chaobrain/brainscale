@@ -407,13 +407,13 @@ class Trainer:
         # initialize the online learning model
         if self.method == 'expsm_diag':
             model = brainscale.DiagIODimAlgorithm(self.target, decay_or_rank=0.99)
-            model.compile_graph(inputs[0])
+            model.compile_etrace_graph(inputs[0])
         elif self.method == 'diag':
             model = brainscale.DiagParamDimAlgorithm(self.target, mode=bst.mixin.Batching())
-            model.compile_graph(inputs[0])
+            model.compile_etrace_graph(inputs[0])
         elif self.method == 'hybrid':
             model = brainscale.DiagHybridDimAlgorithm(self.target, decay_or_rank=0.99, mode=bst.mixin.Batching())
-            model.compile_graph(inputs[0])
+            model.compile_etrace_graph(inputs[0])
         else:
             raise ValueError(f'Unknown online learning methods: {self.method}.')
 

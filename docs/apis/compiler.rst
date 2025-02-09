@@ -46,12 +46,12 @@ Graph Executor
 
 The following classes are the base classes for the online learning compilation.
 
-:class:`ETraceGraphExecutor` is used to implement or execute the compiled eligibility trace graph.
+``ETraceGraphExecutor`` is used to implement or execute the compiled eligibility trace graph.
 It utilizes the compiled graph defined in the above data structure to execute the model,
 compute the Jacobian of hidden-group, the Jacobian of weight-to-hidden-group,
 and the gradient of the loss-to-hidden-group.
 
-:class:`ETraceGraphExecutor` defines the abstract methods for the online learning graph execution.
+``ETraceGraphExecutor`` defines the abstract methods for the online learning graph execution.
 Generally, the derived classes should implement the following methods:
 
 - :meth:`ETraceGraphExecutor.solve_h2w_h2h_jacobian` to compute the Jacobian of hidden-group and weight-to-hidden-group.
@@ -66,7 +66,7 @@ Generally, the derived classes should implement the following methods:
     ETraceGraphExecutor
 
 
-:class:`ETraceVjpGraphExecutor` implements the graph execution for the VJP-based online learning algorithms,
+``ETraceVjpGraphExecutor`` implements the graph execution for the VJP-based online learning algorithms,
 including those eligibility trace algorithms for:
 
 - :class:`IODimVjpAlgorithm`

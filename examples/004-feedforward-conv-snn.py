@@ -194,7 +194,7 @@ class OnlineTrainer(Trainer):
         with bst.environ.context(fit=True):
             # model = brainscale.ParamDimVjpAlgorithm(self.target, mode=bst.mixin.Batching())
             model = brainscale.DiagIODimAlgorithm(self.target, self.decay_or_rank)
-            model.compile_graph(inputs[0])
+            model.compile_etrace_graph(inputs[0])
 
         def _etrace_grad(inp):
             with bst.environ.context(fit=True):

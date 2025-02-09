@@ -25,7 +25,7 @@ from typing import Dict, Any, Optional
 
 import brainstate as bst
 
-from ._etrace_compiler_graph import CompiledGraph
+from ._etrace_compiler_graph import ETracedGraph
 from ._etrace_concepts import ETraceState
 from ._etrace_graph_executor import ETraceGraphExecutor
 from ._typing import Path
@@ -84,7 +84,7 @@ class ETraceAlgorithm(bst.nn.Module):
     def __init__(
         self,
         model: bst.nn.Module,
-        graph: ETraceGraphExecutor,
+        graph_executor: ETraceGraphExecutor,
         name: Optional[str] = None,
     ):
         super().__init__(name=name)
@@ -97,12 +97,12 @@ class ETraceAlgorithm(bst.nn.Module):
             )
 
         # the graph
-        if not isinstance(graph, ETraceGraphExecutor):
+        if not isinstance(graph_executor, ETraceGraphExecutor):
             raise ValueError(
                 f'The graph should be a ETraceGraphExecutor, this can help us to '
-                f'better obtain the program structure. But we got {type(graph)}.'
+                f'better obtain the program structure. But we got {type(graph_executor)}.'
             )
-        self.graph = graph
+        self.graph_executor = graph_executor
 
         # The flag to indicate whether the etrace algorithm has been compiled
         self.is_compiled = False
@@ -116,8 +116,18 @@ class ETraceAlgorithm(bst.nn.Module):
         self._other_states = None
 
     @property
-    def compiled(self) -> CompiledGraph:
-        return self.graph.compiled
+    def graph(self) -> ETracedGraph:
+        """
+        Get the etrace graph.
+        """
+        return self.graph_executor.graph
+
+    @property
+    def executor(self) -> ETraceGraphExecutor:
+        """
+        Get the etrace graph executor.
+        """
+        return self.graph_executor
 
     @property
     def param_states(self) -> bst.util.FlattedDict[Path, bst.ParamState]:
@@ -162,7 +172,7 @@ class ETraceAlgorithm(bst.nn.Module):
             self._param_states,
             self._hidden_states,
             self._other_states
-        ) = self.compiled.model_info.retrieved_model_states.split(bst.ParamState, ETraceState, ...)
+        ) = self.graph.module_info.retrieved_model_states.split(bst.ParamState, ETraceState, ...)
 
     def compile_graph(self, *args) -> None:
         r"""
@@ -179,7 +189,7 @@ class ETraceAlgorithm(bst.nn.Module):
 
         if not self.is_compiled:
             # --- the model etrace graph -- #
-            self.graph.compile_graph(*args)
+            self.graph_executor.compile_graph(*args)
 
             # --- the initialization of the states --- #
             self.init_etrace_state(*args)
@@ -192,20 +202,20 @@ class ETraceAlgorithm(bst.nn.Module):
         """
         Get the path to the states.
         """
-        return self.graph.path_to_states
+        return self.graph_executor.path_to_states
 
     @property
     def state_id_to_path(self) -> Dict[int, Path]:
         """
         Get the state ID to the path.
         """
-        return self.graph.state_id_to_path
+        return self.graph_executor.state_id_to_path
 
     def show_graph(self) -> None:
         """
         Show the etrace graph.
         """
-        return self.graph.show_graph()
+        return self.graph_executor.show_graph()
 
     def __call__(self, *args) -> Any:
         """

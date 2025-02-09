@@ -49,7 +49,7 @@ from jax.extend import linear_util as lu
 from jax.interpreters import partial_eval as pe
 from jax.tree_util import register_pytree_node_class
 
-from ._etrace_compiler_graph import compile_graph
+from ._etrace_compiler_graph import compile_etrace_graph
 from ._etrace_compiler_hidden_group import HiddenGroup
 from ._etrace_graph_executor import ETraceGraphExecutor
 from ._etrace_input_data import (
@@ -70,7 +70,7 @@ from ._typing import (
     ETraceDF_Key,
     Hid2WeightJacobian,
     Hid2HidJacobian,
-    HidGroupJacobian,
+    HiddenGroupJacobian,
 )
 
 if jax.__version_info__ < (0, 4, 38):
@@ -203,7 +203,7 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
         args = get_single_step_data(*args)
 
         # compile the graph
-        self._compiled_graph = compile_graph(self.model, *args, include_hidden_perturb=self.is_multi_step_vjp)
+        self._compiled_graph = compile_etrace_graph(self.model, *args, include_hidden_perturb=self.is_single_step_vjp)
 
     def _compute_hid2weight_jacobian(
         self,
@@ -224,13 +224,13 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
 
         # the weight x
         xs = {}
-        for relation in self.compiled.hidden_param_op_relations:
+        for relation in self.graph.hidden_param_op_relations:
             if relation.x is not None:
                 xs[relation.x] = intermediate_values[relation.x]
 
         # the weight df
         dfs = {}
-        for relation in self.compiled.hidden_param_op_relations:
+        for relation in self.graph.hidden_param_op_relations:
             y = intermediate_values[relation.y]
 
             #
@@ -250,7 +250,8 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
             # For general cases, we should use ``jax.vjp`` to compute the gradients.
             #
             # # ---- Method 3: using ``jax.jvp`` ---- #
-            # For computational efficiency, we use ``jax.jvp`` to compute the gradients.
+            # For computational efficiency, we use ``jax.jvp`` to compute the gradients,
+            # since this is the one-to-many mapping.
             #
             primals, tangent_hidden_groups = jax.jvp(
                 lambda y_val: relation.y_to_hidden_groups(
@@ -276,7 +277,7 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
     def _compute_hid2hid_jacobian(
         self,
         intermediate_values: Dict[Var, jax.Array]
-    ) -> Sequence[jax.Array]:
+    ) -> HiddenGroupJacobian:
         """
         Computing the hidden group-to-hidden group Jacobian according to the given intermediate values.
 
@@ -288,7 +289,7 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
         """
 
         hid2hid_jacobian = []
-        for group in self.compiled.hidden_groups:
+        for group in self.graph.hidden_groups:
             group: HiddenGroup
 
             # data for jacobian computation
@@ -309,7 +310,7 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
         ETraceVals,
         StateVals,
         Hid2WeightJacobian,
-        HidGroupJacobian,
+        HiddenGroupJacobian,
     ]:
         r"""
         Solving the hidden-to-weight and hidden-to-hidden Jacobian according to the given inputs and parameters.
@@ -375,7 +376,7 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
                 _etrace_state_vals,
                 _oth_state_vals,
                 temps
-            ) = self.compiled.model_info.jaxpr_call(args_)
+            ) = self.graph.module_info.jaxpr_call(args_)
 
             # compute the hidden-to-weight Jacobian
             hid2weight_jac = self._compute_hid2weight_jacobian(temps)
@@ -441,7 +442,7 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
         ETraceVals,
         StateVals,
         Hid2WeightJacobian,
-        Hid2HidJacobian,
+        HiddenGroupJacobian,
         VjpResiduals,
     ]:
         r"""
@@ -486,7 +487,7 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
         ) = split_dict_states_v2(self.states)
         if self.is_single_step_vjp:
             etrace_weight_vals = dict()
-            hidden_perturbs = self.compiled.hidden_perturb.init_perturb_data()
+            hidden_perturbs = self.graph.hidden_perturb.init_perturb_data()
             etrace_weight_vals_restore = {path: st.value for path, st in etrace_param_states.items()}
 
         else:
@@ -514,11 +515,11 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
             assign_dict_state_values(other_states, oth_state_vals_, write=False)
 
             # get state values by the "stateful_model", to preserve the order of states
-            old_state_vals = [st.value for st in self.compiled.model_info.compiled_model_states]
+            old_state_vals = [st.value for st in self.graph.module_info.compiled_model_states]
 
             # calling the function
             if self.is_single_step_vjp:
-                assert self.compiled.hidden_perturb is not None, (
+                assert self.graph.hidden_perturb is not None, (
                     'The hidden_perturb should not be None '
                     'when the vjp method is "single-step".'
                 )
@@ -527,7 +528,7 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
                     _etrace_state_vals,
                     _oth_state_vals,
                     temps
-                ) = self.compiled.call_hidden_perturb(
+                ) = self.graph.call_hidden_perturb(
                     inputs,
                     perturb_vals_,
                     old_state_vals,
@@ -539,7 +540,7 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
                     _etrace_state_vals,
                     _oth_state_vals,
                     temps
-                ) = self.compiled.model_info.jaxpr_call(inputs, old_state_vals)
+                ) = self.graph.module_info.jaxpr_call(inputs, old_state_vals)
 
             # --- compute the hidden-to-weight Jacobian --- #
             hid2weight_jac = self._compute_hid2weight_jacobian(temps)

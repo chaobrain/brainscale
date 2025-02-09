@@ -23,8 +23,6 @@ import jax.core
 
 from ._etrace_compiler_base import (
     JaxprEvaluation,
-)
-from ._etrace_compiler_base import (
     extract_module_info,
     ModuleInfo,
 )
@@ -109,7 +107,7 @@ class HiddenPerturbation(NamedTuple):
         return jax.core.eval_jaxpr(
             self.perturb_jaxpr.jaxpr,
             self.perturb_jaxpr.consts,
-            tuple(inputs) + tuple(perturb_data)
+            *(tuple(inputs) + tuple(perturb_data))
         )
 
     def init_perturb_data(self) -> Sequence[jax.Array]:

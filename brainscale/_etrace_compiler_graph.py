@@ -23,7 +23,7 @@ from typing import Dict, Sequence, NamedTuple, Tuple, Optional
 import brainstate as bst
 import jax
 
-from ._etrace_compiler_base import (
+from ._etrace_compiler_module_info import (
     extract_module_info,
     ModuleInfo,
 )
@@ -46,8 +46,8 @@ from ._typing import (
 
 
 __all__ = [
-    'CompiledGraph',
-    'compile_graph',
+    'ETracedGraph',
+    'compile_etrace_graph',
 ]
 
 
@@ -58,7 +58,7 @@ def order_hidden_group_index(
         assert group.index == i, f"Hidden group index {group.index} should be equal to its position {i}."
 
 
-class CompiledGraph(NamedTuple):
+class ETracedGraph(NamedTuple):
     """
     The overall compiled graph for the eligibility trace.
 
@@ -68,7 +68,7 @@ class CompiledGraph(NamedTuple):
 
     The following fields are included:
 
-    - ``model_info``: The model information, instance of :class:`ModuleInfo`.
+    - ``module_info``: The model information, instance of :class:`ModuleInfo`.
     - ``hidden_groups``: The hidden groups, sequence of :class:`HiddenGroup`.
     - ``hid_path_to_group``: The mapping from the hidden path to the hidden group :class:`HiddenGroup`.
     - ``hidden_param_op_relations``: The hidden parameter operation relations, sequence of :class:`HiddenParamOpRelation`.
@@ -81,12 +81,12 @@ class CompiledGraph(NamedTuple):
         >>> gru = brainscale.nn.GRUCell(10, 20)
         >>> gru.init_state()
         >>> inputs = brainstate.random.randn(10)
-        >>> compiled_graph = brainscale.compile_graph(gru, inputs)
+        >>> compiled_graph = brainscale.compile_etrace_graph(gru, inputs)
         >>> compiled_graph._asdict().keys()
 
     """
 
-    model_info: ModuleInfo
+    module_info: ModuleInfo
     hidden_groups: Sequence[HiddenGroup]
     hid_path_to_group: Dict[Path, HiddenGroup]
     hidden_param_op_relations: Sequence[HiddenParamOpRelation]
@@ -100,7 +100,7 @@ class CompiledGraph(NamedTuple):
     ):
         # state checking
         if old_state_vals is None:
-            old_state_vals = [st.value for st in self.model_info.compiled_model_states]
+            old_state_vals = [st.value for st in self.module_info.compiled_model_states]
 
         # calling the function
         jaxpr_outs = self.hidden_perturb.eval_jaxpr(
@@ -108,10 +108,10 @@ class CompiledGraph(NamedTuple):
             perturb_data,
         )
 
-        return self.model_info._process(args, jaxpr_outs)
+        return self.module_info._process(args, jaxpr_outs)
 
 
-CompiledGraph.__module__ = 'brainscale'
+ETracedGraph.__module__ = 'brainscale'
 
 
 class CONTEXT(threading.local):
@@ -158,11 +158,11 @@ def compiler_context(name: str) -> None:
         context.compilers.pop()
 
 
-def compile_graph(
+def compile_etrace_graph(
     model: bst.nn.Module,
     *model_args: Tuple,
     include_hidden_perturb: bool = True,
-) -> CompiledGraph:
+) -> ETracedGraph:
     """
     Building the eligibility trace graph for the model according to the given inputs.
 
@@ -214,8 +214,8 @@ def compile_graph(
         # all y-to-hidden vars
         out_wy2hid_jaxvars = set()
         for relation in hidden_param_op_relations:
-            for hpo_relation in relation.y_to_hidden_group_jaxprs:
-                out_wy2hid_jaxvars.update(hpo_relation.invars + hpo_relation.constvars)
+            for hpo_jaxpr in relation.y_to_hidden_group_jaxprs:
+                out_wy2hid_jaxvars.update(hpo_jaxpr.invars + hpo_jaxpr.constvars)
         out_wy2hid_jaxvars = list(out_wy2hid_jaxvars)
 
         # hidden-hidden transition vars
@@ -235,7 +235,7 @@ def compile_graph(
             minfo.jaxpr.outvars  # exclude the original function outputs
         )
 
-        # rewrite model_info
+        # rewrite module_info
         minfo = minfo.add_jaxpr_outs(list(temp_outvars))
 
         # ---               add perturbations to the hidden states                  --- #
@@ -245,8 +245,8 @@ def compile_graph(
 
         # ---              return the compiled graph               --- #
 
-        return CompiledGraph(
-            model_info=minfo,
+        return ETracedGraph(
+            module_info=minfo,
             hidden_groups=hidden_groups,
             hid_path_to_group=hid_path_to_group,
             hidden_param_op_relations=hidden_param_op_relations,
