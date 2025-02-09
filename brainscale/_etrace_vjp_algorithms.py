@@ -345,6 +345,7 @@ def _solve_IO_dim_weight_gradients(
     dG_weights: Dict[Path, dG_Weight],
     dG_hidden_groups: Sequence[jax.Array],  # same length as total hidden groups
     weight_hidden_relations: Sequence[HiddenParamOpRelation],
+    weight_vals: Dict[Path, WeightVals],
     running_index: int,
     decay: float,
 ):
@@ -386,7 +387,12 @@ def _solve_IO_dim_weight_gradients(
             #
             #    dw = df(dx, dy)
             #
-            dg_weight = weight_op.xy_to_w(x, df_hid)
+            fn_vmap = jax.vmap(
+                lambda df: weight_op.xy_to_w(x, df, weight_vals[weight_path]),
+                in_axes=-1,
+                out_axes=-1,
+            )
+            dg_weight = _sum_last_dim(fn_vmap(df_hid))
 
             # update the weight gradients
             _update_dict(dG_weights, weight_path, dg_weight)  # update the weight gradients
@@ -1931,6 +1937,7 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
             dG_weights,
             dl_to_hidden_groups,
             self.graph.hidden_param_op_relations,
+            weight_vals,
             running_index,
             self.decay,
         )
@@ -2430,6 +2437,7 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
             dG_weights,
             dl_to_hidden_groups,
             on_weight_hidden_relations,
+            weight_vals,
             running_index,
             self.decay,
         )

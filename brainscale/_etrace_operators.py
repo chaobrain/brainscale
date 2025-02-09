@@ -100,7 +100,7 @@ def is_etrace_op_elemwise(jit_param_name: str):
     return jit_param_name.startswith(_etrace_op_name_elemwise)
 
 
-class ETraceOp:
+class ETraceOp(bst.util.PrettyReprTree):
     """
     The Eligibility Trace Operator.
 
@@ -139,6 +139,11 @@ class ETraceOp:
 
     def _define_call(self):
         return lambda x, weights: self.xw_to_y(x, weights)
+
+    def __pretty_repr_item__(self, k, v):
+        if k == '_jitted_call':
+            return None, None
+        return k, v
 
     def __call__(
         self,
@@ -199,6 +204,7 @@ class ETraceOp:
         self,
         input_dim_arr: X,
         hidden_dim_arr: Y,
+        weights: W,
     ) -> W:
         """
         This function is used to compute the weight dimensional array from the input and hidden dimensional inputs.
@@ -215,11 +221,20 @@ class ETraceOp:
         Args:
             input_dim_arr: The input dimensional array.
             hidden_dim_arr: The hidden dimensional array.
+            weights: The weight dimensional array.
 
         Returns:
             The weight dimensional array.
         """
-        raise NotImplementedError
+        primals, f_vjp = jax.vjp(
+            lambda w: u.get_mantissa(self.xw_to_y(input_dim_arr, w)),  # dimensionless processing
+            weights
+        )
+        assert hidden_dim_arr.shape == primals.shape, (
+            f'The shape of the hidden_dim_arr must be the same as the primals. '
+            f'Got {hidden_dim_arr.shape} and {primals.shape}'
+        )
+        return f_vjp(u.get_mantissa(hidden_dim_arr))[0]
 
 
 class MatMulOp(ETraceOp):
@@ -368,27 +383,6 @@ class MatMulOp(ETraceOp):
         else:
             return {'weight': weight_like, 'bias': bias_like}
 
-    def xy_to_w(
-        self,
-        input_dim_arr: X,
-        hidden_dim_arr: Y,
-    ) -> W:
-        """
-        This function is used to compute the weight dimensional array from the input and hidden dimensional inputs.
-
-        $$
-        w = f(x, y)
-        $$
-
-        Args:
-            input_dim_arr: The input dimensional array.
-            hidden_dim_arr: The hidden dimensional array.
-
-        Returns:
-            The weight dimensional array.
-        """
-        raise NotImplementedError
-
 
 class ElemWiseOp(ETraceOp):
     """
@@ -414,6 +408,11 @@ class ElemWiseOp(ETraceOp):
     ):
         self._raw_fn = fn
         super().__init__(is_diagonal=True, name=_etrace_op_name_elemwise)
+
+    def __pretty_repr_item__(self, k, v):
+        if k in ['_raw_fn', '_jitted_call']:
+            return None, None
+        return k, v
 
     def _define_call(self):
         return lambda weights: self._raw_fn(weights) * 1.0
@@ -471,6 +470,7 @@ class ElemWiseOp(ETraceOp):
         self,
         input_dim_arr: Optional[X],
         hidden_dim_arr: Y,
+        weights: W,
     ) -> W:
         """
         This function is used to compute the weight dimensional array from the input and hidden dimensional inputs.
@@ -484,8 +484,18 @@ class ElemWiseOp(ETraceOp):
         Args:
             input_dim_arr: The input dimensional array. It is None.
             hidden_dim_arr: The hidden dimensional array.
+            weights: The weight dimensional
 
         Returns:
             The weight dimensional array.
         """
-        raise NotImplementedError
+
+        primals, f_vjp = jax.vjp(
+            lambda w: u.get_mantissa(self._raw_fn(w)),  # dimensionless processing
+            weights
+        )
+        assert hidden_dim_arr.shape == primals.shape, (
+            f'The shape of the hidden_dim_arr must be the same as the primals. '
+            f'Got {hidden_dim_arr.shape} and {primals.shape}'
+        )
+        return f_vjp(u.get_mantissa(hidden_dim_arr))[0]
