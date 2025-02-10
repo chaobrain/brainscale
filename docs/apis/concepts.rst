@@ -89,6 +89,9 @@ to the outputs.
     ETraceOp
     MatMulOp
     ElemWiseOp
+    ConvOp
+    SpMVOp
+    LoraOp
 
 
 

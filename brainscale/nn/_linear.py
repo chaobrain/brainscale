@@ -48,7 +48,6 @@ class Linear(bst.nn.Module):
         w_init: Union[Callable, ArrayLike] = init.KaimingNormal(),
         b_init: Optional[Union[Callable, ArrayLike]] = init.ZeroInit(),
         w_mask: Optional[Union[ArrayLike, Callable]] = None,
-        full_etrace: bool = False,
         name: Optional[str] = None,
         param_type: type = ETraceParam,
     ):
@@ -59,18 +58,19 @@ class Linear(bst.nn.Module):
         self.out_size = out_size
 
         # w_mask
-        self.w_mask = init.param(w_mask, self.in_size + self.out_size)
+        w_shape = (self.in_size[-1], self.out_size[-1])
+        b_shape = (self.out_size[-1],)
+        self.w_mask = init.param(w_mask, w_shape)
 
         # weights
-        params = dict(weight=init.param(w_init, self.in_size + self.out_size, allow_none=False))
+        params = dict(weight=init.param(w_init, w_shape, allow_none=False))
         if b_init is not None:
-            params['bias'] = init.param(b_init, self.out_size, allow_none=False)
+            params['bias'] = init.param(b_init, b_shape, allow_none=False)
 
         # weight + op
         self.weight_op = param_type(
             params,
             op=MatMulOp(self.w_mask),
-            grad='full' if full_etrace else None
         )
 
     def update(self, x):
@@ -89,7 +89,6 @@ class SignedWLinear(bst.nn.Module):
         out_size: Union[int, Sequence[int]],
         w_init: Union[Callable, ArrayLike] = init.KaimingNormal(),
         w_sign: Optional[ArrayLike] = None,
-        full_etrace: bool = False,
         name: Optional[str] = None,
         param_type: type = ETraceParam,
     ):
@@ -100,9 +99,89 @@ class SignedWLinear(bst.nn.Module):
         self.out_size = out_size
 
         # weights
-        weight = init.param(w_init, [self.in_size[-1], self.out_size[-1]], allow_none=False)
-        op = MatMulOp(weight_mask=w_sign, weight_fn=u.math.abs)
-        self.weight_op = param_type({'weight': weight}, op=op, grad='full' if full_etrace else None)
+        w_shape = (self.in_size[-1], self.out_size[-1])
+        weight = init.param(w_init, w_shape, allow_none=False)
+        op = MatMulOp(
+            weight_mask=w_sign,
+            weight_fn=u.math.abs,
+        )
+        self.weight_op = param_type({'weight': weight}, op=op)
+
+    def update(self, x):
+        return self.weight_op.execute(x)
+
+
+class ScaledWSLinear(bst.nn.Module):
+    """
+    Linear Layer with Weight Standardization.
+
+    Applies weight standardization to the weights of the linear layer.
+
+    Parameters
+    ----------
+    in_size: int, sequence of int
+      The input size.
+    out_size: int, sequence of int
+      The output size.
+    w_init: Callable, ArrayLike
+      The initializer for the weights.
+    b_init: Callable, ArrayLike
+      The initializer for the bias.
+    w_mask: ArrayLike, Callable
+      The optional mask of the weights.
+    ws_gain: bool
+      Whether to use gain for the weights. The default is True.
+    eps: float
+      The epsilon value for the weight standardization.
+    name: str
+      The name of the object.
+
+    """
+    __module__ = 'brainscale.nn'
+
+    def __init__(
+        self,
+        in_size: Union[int, Sequence[int]],
+        out_size: Union[int, Sequence[int]],
+        w_init: Callable = init.KaimingNormal(),
+        b_init: Callable = init.ZeroInit(),
+        w_mask: Optional[Union[ArrayLike, Callable]] = None,
+        ws_gain: bool = True,
+        eps: float = 1e-4,
+        name: Optional[str] = None,
+        param_type: type = ETraceParam,
+    ):
+        super().__init__(name=name)
+
+        # input and output shape
+        self.in_size = in_size
+        self.out_size = out_size
+
+        # w_mask
+        self.w_mask = init.param(w_mask, (self.in_size[0], 1))
+
+        # parameters
+        self.eps = eps
+
+        # weights
+        w_shape = (self.in_size[-1], self.out_size[-1])
+        b_shape = (self.out_size[-1],)
+        params = dict(weight=init.param(w_init, w_shape, allow_none=False))
+        if b_init is not None:
+            params['bias'] = init.param(b_init, b_shape, allow_none=False)
+        # gain
+        if ws_gain:
+            params['gain'] = u.math.ones((1, w_shape[-1]), dtype=params['weight'].dtype)
+
+        # operation
+        op = MatMulOp(
+            weight_mask=self.w_mask,
+            weight_fn=lambda w: bst.functional.weight_standardization(w['weight'], self.eps, w.get('gain', None)),
+            apply_weight_fn_before_mask=True
+        )
+
+        # weight + op
+        self.weight_op = param_type(params, op=op)
 
     def update(self, x):
         return self.weight_op.execute(x)
@@ -145,7 +224,7 @@ class SparseLinear(bst.nn.Module):
         params = dict(weight=sparse_mat.data)
         if b_init is not None:
             params['bias'] = init.param(b_init, self.out_size[-1], allow_none=False)
-        op = SpMVOp(sparse_mat=sparse_mat)
+        op = SpMVOp(sparse_mat=sparse_mat)  # x @ sparse matrix
         self.weight_op = param_type(params, op=op)
 
     def update(self, x):

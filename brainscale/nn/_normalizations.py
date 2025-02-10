@@ -21,23 +21,40 @@ from functools import partial
 from typing import Callable, Union, Sequence, Optional, Any
 
 import brainstate as bst
+import brainunit as u
+import jax
 from brainstate.nn._interaction._normalizations import _BatchNorm
 
-from brainscale._etrace_concepts import ETraceParam, NonTempParam, ETraceState
+from brainscale._etrace_concepts import ETraceParam, ETraceState
+from brainscale._etrace_operators import ETraceOp, Y, W, general_y2w
 from brainscale._typing import ArrayLike, Size, Axes
 
 __all__ = [
-    'BatchNorm0d', 'BatchNorm1d', 'BatchNorm2d', 'BatchNorm3d',
-    'LayerNorm', 'RMSNorm', 'GroupNorm'
+    'BatchNorm0d',
+    'BatchNorm1d',
+    'BatchNorm2d',
+    'BatchNorm3d',
+    'LayerNorm',
+    'RMSNorm',
+    'GroupNorm'
 ]
 
 
-def _operation(x, param):
-    if 'scale' in param:
-        x = x * param['scale']
-    if 'bias' in param:
-        x = x + param['bias']
-    return x
+class ScaleOp(ETraceOp):
+    def xw_to_y(self, x, param):
+        if 'scale' in param:
+            x = x * param['scale']
+        if 'bias' in param:
+            x = x + param['bias']
+        return x
+
+    def yw_to_w(
+        self,
+        hidden_dim_arr: Y,
+        weight_dim_tree: W,
+    ) -> W:
+        w_like = general_y2w(self.xw_to_y, hidden_dim_arr, hidden_dim_arr, weight_dim_tree)
+        return jax.tree.map(u.math.multiply, weight_dim_tree, w_like)
 
 
 class _BatchNormETrace(_BatchNorm):
@@ -55,22 +72,17 @@ class _BatchNormETrace(_BatchNorm):
         scale_initializer: Union[ArrayLike, Callable] = bst.init.Constant(1.),
         axis_name: Optional[Union[str, Sequence[str]]] = None,
         axis_index_groups: Optional[Sequence[Sequence[int]]] = None,
-        as_etrace_weight: bool = False,
-        full_etrace: bool = False,
         name: Optional[str] = None,
         dtype: Any = None,
-        mean_type: type = ETraceState
+        mean_type: type = ETraceState,
+        param_type: type = ETraceParam,
     ):
-
-        if as_etrace_weight:
-            weight_type = partial(
-                ETraceParam,
-                op=_operation,
-                grad='full' if full_etrace else None,
-                is_diagonal=True
-            )
-        else:
-            weight_type = partial(NonTempParam, op=_operation)
+        weight_type = partial(
+            param_type,
+            op=ScaleOp(),
+            grad='full',
+            is_diagonal=True
+        )
 
         super().__init__(
             in_size=in_size,
@@ -121,63 +133,51 @@ class LayerNorm(bst.nn.LayerNorm):
     def __init__(
         self,
         *args,
-        as_etrace_weight: bool = True,
-        full_etrace: bool = False,
+        param_type: type = ETraceParam,
         **kwargs,
     ):
-        if as_etrace_weight:
-            weight_type = partial(
-                ETraceParam,
-                op=_operation,
-                grad='full' if full_etrace else None,
-                is_diagonal=True
-            )
-        else:
-            weight_type = partial(NonTempParam, op=_operation)
+        weight_type = partial(
+            param_type,
+            op=ScaleOp(),
+            grad='full',
+            is_diagonal=True
+        )
         super().__init__(*args, param_type=weight_type, **kwargs)
 
 
-class RMSNorm(bst.nn.LayerNorm):
+class RMSNorm(bst.nn.RMSNorm):
     __module__ = 'brainscale.nn'
     __doc__ = bst.nn.RMSNorm.__doc__
 
     def __init__(
         self,
         *args,
-        as_etrace_weight: bool = True,
-        full_etrace: bool = False,
+        param_type: type = ETraceParam,
         **kwargs,
     ):
-        if as_etrace_weight:
-            weight_type = partial(
-                ETraceParam,
-                op=_operation,
-                grad='full' if full_etrace else None,
-                is_diagonal=True
-            )
-        else:
-            weight_type = partial(NonTempParam, op=_operation)
+        weight_type = partial(
+            param_type,
+            op=ScaleOp(),
+            grad='full',
+            is_diagonal=True
+        )
         super().__init__(*args, param_type=weight_type, **kwargs)
 
 
-class GroupNorm(bst.nn.LayerNorm):
+class GroupNorm(bst.nn.GroupNorm):
     __module__ = 'brainscale.nn'
     __doc__ = bst.nn.GroupNorm.__doc__
 
     def __init__(
         self,
         *args,
-        as_etrace_weight: bool = False,
-        full_etrace: bool = False,
+        param_type: type = ETraceParam,
         **kwargs,
     ):
-        if as_etrace_weight:
-            weight_type = partial(
-                ETraceParam,
-                op=_operation,
-                grad='full' if full_etrace else None,
-                is_diagonal=True
-            )
-        else:
-            weight_type = partial(NonTempParam, op=_operation)
+        weight_type = partial(
+            param_type,
+            op=ScaleOp(),
+            grad='full',
+            is_diagonal=True
+        )
         super().__init__(*args, param_type=weight_type, **kwargs)

@@ -6,8 +6,8 @@
 
 
 
-Connection Operation
---------------------
+Linear Layers
+-------------
 
 .. autosummary::
    :toctree: generated/
@@ -15,14 +15,40 @@ Connection Operation
    :template: classtemplate.rst
 
    Linear
-   ScaledWSLinear
    SignedWLinear
+   SparseLinear
+   LoRA
+
+
+
+Convolutional Layers
+--------------------
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+   :template: classtemplate.rst
+
    Conv1d
    Conv2d
    Conv3d
-   ScaledWSConv1d
-   ScaledWSConv2d
-   ScaledWSConv3d
+
+
+Normalization Layers
+--------------------
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+   :template: classtemplate.rst
+
+   BatchNorm0d
+   BatchNorm1d
+   BatchNorm2d
+   BatchNorm3d
+   LayerNorm
+   RMSNorm
+   GroupNorm
 
 
 Element-wise Operation
@@ -93,19 +119,6 @@ Synaptic Dynamics
    STP
    STD
 
-
-Normalization Operation
------------------------
-
-.. autosummary::
-   :toctree: generated/
-   :nosignatures:
-   :template: classtemplate.rst
-
-   BatchNorm0d
-   BatchNorm1d
-   BatchNorm2d
-   BatchNorm3d
 
 
 Pooling Operation

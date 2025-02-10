@@ -17,20 +17,24 @@ from __future__ import annotations
 
 import contextlib
 import threading
-from typing import Callable, Optional, Dict
+from typing import Callable, Optional, Dict, Sequence, Any
 
 import brainstate as bst
 import brainunit as u
 import jax
 import numpy as np
+from jax.api_util import shaped_abstractify
 
 __all__ = [
-    'stop_param_gradients',  # stop weight gradients
     'ETraceOp',  # base class
     'MatMulOp',  # x @ f(w * m) + b
+    'ElemWiseOp',  # element-wise operation
+    'ConvOp',  # x [convolution] f(w * m) + bias
     'SpMVOp',  # x @ f(sparse_weight) + b
     'LoraOp',  # low-rank approximation
-    'ElemWiseOp',  # element-wise operation
+
+    'general_y2w',
+    'stop_param_gradients',  # stop weight gradients
 ]
 
 _etrace_op_name = '_etrace_operator_call'
@@ -100,6 +104,41 @@ def is_etrace_op_elemwise(jit_param_name: str):
     Check whether the jitted parameter name is the element-wise operator.
     """
     return jit_param_name.startswith(_etrace_op_name_elemwise)
+
+
+def general_y2w(
+    xw2y: Callable[[X, W], Y],
+    x: X,
+    y: Y,
+    w: W,
+):
+    """
+    General function to compute the weight from the hidden dimensional array.
+
+    Args:
+        xw2y: The function to compute the output from the input and weight.
+        x: The input data.
+        y: The hidden dimensional array.
+        w: The weight dimensional array.
+
+    Returns:
+        The updated weight dimensional array.
+    """
+    x = u.math.ones_like(x)
+    primals, f_vjp = jax.vjp(
+        # dimensionless processing
+        lambda w: u.get_mantissa(xw2y(x, w)),
+        w
+    )
+    assert y.shape == primals.shape, (
+        f'The shape of the hidden_dim_arr must be the same as the primals. '
+        f'Got {y.shape} and {primals.shape}'
+    )
+    w_like = f_vjp(
+        # dimensionless processing
+        u.get_mantissa(y)
+    )[0]
+    return w_like
 
 
 class ETraceOp(bst.util.PrettyReprTree):
@@ -229,7 +268,8 @@ class ETraceOp(bst.util.PrettyReprTree):
             The weight dimensional array.
         """
         primals, f_vjp = jax.vjp(
-            lambda w: u.get_mantissa(self.xw_to_y(input_dim_arr, w)),  # dimensionless processing
+            # dimensionless processing
+            lambda w: u.get_mantissa(self.xw_to_y(input_dim_arr, w)),
             weights
         )
         assert hidden_dim_arr.shape == primals.shape, (
@@ -263,6 +303,7 @@ class MatMulOp(ETraceOp):
         self,
         weight_mask: Optional[jax.Array] = None,
         weight_fn: Callable[[X], X] = lambda w: w,
+        apply_weight_fn_before_mask: bool = False,
     ):
         super().__init__(is_diagonal=False)
 
@@ -278,6 +319,17 @@ class MatMulOp(ETraceOp):
         # weight function
         assert callable(weight_fn), f'The weight_fn must be callable. But got {type(weight_fn)}'
         self.weight_fn = weight_fn
+
+        # apply weight function before mask
+        assert isinstance(apply_weight_fn_before_mask, bool), 'apply_weight_fn_before_mask must be a boolean.'
+        self.apply_weight_fn_before_mask = apply_weight_fn_before_mask
+
+    def _check_weight(self, w: Dict[str, bst.typing.ArrayLike]):
+        if not isinstance(w, dict):
+            raise TypeError(f'{self.__class__.__name__} only supports '
+                            f'the dictionary weight. But got {type(w)}')
+        if 'weight' not in w:
+            raise ValueError(f'The weight must contain the key "weight".')
 
     def xw_to_y(
         self,
@@ -300,16 +352,26 @@ class MatMulOp(ETraceOp):
         if the bias is not provided.
 
         """
-        if not isinstance(w, dict):
-            raise TypeError(f'{self.__class__.__name__} only supports '
-                            f'the dictionary weight. But got {type(w)}')
-        if 'weight' not in w:
-            raise ValueError(f'The weight must contain the key "weight".')
-        weight = w['weight']
-        if self.weight_mask is not None:
-            weight = weight * self.weight_mask
-        weight = self.weight_fn(weight)
-        y = u.math.matmul(x, weight)
+        self._check_weight(w)
+
+        if self.apply_weight_fn_before_mask:
+
+            # Case 1: apply the weight function before the mask
+            weight = self.weight_fn(w['weight'])
+            if self.weight_mask is not None:
+                weight = weight * self.weight_mask
+            y = u.math.matmul(x, weight)
+
+        else:
+
+            # Case 2: apply the weight function after the mask
+            weight = w['weight']
+            if self.weight_mask is not None:
+                weight = weight * self.weight_mask
+            weight = self.weight_fn(weight)
+            y = u.math.matmul(x, self.weight_fn(weight))
+
+        # add bias
         if 'bias' in w:
             y = y + w['bias']
         return y
@@ -335,10 +397,7 @@ class MatMulOp(ETraceOp):
         """
         if not isinstance(hidden_dim_arr, (np.ndarray, jax.Array, u.Quantity)):
             raise TypeError(f'The hidden_dim_arr must be an array-like. But got {type(hidden_dim_arr)}')
-        if not isinstance(weight_dim_tree, dict):
-            raise TypeError(f'The weight_dim_tree must be a dictionary. But got {type(weight_dim_tree)}')
-        if 'weight' not in weight_dim_tree:
-            raise ValueError(f'The weight_dim_tree must contain the key "weight".')
+        self._check_weight(weight_dim_tree)
 
         weight_like = weight_dim_tree['weight']
         if 'bias' in weight_dim_tree:
@@ -390,6 +449,133 @@ class MatMulOp(ETraceOp):
             return {'weight': weight_like}
         else:
             return {'weight': weight_like, 'bias': bias_like}
+
+
+class ConvOp(ETraceOp):
+    """
+    The convolution operator for eligibility trace-based gradient learning.
+
+    This operator is used to compute the output of the operator, mathematically:
+
+    $$
+    y = x \mathrm{[convolution]} f(w * m) + \mathrm{bias}
+    $$
+
+    $bias$ is the bias term, which can be optional, $m$ is the weight mask,
+    and $f$ is the weight function.
+    """
+
+    def __init__(
+        self,
+        window_strides: Sequence[int],
+        padding: str | Sequence[tuple[int, int]],
+        lhs_dilation: Sequence[int] | None = None,
+        rhs_dilation: Sequence[int] | None = None,
+        feature_group_count: int = 1,
+        batch_group_count: int = 1,
+        dimension_numbers: Any = None,
+        weight_mask: Optional[jax.Array] = None,
+        weight_fn: Callable[[X], X] = lambda w: w,
+    ):
+        super().__init__(is_diagonal=False)
+
+        self.window_strides = window_strides
+        self.padding = padding
+        self.lhs_dilation = lhs_dilation
+        self.rhs_dilation = rhs_dilation
+        self.feature_group_count = feature_group_count
+        self.batch_group_count = batch_group_count
+        self.dimension_numbers = dimension_numbers
+
+        # weight mask
+        if weight_mask is None:
+            pass
+        elif isinstance(weight_mask, (np.ndarray, jax.Array, u.Quantity)):
+            weight_mask = u.math.asarray(weight_mask)
+        else:
+            raise TypeError(f'The weight_mask must be an array-like. But got {type(weight_mask)}')
+        self.weight_mask = weight_mask
+
+        # weight function
+        assert callable(weight_fn), f'The weight_fn must be callable. But got {type(weight_fn)}'
+        self.weight_fn = weight_fn
+
+        self.xinfo = None
+
+    def _check_weight(self, w: Dict[str, bst.typing.ArrayLike]):
+        if not isinstance(w, dict):
+            raise TypeError(f'{self.__class__.__name__} only supports '
+                            f'the dictionary weight. But got {type(w)}')
+        if 'weight' not in w:
+            raise ValueError(f'The weight must contain the key "weight".')
+
+    def _pure_convolution_without_batch(
+        self,
+        inputs: X,
+        weights: W,
+    ) -> Y:
+        self._check_weight(weights)
+        inputs = u.math.expand_dims(inputs, axis=0)
+        inputs, input_unit = u.split_mantissa_unit(inputs)
+        weight, weight_unit = u.split_mantissa_unit(weights['weight'])
+
+        # convolution
+        y = jax.lax.conv_general_dilated(
+            lhs=inputs,
+            rhs=weight,
+            window_strides=self.window_strides,
+            padding=self.padding,
+            lhs_dilation=self.lhs_dilation,
+            rhs_dilation=self.rhs_dilation,
+            feature_group_count=self.feature_group_count,
+            batch_group_count=self.batch_group_count,
+            dimension_numbers=self.dimension_numbers
+        )
+        y = u.maybe_decimal(y * input_unit * weight_unit)
+
+        # bias
+        if 'bias' in weights:
+            y = y + weights['bias']
+        return y[0]
+
+    def xw_to_y(
+        self,
+        inputs: X,
+        weights: W,
+    ) -> Y:
+        self.xinfo = shaped_abstractify(inputs)
+        # weight processing
+        weights = {k: v for k, v in weights.items()}
+        if self.weight_mask is not None:
+            weights['weight'] = weights['weight'] * self.weight_mask
+        # convolution
+        return self._pure_convolution_without_batch(inputs, weights)
+
+    def yw_to_w(
+        self,
+        hidden_dim_arr: bst.typing.ArrayLike,
+        weight_dim_tree: Dict[str, bst.typing.ArrayLike],
+    ) -> Dict[str, bst.typing.ArrayLike]:
+        """
+        This function is used to compute the weight from the hidden dimensional array.
+
+        $$
+        w = f(y, w)
+        $$
+
+        Args:
+            hidden_dim_arr: The hidden dimensional array.
+            weight_dim_tree: The weight dimensional tree.
+
+        Returns:
+            The updated weight dimensional tree.
+        """
+        self._check_weight(weight_dim_tree)
+        if self.xinfo is None:
+            raise ValueError('The xinfo is None. Please call the xw_to_y function first.')
+        w_like = general_y2w(self._pure_convolution_without_batch,
+                             self.xinfo, hidden_dim_arr, weight_dim_tree)
+        return jax.tree.map(u.math.multiply, weight_dim_tree, w_like)
 
 
 class SpMVOp(ETraceOp):
@@ -730,10 +916,17 @@ class ElemWiseOp(ETraceOp):
             f'The shape of the hidden_dim_arr must be the same as the weight_dim_tree. '
             f'Got {hidden_dim_arr.shape} and {prim.shape}'
         )
-        return f_vjp(
+        y_to_w = f_vjp(
             # dimensionless processing
             u.get_mantissa(hidden_dim_arr)
         )[0]
+        # new_w = y_to_w * old_w
+        new_w = jax.tree.map(
+            lambda w1, w2: w1 * w2,
+            weight_dim_tree,
+            y_to_w,
+        )
+        return new_w
 
     def xy_to_w(
         self,
