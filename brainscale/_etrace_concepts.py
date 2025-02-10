@@ -752,4 +752,4 @@ class FakeElemWiseParam(object):
         self.name = name
 
     def execute(self) -> bst.typing.ArrayLike:
-        return self.op(self.value)
+        return self.op(None, self.value)
