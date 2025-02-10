@@ -91,13 +91,6 @@ to the outputs.
     ElemWiseOp
 
 
-.. autosummary::
-   :toctree: generated/
-   :nosignatures:
-
-   stop_param_gradients
-
-
 
 ETrace Input Data
 -----------------

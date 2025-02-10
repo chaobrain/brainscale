@@ -54,7 +54,12 @@ import brainunit as u
 import jax.core
 import numpy as np
 
-from ._compatible_imports import Var, Literal, JaxprEqn, Jaxpr
+from ._compatible_imports import (
+    Var,
+    Literal,
+    JaxprEqn,
+    Jaxpr,
+)
 from ._etrace_compiler_base import (
     JaxprEvaluation,
     find_matched_vars,

@@ -35,7 +35,6 @@ from brainscale._etrace_model_test import (
 )
 
 
-# @pytest.mark.skip(reason="Not implemented")
 class TestDiagOn:
 
     @pytest.mark.parametrize(

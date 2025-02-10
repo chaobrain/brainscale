@@ -397,8 +397,13 @@ class ALIF_STPExpCu_Dense_Layer(bst.nn.Module):
         super().__init__()
         self.inp_stp = inp_stp
         self.neu = brainscale.nn.ALIF(
-            n_rec, tau=tau_mem, spk_fun=spk_fun, spk_reset=spk_reset, V_th=V_th, tau_a=tau_a,
-            beta=beta
+            n_rec,
+            tau=tau_mem,
+            spk_fun=spk_fun,
+            spk_reset=spk_reset,
+            V_th=V_th,
+            tau_a=tau_a,
+            beta=beta,
         )
         self.stp = brainscale.nn.STP(n_rec, tau_f=tau_f, tau_d=tau_d)
         if inp_stp:

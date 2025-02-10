@@ -22,7 +22,11 @@ import brainstate as bst
 import brainunit as u
 import jax
 
-from ._compatible_imports import Var, Jaxpr, ClosedJaxpr
+from ._compatible_imports import (
+    Var,
+    Jaxpr,
+    ClosedJaxpr
+)
 from ._etrace_concepts import (
     ETraceParam,
     ETraceState,

@@ -23,7 +23,12 @@ import brainstate as bst
 import jax.core
 from jax.extend import source_info_util
 
-from ._compatible_imports import Var, Literal, JaxprEqn, Jaxpr
+from ._compatible_imports import (
+    Var,
+    Literal,
+    JaxprEqn,
+    Jaxpr,
+)
 from ._etrace_compiler_base import (
     JaxprEvaluation,
     check_unsupported_op,

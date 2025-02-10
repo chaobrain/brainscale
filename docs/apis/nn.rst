@@ -17,7 +17,6 @@ Connection Operation
    Linear
    ScaledWSLinear
    SignedWLinear
-   CSRLinear
    Conv1d
    Conv2d
    Conv3d
@@ -65,8 +64,6 @@ Element-wise Operation
    Dropout1d
    Dropout2d
    Dropout3d
-   AlphaDropout
-   FeatureAlphaDropout
    Identity
    SpikeBitwise
 

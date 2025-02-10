@@ -477,7 +477,16 @@ class ETraceTreeState(ETraceGroupState):
                                               f'But we got {v.shape}.')
             indices.append(index)
             values.append(u.Quantity(v).to(self.index2unit[index]).mantissa)
-        values = u.math.stack(values, axis=-1)
+        if len(indices) == 0:
+            raise ValueError(
+                f'No hidden state is set. Please check the hidden state names or indices.'
+            )
+        if len(indices) == 1:
+            indices = indices[0]
+            values = values[0]
+        else:
+            indices = np.asarray(indices)
+            values = u.math.stack(values, axis=-1)
         self.value = self.value.at[..., indices].set(values)
 
 

@@ -234,7 +234,10 @@ class ETraceOp(bst.util.PrettyReprTree):
             f'The shape of the hidden_dim_arr must be the same as the primals. '
             f'Got {hidden_dim_arr.shape} and {primals.shape}'
         )
-        return f_vjp(u.get_mantissa(hidden_dim_arr))[0]
+        return f_vjp(
+            # dimensionless processing
+            u.get_mantissa(hidden_dim_arr)
+        )[0]
 
 
 class MatMulOp(ETraceOp):
@@ -498,4 +501,7 @@ class ElemWiseOp(ETraceOp):
             f'The shape of the hidden_dim_arr must be the same as the primals. '
             f'Got {hidden_dim_arr.shape} and {primals.shape}'
         )
-        return f_vjp(u.get_mantissa(hidden_dim_arr))[0]
+        return f_vjp(
+            # dimensionless processing
+            u.get_mantissa(hidden_dim_arr)
+        )[0]
