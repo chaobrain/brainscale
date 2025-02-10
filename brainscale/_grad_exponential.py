@@ -67,6 +67,18 @@ class GradExpon(bst.nn.Module):
         self.decay = decay
 
     def update(self, grads: bst.typing.PyTree):
+        """
+        Updates the accumulated gradients using the exponential decay rule.
+
+        This method applies the update rule g_{t+1} = decay * g_t + grads, where g_t is the
+        accumulated gradient at time t, grads is the new gradient, and decay is the decay factor.
+
+        Args:
+            grads (bst.typing.PyTree): The new gradients to be incorporated into the accumulated gradients.
+
+        Returns:
+            None. The method updates the `self.gradients` attribute in-place.
+        """
         self.gradients = jax.tree.map(
             lambda x, y: x * self.decay + y,
             self.gradients,
