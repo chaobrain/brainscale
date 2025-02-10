@@ -483,10 +483,9 @@ def _update_param_dim_etrace_scan_fn(
         etrace_op: ETraceOp = relation.weight.op
         if isinstance(relation.weight, ElemWiseParam):
             x = None
-            fn_dw = lambda df_: jax.vjp(lambda w: u.get_mantissa(etrace_op.xw_to_y(w)), weight_val)[1](df_)[0]
         else:
             x = etrace_xs_at_t[relation.x]
-            fn_dw = lambda df_: jax.vjp(lambda w: u.get_mantissa(etrace_op.xw_to_y(x, w)), weight_val)[1](df_)[0]
+        fn_dw = lambda df_: jax.vjp(lambda w: u.get_mantissa(etrace_op.xw_to_y(x, w)), weight_val)[1](df_)[0]
         if mode.has(bst.mixin.Batching):
             fn_dw = jax.vmap(fn_dw)
 

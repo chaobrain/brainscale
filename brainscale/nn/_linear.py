@@ -21,15 +21,14 @@ from typing import Callable, Union, Sequence, Optional
 
 import brainstate as bst
 import brainunit as u
-from brainstate import functional, init
+from brainstate import init
 
 from brainscale._etrace_concepts import ETraceParam
-from brainscale._etrace_operators import MatMulOp
+from brainscale._etrace_operators import MatMulOp, LoraOp
 from brainscale._typing import ArrayLike
 
 __all__ = [
     'Linear',
-    'ScaledWSLinear',
     'SignedWLinear',
     'SparseLinear',
     'LoRA',
@@ -109,85 +108,6 @@ class SignedWLinear(bst.nn.Module):
         return self.weight_op.execute(x)
 
 
-class ScaledWSLinear(bst.nn.Module):
-    """
-    Linear Layer with Weight Standardization.
-
-    Applies weight standardization to the weights of the linear layer.
-
-    Parameters
-    ----------
-    in_size: int, sequence of int
-      The input size.
-    out_size: int, sequence of int
-      The output size.
-    w_init: Callable, ArrayLike
-      The initializer for the weights.
-    b_init: Callable, ArrayLike
-      The initializer for the bias.
-    w_mask: ArrayLike, Callable
-      The optional mask of the weights.
-    ws_gain: bool
-      Whether to use gain for the weights. The default is True.
-    eps: float
-      The epsilon value for the weight standardization.
-    name: str
-      The name of the object.
-
-    """
-    __module__ = 'brainscale.nn'
-
-    def __init__(
-        self,
-        in_size: Union[int, Sequence[int]],
-        out_size: Union[int, Sequence[int]],
-        w_init: Callable = init.KaimingNormal(),
-        b_init: Callable = init.ZeroInit(),
-        w_mask: Optional[Union[ArrayLike, Callable]] = None,
-        full_etrace: bool = False,
-        ws_gain: bool = True,
-        eps: float = 1e-4,
-        name: Optional[str] = None,
-        param_type: type = ETraceParam,
-    ):
-        super().__init__(name=name)
-
-        # input and output shape
-        self.in_size = in_size
-        self.out_size = out_size
-
-        # w_mask
-        self.w_mask = init.param(w_mask, (self.in_size[0], 1))
-
-        # parameters
-        self.eps = eps
-
-        # weights
-        params = dict(weight=init.param(w_init, self.in_size + self.out_size, allow_none=False))
-        if b_init is not None:
-            params['bias'] = init.param(b_init, self.out_size, allow_none=False)
-        # gain
-        if ws_gain:
-            s = params['weight'].shape
-            params['gain'] = u.math.ones((1,) * (len(s) - 1) + (s[-1],), dtype=params['weight'].dtype)
-
-        # weight operation
-        self.weight_op = param_type(params, self._operation, grad='full' if full_etrace else None)
-
-    def update(self, x):
-        return self.weight_op.execute(x)
-
-    def _operation(self, x, params):
-        w = params['weight']
-        w = functional.weight_standardization(w, self.eps, params.get('gain', None))
-        if self.w_mask is not None:
-            w = w * self.w_mask
-        y = u.math.dot(x, w)
-        if 'bias' in params:
-            y = y + params['bias']
-        return y
-
-
 class SparseLinear(bst.nn.Module):
     """
     Linear layer with Sparse Matrix (can be ``brainunit.sparse.CSR``,
@@ -253,11 +173,11 @@ class LoRA(bst.nn.Module):
         >>> import jax, jax.numpy as jnp
         >>> layer = brainscale.nn.LoRA(3, 2, 4)
         >>> layer.weight_op.value
-    {'lora_a': Array([[ 0.25141352, -0.09826107],
-            [ 0.2328382 ,  0.38869813],
-            [ 0.27069277,  0.7678282 ]], dtype=float32),
-     'lora_b': Array([[-0.8372317 ,  0.21012013, -0.52999765, -0.31939325],
-            [ 0.64234126, -0.42980042,  1.2549229 , -0.47134295]],      dtype=float32)}
+        {'lora_a': Array([[ 0.25141352, -0.09826107],
+                [ 0.2328382 ,  0.38869813],
+                [ 0.27069277,  0.7678282 ]], dtype=float32),
+         'lora_b': Array([[-0.8372317 ,  0.21012013, -0.52999765, -0.31939325],
+                [ 0.64234126, -0.42980042,  1.2549229 , -0.47134295]],      dtype=float32)}
         >>> # Wrap around existing layer
         >>> linear = bst.nn.Linear(3, 4)
         >>> wrapper = brainscale.nn.LoRA(3, 2, 4, base_module=linear)
@@ -283,7 +203,7 @@ class LoRA(bst.nn.Module):
         out_features: bst.typing.Size,
         *,
         alpha: float = 1.,
-        base_module: Optional[bst.nn.Module] = None,
+        base_module: Optional[Callable] = None,
         B_init: Union[Callable, ArrayLike] = init.ZeroInit(),
         A_init: Union[Callable, ArrayLike] = init.LecunNormal(),
         param_type: type = ETraceParam,
@@ -299,6 +219,8 @@ class LoRA(bst.nn.Module):
         self.alpha = alpha
 
         # others
+        if base_module is not None:
+            assert callable(base_module), '"base_module" must be callable.'
         self.base_module = base_module
 
         # weights
@@ -306,15 +228,11 @@ class LoRA(bst.nn.Module):
             B=B_init((self.in_size[-1], lora_rank)),
             A=A_init((lora_rank, self.out_size[-1]))
         )
-        self.weight_op = param_type(param, self._operation)
-
-    def _operation(self, x, w):
-        return self.alpha / self.lora_rank * x @ w['B'] @ w['A']
+        op = LoraOp(alpha=self.alpha / self.lora_rank)
+        self.weight_op = param_type(param, op=op)
 
     def __call__(self, x: ArrayLike):
         out = self.weight_op.execute(x)
         if self.base_module is not None:
-            if not callable(self.base_module):
-                raise ValueError('`self.base_module` must be callable.')
             out += self.base_module(x)
         return out

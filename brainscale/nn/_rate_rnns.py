@@ -83,10 +83,12 @@ class ValinaRNNCell(bst.nn.RNNCell):
             self.activation = activation
 
         # weights
-        self.W = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1],
+        self.W = Linear(
+            self.in_size[-1] + self.out_size[-1], self.out_size[-1],
                         w_init=w_init,
                         b_init=b_init,
-                        param_type=param_type)
+                        param_type=param_type
+                        )
 
     def init_state(self, batch_size: int = None, **kwargs):
         self.h = ETraceState(bst.init.param(self._state_initializer, self.out_size, batch_size))

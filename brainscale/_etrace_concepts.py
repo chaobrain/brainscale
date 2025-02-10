@@ -406,8 +406,10 @@ class ETraceTreeState(ETraceGroupState):
     ) -> Tuple[bst.typing.ArrayLike, Dict[str, u.Unit], Dict[str, int]]:
         if isinstance(value, (tuple, list)):
             value = {str(i): v for i, v in enumerate(value)}
-        assert isinstance(value, dict), (f'Currently, {self.__class__.__name__} only supports '
-                                         f'dictionary/sequence of hidden states. But we got {type(value)}.')
+        assert isinstance(value, dict), (
+            f'Currently, {self.__class__.__name__} only supports '
+            f'dictionary/sequence of hidden states. But we got {type(value)}.'
+        )
         shapes = []
         for k, v in value.items():
             if not isinstance(v, (np.ndarray, jax.Array, u.Quantity)):

@@ -28,6 +28,7 @@ __all__ = [
     'stop_param_gradients',  # stop weight gradients
     'ETraceOp',  # base class
     'MatMulOp',  # x @ f(w * m) + b
+    'LoraOp',  # low-rank approximation
     'ElemWiseOp',  # element-wise operation
 ]
 
@@ -299,7 +300,7 @@ class MatMulOp(ETraceOp):
 
         """
         if not isinstance(w, dict):
-            raise TypeError(f'{MatMulOp.__name__} only supports '
+            raise TypeError(f'{self.__class__.__name__} only supports '
                             f'the dictionary weight. But got {type(w)}')
         if 'weight' not in w:
             raise ValueError(f'The weight must contain the key "weight".')
@@ -387,6 +388,133 @@ class MatMulOp(ETraceOp):
             return {'weight': weight_like, 'bias': bias_like}
 
 
+class LoraOp(ETraceOp):
+    r"""
+    The low-rank approximation operator for eligibility trace-based gradient learning.
+
+    This operator is used to compute the output of the operator, mathematically:
+
+    $$
+    y = x @ (\alpha B A) + b
+    $$
+
+    $b$ is the bias term, which can be optional, $\alpha$ is the scaling factor,
+    $A$ is the weight matrix, $B$ is the low-rank matrix, and $x$ is the input data.
+
+    """
+
+    def __init__(
+        self,
+        alpha: Optional[bst.typing.ArrayLike] = None,
+    ):
+        super().__init__(is_diagonal=False)
+
+        # weight mask
+        if alpha is not None:
+            alpha = u.math.asarray(alpha)
+        self.alpha = alpha
+
+    def _check_weight(self, w: W):
+        if not isinstance(w, dict):
+            raise TypeError(f'{self.__class__.__name__} only supports '
+                            f'the dictionary weight. But got {type(w)}')
+        if 'B' not in w:
+            raise ValueError(f'The weight must contain the key "B".')
+        if 'A' not in w:
+            raise ValueError(f'The weight must contain the key "A".')
+
+    def xw_to_y(
+        self,
+        x: bst.typing.ArrayLike,
+        w: Dict[str, bst.typing.ArrayLike]
+    ):
+        r"""
+        This function is used to compute the output of the operator, mathematically:
+
+        $$
+        y = \alpha * x @ B @ A + b
+        $$
+
+        Args:
+            x: The input data.
+            w: The weight parameters.
+
+        Returns:
+            The output of the operator.
+        """
+        self._check_weight(w)
+        if self.alpha is not None:
+            x = self.alpha * x
+        y = x @ w['B'] @ w['A']
+        if 'bias' in w:
+            y = y + w['bias']
+        return y
+
+    def yw_to_w(
+        self,
+        hidden_dim_arr: bst.typing.ArrayLike,
+        weight_dim_tree: Dict[str, bst.typing.ArrayLike],
+    ) -> Dict[str, bst.typing.ArrayLike]:
+        """
+        This function is used to compute the weight from the hidden dimensional array.
+
+        $$
+        w = f(y, w)
+        $$
+
+        Args:
+            hidden_dim_arr: The hidden dimensional array.
+            weight_dim_tree: The weight dimensional tree.
+
+        Returns:
+            The updated weight dimensional tree.
+        """
+        if not isinstance(hidden_dim_arr, (np.ndarray, jax.Array, u.Quantity)):
+            raise TypeError(f'The hidden_dim_arr must be an array-like. But got {type(hidden_dim_arr)}')
+        self._check_weight(weight_dim_tree)
+
+        B_like = weight_dim_tree['B']
+        A_like = weight_dim_tree['A']
+        bias_like = weight_dim_tree.get('bias', None)
+        if hidden_dim_arr.ndim == 1:
+            assert B_like.ndim == 2 and A_like.ndim == 2, (
+                f'The weight must be a 2D array when hidden_dim_arr is 1D. '
+                f'But got the shape of B = {B_like.shape}, A = {A_like.shape}.'
+            )
+            A_like = (
+                A_like *
+                u.math.expand_dims(hidden_dim_arr, axis=0)
+            )
+            if bias_like is not None:
+                assert bias_like.ndim == 1, (
+                    f'The bias must be a 1D array when hidden_dim_arr is 1D. '
+                    f'But got the shape {bias_like.shape}'
+                )
+                bias_like = bias_like * hidden_dim_arr
+        elif hidden_dim_arr.ndim == 2:
+            assert B_like.ndim == 3 and A_like.ndim == 3, (
+                f'The weight must be a 3D array when hidden_dim_arr is 2D. '
+                f'But got the shape B = {B_like.shape}, A = {A_like.shape}.'
+            )
+            # assume batch size is the first dimension
+            A_like = (
+                A_like *
+                u.math.expand_dims(hidden_dim_arr, axis=1)
+            )
+            if bias_like is not None:
+                assert bias_like.ndim == 2, (
+                    f'The bias must be a 2D array when hidden_dim_arr is 2D. '
+                    f'But got the shape {bias_like.shape}'
+                )
+                bias_like = bias_like * hidden_dim_arr
+        else:
+            raise ValueError(f'The hidden_dim_arr must be a 1D or 2D array. But got the shape {hidden_dim_arr.shape}')
+        if bias_like is None:
+            return {'B': B_like, 'A': A_like}
+        else:
+            return {'B': B_like, 'A': A_like, 'bias': bias_like}
+
+
 class ElemWiseOp(ETraceOp):
     """
     The element-wise operator for the eligibility trace-based gradient learning.
@@ -423,7 +551,11 @@ class ElemWiseOp(ETraceOp):
     def __call__(self, weights: W) -> Y:
         return self._jitted_call(weights)
 
-    def xw_to_y(self, weights: W) -> Y:
+    def xw_to_y(
+        self,
+        inputs: Optional[X],
+        weights: W
+    ) -> Y:
         """
         This function is used to compute the output of the element-wise operator.
 
@@ -434,6 +566,7 @@ class ElemWiseOp(ETraceOp):
         $$
 
         Args:
+            inputs: The input data. It is None.
             weights: The weight parameters.
 
         Returns:
@@ -462,12 +595,19 @@ class ElemWiseOp(ETraceOp):
         Returns:
             The updated weight dimensional tree.
         """
-        prim, f_vjp = jax.vjp(self._raw_fn, weight_dim_tree)
+        prim, f_vjp = jax.vjp(
+            # dimensionless processing
+            lambda w: u.get_mantissa(self._raw_fn(w)),
+            weight_dim_tree
+        )
         assert hidden_dim_arr.shape == prim.shape, (
             f'The shape of the hidden_dim_arr must be the same as the weight_dim_tree. '
             f'Got {hidden_dim_arr.shape} and {prim.shape}'
         )
-        return f_vjp(hidden_dim_arr)[0]
+        return f_vjp(
+            # dimensionless processing
+            u.get_mantissa(hidden_dim_arr)
+        )[0]
 
     def xy_to_w(
         self,
@@ -494,7 +634,8 @@ class ElemWiseOp(ETraceOp):
         """
 
         primals, f_vjp = jax.vjp(
-            lambda w: u.get_mantissa(self._raw_fn(w)),  # dimensionless processing
+            # dimensionless processing
+            lambda w: u.get_mantissa(self._raw_fn(w)),
             weights
         )
         assert hidden_dim_arr.shape == primals.shape, (
