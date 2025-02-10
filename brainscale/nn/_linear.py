@@ -24,7 +24,7 @@ import brainunit as u
 from brainstate import init
 
 from brainscale._etrace_concepts import ETraceParam
-from brainscale._etrace_operators import MatMulOp, LoraOp
+from brainscale._etrace_operators import MatMulOp, LoraOp, SpMVOp
 from brainscale._typing import ArrayLike
 
 __all__ = [
@@ -114,7 +114,7 @@ class SparseLinear(bst.nn.Module):
     ``brainunit.sparse.CSC``, ``brainunit.sparse.COO``, or any other sparse matrix).
 
     Args:
-        spar_mat: SparseMatrix. The sparse weight matrix.
+        sparse_mat: brainunit.sparse.SparseMatrix. The sparse weight matrix.
         in_size: Size. The input size.
         name: str. The object name.
     """
@@ -122,7 +122,7 @@ class SparseLinear(bst.nn.Module):
 
     def __init__(
         self,
-        spar_mat: u.sparse.SparseMatrix,
+        sparse_mat: u.sparse.SparseMatrix,
         b_init: Optional[Union[Callable, ArrayLike]] = None,
         in_size: bst.typing.Size = None,
         name: Optional[str] = None,
@@ -133,7 +133,7 @@ class SparseLinear(bst.nn.Module):
         # input and output shape
         if in_size is not None:
             self.in_size = in_size
-        self.out_size = spar_mat.shape[-1]
+        self.out_size = sparse_mat.shape[-1]
         if in_size is not None:
             assert self.in_size[:-1] == self.out_size[:-1], (
                 'The first n-1 dimensions of "in_size" '
@@ -141,19 +141,12 @@ class SparseLinear(bst.nn.Module):
             )
 
         # weights
-        assert isinstance(spar_mat, u.sparse.SparseMatrix), '"weight" must be a SparseMatrix.'
-        self.spar_mat = spar_mat
-        params = dict(weight=spar_mat.data)
+        assert isinstance(sparse_mat, u.sparse.SparseMatrix), '"weight" must be a brainunit.sparse.SparseMatrix.'
+        params = dict(weight=sparse_mat.data)
         if b_init is not None:
             params['bias'] = init.param(b_init, self.out_size[-1], allow_none=False)
-        self.weight_op = param_type(params, self._operation)
-
-    def _operation(self, x, w):
-        data = w['weight']
-        y = x @ self.spar_mat.with_data(data)
-        if 'bias' in w:
-            y = y + w['bias']
-        return y
+        op = SpMVOp(sparse_mat=sparse_mat)
+        self.weight_op = param_type(params, op=op)
 
     def update(self, x):
         return self.weight_op.execute(x)

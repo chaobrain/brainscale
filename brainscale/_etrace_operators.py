@@ -28,6 +28,7 @@ __all__ = [
     'stop_param_gradients',  # stop weight gradients
     'ETraceOp',  # base class
     'MatMulOp',  # x @ f(w * m) + b
+    'SpMVOp',  # x @ f(sparse_weight) + b
     'LoraOp',  # low-rank approximation
     'ElemWiseOp',  # element-wise operation
 ]
@@ -340,7 +341,10 @@ class MatMulOp(ETraceOp):
             raise ValueError(f'The weight_dim_tree must contain the key "weight".')
 
         weight_like = weight_dim_tree['weight']
-        bias_like = weight_dim_tree.get('bias', None)
+        if 'bias' in weight_dim_tree:
+            bias_like = weight_dim_tree['bias']
+        else:
+            bias_like = None
         if hidden_dim_arr.ndim == 1:
             assert weight_like.ndim == 2, (
                 f'The weight must be a 2D array when hidden_dim_arr is 1D. '
@@ -388,6 +392,125 @@ class MatMulOp(ETraceOp):
             return {'weight': weight_like, 'bias': bias_like}
 
 
+class SpMVOp(ETraceOp):
+    """
+    The sparse matrix-vector multiplication operator for eligibility trace-based gradient learning.
+
+    This operator is used to compute the output of the operator, mathematically:
+
+    $$
+    y = v @ f(w) + b,
+    $$
+
+    $b$ is the bias term, which can be optional, $f$ is the weight function, and $v$ is the input vector.
+
+    By default, the weight function is the identity function.
+
+    .. note::
+
+       The sparse matrix must be the instance of ``brainunit.sparse.SparseMatrix``,
+       which implements the protocol method ``.yw_to_w()`` that we need.
+
+    """
+
+    def __init__(
+        self,
+        sparse_mat: u.sparse.SparseMatrix,
+        weight_fn: Callable[[X], X] = lambda w: w,
+    ):
+        super().__init__(is_diagonal=False)
+
+        # sparse matrix
+        assert isinstance(sparse_mat, u.sparse.SparseMatrix), (
+            f'The sparse_mat must be a SparseMatrix. But we got {type(sparse_mat)}'
+        )
+        self.sparse_mat = sparse_mat
+
+        # weight function
+        assert callable(weight_fn), f'The weight_fn must be callable. But got {type(weight_fn)}'
+        self.weight_fn = weight_fn
+
+    def _check_weight(self, w: W, check_shape: bool = True):
+        if not isinstance(w, dict):
+            raise TypeError(f'{self.__class__.__name__} only supports '
+                            f'the dictionary weight. But got {type(w)}')
+        if 'weight' not in w:
+            raise ValueError(f'The weight must contain the key "weight".')
+        if check_shape:
+            if w['weight'].shape != self.sparse_mat.data.shape:
+                raise ValueError(f'The shape of the weight must be the same as the sparse matrix data. '
+                                 f'Got {w["weight"].shape} and {self.sparse_mat.data.shape}.')
+        if w['weight'].dtype != self.sparse_mat.data.dtype:
+            raise ValueError(f'The dtype of the weight must be the same as the sparse matrix data. '
+                             f'Got {w["weight"].dtype} and {self.sparse_mat.data.dtype}.')
+        if u.get_unit(w['weight']) != u.get_unit(self.sparse_mat.data):
+            raise ValueError(f'The unit of the weight must be the same as the sparse matrix data. '
+                             f'Got {u.get_unit(w["weight"])} and {u.get_unit(self.sparse_mat.data)}.')
+
+    def xw_to_y(
+        self,
+        x: bst.typing.ArrayLike,
+        w: Dict[str, bst.typing.ArrayLike]
+    ):
+        r"""
+        This function is used to compute the output of the operator, mathematically:
+
+        $$
+        y = x @ f(w) + b
+        $$
+        """
+        self._check_weight(w)
+        weight = self.weight_fn(w['weight'])
+        sparse_mat = self.sparse_mat.with_data(weight)
+        y = x @ sparse_mat
+        if 'bias' in w:
+            y = y + w['bias']
+        return y
+
+    def yw_to_w(
+        self,
+        hidden_dim_arr: bst.typing.ArrayLike,
+        weight_dim_tree: Dict[str, bst.typing.ArrayLike],
+    ) -> Dict[str, bst.typing.ArrayLike]:
+        """
+        This function is used to compute the weight from the hidden dimensional array.
+
+        $$
+        w = f(y, w)
+        $$
+
+        Args:
+            hidden_dim_arr: The hidden dimensional array.
+            weight_dim_tree: The weight dimensional tree.
+
+        Returns:
+            The updated weight dimensional tree.
+        """
+        self._check_weight(weight_dim_tree, check_shape=False)
+        weight_like: bst.typing.ArrayLike = weight_dim_tree['weight']
+        if 'bias' in weight_dim_tree:
+            bias_like = weight_dim_tree['bias']
+        else:
+            bias_like = None
+        assert hidden_dim_arr.ndim == 1, (
+            f'The hidden_dim_arr must be a 1D array. But got the shape {hidden_dim_arr.shape}'
+        )
+        weight_like = self.sparse_mat.yw_to_w(
+            u.math.expand_dims(hidden_dim_arr, axis=0),
+            weight_like
+        )
+        if bias_like is not None:
+            assert bias_like.ndim == 1, (
+                f'The bias must be a 1D array when hidden_dim_arr is 1D. '
+                f'But got the shape {bias_like.shape}'
+            )
+            bias_like = bias_like * hidden_dim_arr
+        if bias_like is None:
+            return {'weight': weight_like}
+        else:
+            return {'weight': weight_like, 'bias': bias_like}
+
+
 class LoraOp(ETraceOp):
     r"""
     The low-rank approximation operator for eligibility trace-based gradient learning.
@@ -395,7 +518,7 @@ class LoraOp(ETraceOp):
     This operator is used to compute the output of the operator, mathematically:
 
     $$
-    y = x @ (\alpha B A) + b
+    y = \alpha x B A + b
     $$
 
     $b$ is the bias term, which can be optional, $\alpha$ is the scaling factor,
@@ -475,7 +598,10 @@ class LoraOp(ETraceOp):
 
         B_like = weight_dim_tree['B']
         A_like = weight_dim_tree['A']
-        bias_like = weight_dim_tree.get('bias', None)
+        if 'bias' in weight_dim_tree:
+            bias_like = weight_dim_tree['bias']
+        else:
+            bias_like = None
         if hidden_dim_arr.ndim == 1:
             assert B_like.ndim == 2 and A_like.ndim == 2, (
                 f'The weight must be a 2D array when hidden_dim_arr is 1D. '
