@@ -26,8 +26,8 @@ import jax
 import jax.numpy as jnp
 from brainstate import init, surrogate, nn
 
-from brainscale._etrace_concepts import ETraceParamOp, ETraceState
-from brainscale._etrace_operators import MatMulETraceOp
+from brainscale._etrace_concepts import ETraceParam, ETraceState
+from brainscale._etrace_operators import MatMulOp
 from brainscale._typing import Size, ArrayLike, Spike
 
 __all__ = [
@@ -62,7 +62,7 @@ class LeakyRateReadout(nn.Module):
 
         # weights
         weight = init.param(w_init, (self.in_size[0], self.out_size[0]))
-        self.weight_op = ETraceParamOp({'weight': weight}, MatMulETraceOp())
+        self.weight_op = ETraceParam({'weight': weight}, op=MatMulOp())
 
     def init_state(self, batch_size=None, **kwargs):
         self.r = ETraceState(init.param(self.r_initializer, self.out_size, batch_size))
@@ -102,7 +102,7 @@ class LeakySpikeReadout(nn.LeakySpikeReadout):
 
         # weights
         weight = init.param(w_init, (self.in_size[0], self.out_size[0]))
-        self.weight_op = ETraceParamOp({'weight': weight}, MatMulETraceOp())
+        self.weight_op = ETraceParam({'weight': weight}, op=MatMulOp())
 
     def init_state(self, batch_size, **kwargs):
         self.V = ETraceState(init.param(self.V_initializer, self.varshape, batch_size))

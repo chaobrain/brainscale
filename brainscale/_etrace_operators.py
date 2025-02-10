@@ -15,673 +15,953 @@
 
 from __future__ import annotations
 
-from functools import partial, reduce
-from typing import Tuple, Callable, List, Optional, Any
+import contextlib
+import threading
+from typing import Callable, Optional, Dict, Sequence, Any
 
 import brainstate as bst
 import brainunit as u
 import jax
-
-from ._etrace_concepts import ETraceOp
-from ._misc import remove_units
-from ._typing import PyTree
-
-WeightTree = Any
+import numpy as np
+from jax.api_util import shaped_abstractify
 
 __all__ = [
-    'StandardETraceOp',
-    'GeneralETraceOp',
-    'MatMulETraceOp',
-    'ElementWiseOp',
+    'ETraceOp',  # base class
+    'MatMulOp',  # x @ f(w * m) + b
+    'ElemWiseOp',  # element-wise operation
+    'ConvOp',  # x [convolution] f(w * m) + bias
+    'SpMVOp',  # x @ f(sparse_weight) + b
+    'LoraOp',  # low-rank approximation
+
+    'general_y2w',
+    'stop_param_gradients',  # stop weight gradients
 ]
 
-
-class StandardETraceOp(ETraceOp):
-    """
-    The standard operator for the eligibility trace, which is used
-    for computing the parameter-dimensional eligibility trace updates.
-    """
-
-    def etrace_update(
-        self,
-        mode: bst.mixin.Mode,
-        w: WeightTree,
-        dh_to_dw: List[WeightTree],
-        diag_jac: List[jax.Array],
-        ph_to_pwx: jax.Array,
-        ph_to_pwy: jax.Array
-    ):
-        r"""
-        Standard operator for computing the eligibility trace updates.
-
-        Update: ``eligibility trace`` * ``diagonal hidden Jacobian`` + ``new hidden-to-weight Jacobian``
-
-        .. math::
-           d\epsilon^t = D_h ⊙ d\epsilon^{t-1} + df^t
-
-        where :math:`D_h` is the hidden-to-hidden Jacobian diagonal matrix，
-        :math:`df^t` is the hidden-to-weight Jacobian matrix.
-
-        For example::
-
-          ∂V^t/∂V^t-1 * ∂V^t-1/∂θ1 + ∂V^t/∂a^t-1 * ∂a^t-1/∂θ1 + ... + ∂V^t/∂θ1^t
-
-
-        Args:
-            mode: the mode of the operation, which may contain the batching information.
-            w: the weight value.
-            dh_to_dw: the hidden-to-weight Jacobian.
-            diag_jac: the diagonal Jacobian $\frac{ \partial h^t } { \partial h^{t-1} } $ of the hidden states.
-            ph_to_pwx: the partial derivative of the hidden with respect to the weight operation input,
-                    i.e., the input $x^t$.
-            ph_to_pwy: the partial derivative of the hidden with respect to the weight operation output,
-                    i.e., the output $\frac{ \partial h^t } { \partial y^t }$.
-
-        """
-        raise NotImplementedError
-
-    def hidden_to_etrace(
-        self,
-        mode: bst.mixin.Mode,
-        w: WeightTree,
-        dl_to_dh: jax.Array,
-        dh_to_dw: WeightTree
-    ):
-        r"""
-        Compute the gradient of the loss with respect to the weight operation.
-
-        This function is used to merge the hidden dimensional gradients (i.e. the loss-to-hidden
-        gradient) into the eligibility trace updates.
-
-        .. math::
-
-           dL/dW = (dL/dH) \circ (dH / dW) \approx \frac{ \partial L^t } { \partial h^t } \circ \epsilon^t
-
-        Args:
-            mode: the mode of the operation, which may contain the batching information.
-            w: the weight value.
-            dl_to_dh: the derivative of the loss with respect to the hidden
-                states, i.e., $\frac{ \partial L^t } { \partial h^t }$.
-            dh_to_dw: the derivative of the hidden states with respect to the weight operation,
-                i.e., the eligibility trace $\frac{ \partial h^t } { \partial W^t } \approx \epsilon^t$.
-
-        """
-        raise NotImplementedError
-
+_etrace_op_name = '_etrace_operator_call'
+_etrace_op_name_enable_grad = f'{_etrace_op_name}_enable_grad_'
+_etrace_op_name_elemwise = f'{_etrace_op_name}_enable_grad_elemwise_'
 
 X = bst.typing.ArrayLike
 W = bst.typing.PyTree
 Y = bst.typing.ArrayLike
 
 
-class GeneralETraceOp(StandardETraceOp):
+class OperatorContext(threading.local):
     """
-    The general operator for computing the eligibility trace updates, which can be applied to any :py:class:`ETraceOp`,
-    but does not guarantee the computational efficiency.
+    The context for the eligibility trace operator.
     """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.stop_param_gradient = [False]
+
+
+context = OperatorContext()
+
+
+@contextlib.contextmanager
+def stop_param_gradients(stop_or_not: bool = True):
+    """
+    Stop the weight gradients for the ETrace weight operator.
+
+    Example::
+
+      >>> import brainscale
+      >>> with brainscale.stop_weight_gradients():
+      >>>    # do something
+
+    Args:
+        stop_or_not: Whether to stop the weight gradients.
+    """
+    try:
+        context.stop_param_gradient.append(stop_or_not)
+        yield
+    finally:
+        context.stop_param_gradient.pop()
+
+
+def wrap_etrace_fun(fun, name: str = _etrace_op_name):
+    fun.__name__ = name
+    return fun
+
+
+def is_etrace_op(jit_param_name: str):
+    """
+    Check whether the jitted parameter name is the operator.
+    """
+    return jit_param_name.startswith(_etrace_op_name)
+
+
+def is_etrace_op_enable_gradient(jit_param_name: str):
+    """
+    Check whether the jitted parameter name is the operator with the gradient enabled.
+    """
+    return jit_param_name.startswith(_etrace_op_name_enable_grad)
+
+
+def is_etrace_op_elemwise(jit_param_name: str):
+    """
+    Check whether the jitted parameter name is the element-wise operator.
+    """
+    return jit_param_name.startswith(_etrace_op_name_elemwise)
+
+
+def general_y2w(
+    xw2y: Callable[[X, W], Y],
+    x: X,
+    y: Y,
+    w: W,
+):
+    """
+    General function to compute the weight from the hidden dimensional array.
+
+    Args:
+        xw2y: The function to compute the output from the input and weight.
+        x: The input data.
+        y: The hidden dimensional array.
+        w: The weight dimensional array.
+
+    Returns:
+        The updated weight dimensional array.
+    """
+    x = u.math.ones_like(x)
+    primals, f_vjp = jax.vjp(
+        # dimensionless processing
+        lambda w: u.get_mantissa(xw2y(x, w)),
+        w
+    )
+    assert y.shape == primals.shape, (
+        f'The shape of the hidden_dim_arr must be the same as the primals. '
+        f'Got {y.shape} and {primals.shape}'
+    )
+    w_like = f_vjp(
+        # dimensionless processing
+        u.get_mantissa(y)
+    )[0]
+    return w_like
+
+
+class ETraceOp(bst.util.PrettyReprTree):
+    """
+    The Eligibility Trace Operator.
+
+    The function must have the signature: ``(x: jax.Array, weight: PyTree) -> jax.Array``.
+
+    Attributes:
+        fun: The operator function.
+        is_diagonal: bool. Whether the operator is in the hidden diagonal or not.
+
+    Args:
+        is_diagonal: bool. Whether the operator is in the hidden diagonal or not.
+    """
+    __module__ = 'brainscale'
 
     def __init__(
         self,
-        op: Callable[[X, W], Y],
-        xinfo: jax.ShapeDtypeStruct,
-        is_diagonal: bool = False
+        is_diagonal: Optional[bool] = False,
+        name: Optional[str] = None,
     ):
-        super().__init__(op, is_diagonal=is_diagonal)
-        #
-        # calling the operator through:
-        #       y = op(x, w)
-        #
-        self.op = op
-        #
-        # the shape and dtype of the input x
-        #
-        self.xinfo = xinfo
+        super().__init__()
 
-    def etrace_update(
+        # whether the operator is in the hidden diagonal
+        self.is_diagonal = is_diagonal
+
+        # function JIT name
+        if name is None:
+            name = (
+                _etrace_op_name_enable_grad
+                if is_diagonal else
+                _etrace_op_name
+            )
+
+        # JIT the operator function
+        # This is important during compilation of eligibility trace graph
+        self._jitted_call = jax.jit(wrap_etrace_fun(self._define_call(), name))
+
+    def _define_call(self):
+        return lambda x, weights: self.xw_to_y(x, weights)
+
+    def __pretty_repr_item__(self, k, v):
+        if k == '_jitted_call':
+            return None, None
+        return k, v
+
+    def __call__(
         self,
-        mode: bst.mixin.Mode,
-        w: WeightTree,
-        dh_to_dw: List[WeightTree],
-        diag_jac: List[jax.Array],
-        ph_to_pwx: jax.Array,
-        ph_to_pwy: Optional[jax.Array],
-    ):
-        """
-        This is the general method for computing the eligibility trace updates, which
-        can be applied to any :py:class:`ETraceOp`, but does not guarantee the computational efficiency.
+        inputs: X,
+        weights: W,
+    ) -> Y:
+        y = self._jitted_call(inputs, weights)
+        if context.stop_param_gradient[-1] and not self.is_diagonal:
+            y = jax.lax.stop_gradient(y)
+        return y
 
-        See the :meth:`StandardETraceOp.etrace_update` for more details.
-        """
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__}(is_diagonal={self.is_diagonal})'
 
-        assert isinstance(dh_to_dw, (list, tuple)), f'The dh_to_dw must be a list of pytrees. Got {type(dh_to_dw)}'
-        assert isinstance(diag_jac, (list, tuple)), f'The diag_jac must be a list of jax.Array. Got {type(diag_jac)}'
-        assert len(dh_to_dw) == len(diag_jac), (
-            f'The length of dh_to_dw and diag_jac must be the same. '
-            f'Got {len(dh_to_dw)} and {len(diag_jac)}'
-        )
-
-        #
-        # Step 1:
-        #
-        # update the eligibility trace * hidden diagonal Jacobian
-        #         dϵ^t = D_h ⊙ dϵ^t-1, where D_h is the hidden-to-hidden Jacobian diagonal matrix.
-        #
-        final_dw = None
-        for dw, diag in zip(dh_to_dw, diag_jac):
-            #
-            # convert the diagonal hidden-to-hidden Jacobian to the
-            # dimension of weights
-            dg_weight = self.dy_to_weight(
-                mode,
-                w,
-                self.op,
-                self.xinfo,
-                diag
-            )
-
-            #
-            # compute the element-wise multiplication of:
-            #      diagonal * \epsilon (dh_to_dw)
-            diag_mul_dw = jax.tree.map(u.math.multiply, dg_weight, dw)
-            final_dw = (
-                diag_mul_dw
-                if final_dw is None else
-                jax.tree.map(u.math.add, final_dw, diag_mul_dw)
-            )
-
-        #
-        # Step 2:
-        #
-        # update: eligibility trace * hidden diagonal Jacobian + new hidden df
-        #        dϵ^t = D_h ⊙ dϵ^t-1 + df^t, where D_h is the hidden-to-hidden Jacobian diagonal matrix.
-        #
-        if ph_to_pwy is not None:
-            current_etrace = self.dx_dy_to_weight(
-                mode,
-                w,
-                self.op,
-                ph_to_pwx,
-                ph_to_pwy
-            )
-            final_dw = jax.tree.map(u.math.add, final_dw, current_etrace)
-        return final_dw
-
-    def hidden_to_etrace(
+    def xw_to_y(
         self,
-        mode: bst.mixin.Mode,
-        w: PyTree,
-        dl_to_dh: jax.Array,
-        dh_to_dw: PyTree
-    ):
+        inputs: X,
+        weights: W,
+    ) -> Y:
         """
-        This is the general method for computing the gradient of the loss with respect to the weight operation.
-        It can be applied to any :py:class:`ETraceOp`, but does not guarantee the computational efficiency.
+        This function is used to compute the output of the operator.
 
-        See the :meth:`StandardETraceOp.hidden_to_etrace` for more details.
+        It computes:
+
+        $$
+        y = f(x, w)
+        $$
+
+        Args:
+            inputs: The input data.
+            weights: The weight parameters.
+
+        Returns:
+            The output of the operator.
         """
+        raise NotImplementedError
 
-        # compute: dL/dW = (dL/dH) \circ (dH / dW)
-        dg_weight = self.dy_to_weight(
-            mode,
-            w,
-            self.op,
-            self.xinfo,
-            dl_to_dh
+    def yw_to_w(
+        self,
+        hidden_dim_arr: Y,
+        weight_dim_tree: W,
+    ) -> W:
+        """
+        This function is used to compute the weight from the hidden dimensional array.
+
+        It computes:
+
+        $$
+        w = f(y, w)
+        $$
+
+        This function is mainly used when computing eligibility trace updates based on
+        :py:class:`ParamDimVjpAlgorithm`.
+        """
+        raise NotImplementedError
+
+    def xy_to_w(
+        self,
+        input_dim_arr: X,
+        hidden_dim_arr: Y,
+        weights: W,
+    ) -> W:
+        """
+        This function is used to compute the weight dimensional array from the input and hidden dimensional inputs.
+
+        It computes:
+
+        $$
+        w = f(x, y)
+        $$
+
+        This function is mainly used when computing eligibility trace updates based on
+        :py:class:`IODimVjpAlgorithm`.
+
+        Args:
+            input_dim_arr: The input dimensional array.
+            hidden_dim_arr: The hidden dimensional array.
+            weights: The weight dimensional array.
+
+        Returns:
+            The weight dimensional array.
+        """
+        primals, f_vjp = jax.vjp(
+            # dimensionless processing
+            lambda w: u.get_mantissa(self.xw_to_y(input_dim_arr, w)),
+            weights
         )
-        return jax.tree.map(u.math.multiply, dg_weight, dh_to_dw)
-
-    @staticmethod
-    def dy_to_weight(
-        mode: bst.mixin.Mode,
-        weight_vals: PyTree,
-        op: Callable,
-        x_info: jax.ShapeDtypeStruct,
-        dg_hidden: jax.Array
-    ) -> PyTree:
-        #
-        # [KEY]
-        # For the following operation:
-        #      dL/dW = (dL/dH) \circ (dH / dW)
-        #   or
-        #      \partial H^t/\partial W = \partial H^t/\partial H^{t-1} \cdot \partial H^{t-1}/\partial W
-        #
-        # we can compute the gradient of the weight using the following two merging operations:
-        #
-
-        # input
-        x_data = u.math.ones(x_info.shape, x_info.dtype)
-
-        # transform
-        def fn4vjp(dh, x):
-            primals, f_vjp = jax.vjp(partial(op, x), weight_vals)
-            if isinstance(dh, (tuple, list)):
-                assert isinstance(primals, (tuple, list))
-                dh = (
-                    u.maybe_decimal(u.get_magnitude(dh[0]) * u.get_unit(primals[0])),
-                )
-            else:
-                dh = u.maybe_decimal(u.get_magnitude(dh) * u.get_unit(primals))
-            return f_vjp(dh)[0]
-
-        # fun = lambda dh, x: jax.vjp(partial(op, x), weight_vals)[1](dh)[0]
-        if mode.has(bst.mixin.Batching):
-            # TODO:
-            #    assuming the batch size is the first dimension
-            x_data = u.math.expand_dims(x_data, axis=1)
-            dg_hidden = u.math.expand_dims(dg_hidden, axis=1)
-            dg_weight = jax.vmap(fn4vjp)(dg_hidden, x_data)
-        else:
-            dg_weight = fn4vjp(dg_hidden, x_data)
-        return dg_weight
-
-    @staticmethod
-    def dx_dy_to_weight(
-        mode: bst.mixin.Mode,
-        weight_vals: PyTree,
-        op: Callable,
-        dg_x: jax.Array,
-        dg_y: jax.Array
-    ) -> PyTree:
-        #
-        # [KEY]
-        # For the following operation:
-        #      dW = dy \otimes dx
-        #
-        # we can compute the gradient of the weight using the following two merging operations:
-        #
-        def fn4vjp(dx, dy):
-            primals, f_vjp = jax.vjp(partial(op, dx), weight_vals)
-            if isinstance(primals, u.Quantity) and isinstance(dy, u.Quantity):
-                assert primals.unit.has_same_dim(dy.unit), (
-                    f'The unit of the primal and the derivative must '
-                    f'be the same. But we got {primals.unit} and {dy.unit}'
-                )
-            elif isinstance(primals, u.Quantity):
-                dy = u.Quantity(dy, unit=primals.unit)
-            elif isinstance(dy, u.Quantity):
-                raise ValueError(f'The primal must be a quantity. Got {type(primals)}')
-            # dy = u.math.asarray(dy, dtype=primals.dtype)
-            return f_vjp(dy)[0]
-
-        # fun = lambda dx, dy: jax.vjp(partial(op, dx), weight_vals)[1](dy)[0]
-        if mode.has(bst.mixin.Batching):
-            # TODO:
-            #    assuming the batch size is the first dimension
-            dg_weight = jax.vmap(fn4vjp)(u.math.expand_dims(dg_x, axis=1),
-                                         u.math.expand_dims(dg_y, axis=1))
-        else:
-            dg_weight = fn4vjp(dg_x, dg_y)
-        return dg_weight
+        assert hidden_dim_arr.shape == primals.shape, (
+            f'The shape of the hidden_dim_arr must be the same as the primals. '
+            f'Got {hidden_dim_arr.shape} and {primals.shape}'
+        )
+        return f_vjp(
+            # dimensionless processing
+            u.get_mantissa(hidden_dim_arr)
+        )[0]
 
 
-class MatMulETraceOp(StandardETraceOp):
+class MatMulOp(ETraceOp):
     """
-    The standard matrix multiplication operator for the eligibility trace updates.
+    The matrix multiplication operator for eligibility trace-based gradient learning.
 
-    This operator is much more efficient than the :py:class:`GeneralETraceOp` for the matrix multiplication operation.
+    This operator is used to compute the output of the operator, mathematically:
 
+    $$
+    y = x @ f(w * m) + b
+    $$
+
+    $b$ is the bias term, which can be optional, $m$ is the weight mask,
+    and $f$ is the weight function.
+
+    By default, the weight function is the identity function, and
+    the weight mask is None.
     """
 
     def __init__(
         self,
         weight_mask: Optional[jax.Array] = None,
-        is_diagonal: bool = False
+        weight_fn: Callable[[X], X] = lambda w: w,
+        apply_weight_fn_before_mask: bool = False,
     ):
-        super().__init__(self._operation, is_diagonal=is_diagonal)
-        self.weight_mask = weight_mask
-
-    def _format_weight(
-        self,
-        weights,
-        keep_unit: bool = True
-    ) -> Tuple[Tuple[jax.Array, Optional[jax.Array]], Callable]:
-        weights = (weights['weight'], weights.get('bias', None))
-
-        if keep_unit:
-            unflatten = lambda weight, bias: (
-                {'weight': weight, } if bias is None else
-                {'weight': weight, 'bias': bias}
-            )
-        else:
-            w_unit = u.get_unit(weights[0])
-            b_unit = u.get_unit(weights[1])
-
-            def unflatten(weight, bias):
-                weight = u.maybe_decimal(weight * w_unit)
-                bias = None if bias is None else u.maybe_decimal(bias * b_unit)
-                if bias is None:
-                    return {'weight': weight}
-                return {'weight': weight, 'bias': bias}
-
-            weights = tuple([u.get_magnitude(w) for w in weights])
-        return weights, unflatten
-
-    def _operation(self, x, w):
-        (weight, bias), _ = self._format_weight(w, keep_unit=True)
-        if self.weight_mask is not None:
-            weight = weight * self.weight_mask
-        if bias is None:
-            return u.math.matmul(x, weight)
-        else:
-            return u.math.matmul(x, weight) + bias
-
-    def etrace_update(
-        self,
-        mode: bst.mixin.Mode,
-        w: PyTree,
-        dh_to_dw: List[PyTree],
-        diag_jac: List[jax.Array],
-        ph_to_pwx: jax.Array,
-        ph_to_pwy: Optional[jax.Array],
-    ):
-        """
-        This is the standard method for computing the eligibility trace updates for the matrix multiplication operation.
-
-        See the :meth:`StandardETraceOp.etrace_update` for more details.
-        """
-
-        # 1. w: the wight value, a pytree
-        # 2. dh_to_dw: derivative of hidden to weight, the number equals to the number of hidden states
-        # 3. diag_jac: the diagonal Jacobian of the hidden states, the number equals to the number of hidden states
-        # 4. ph_to_pwx: the partial derivative of the hidden with respect to the weight input
-        # 5. ph_to_pwy: the partial derivative of the hidden with respect to the weight output
-
-        assert isinstance(dh_to_dw, (list, tuple)), f'The dh_to_dw must be a list of pytrees. Got {type(dh_to_dw)}'
-        assert isinstance(diag_jac, (list, tuple)), f'The diag_jac must be a list of jax.Array. Got {type(diag_jac)}'
-        assert len(dh_to_dw) == len(diag_jac), (
-            f'The length of dh_to_dw and diag_jac must be the same. '
-            f'Got {len(dh_to_dw)} and {len(diag_jac)}'
-        )
-
-        # diag_jac = remove_units(diag_jac)
-        # dh_to_dw = remove_units(dh_to_dw)
-        ph_to_pwx = remove_units(ph_to_pwx)
-        ph_to_pwy = remove_units(ph_to_pwy)
-
-        diag_mul_dhdw = [
-            self.hidden_to_etrace(mode, w, dh, dw)
-            for dh, dw in zip(diag_jac, dh_to_dw)
-        ]
-        diag_mul_dhdw = jax.tree.map(lambda *xs: reduce(u.math.add, xs), *diag_mul_dhdw)
-
-        (dh_to_dweight, dh_to_dbias), unflatten = self._format_weight(diag_mul_dhdw, keep_unit=False)
-        if ph_to_pwy is not None:
-            if mode.has(bst.mixin.Batching):
-                # dh_to_dweight: (batch_size, input_size, hidden_size,)
-                # dh_to_dbias: (batch_size, hidden_size,)
-                # ph_to_pwx: (batch_size, input_size,)
-                # ph_to_pwy: (batch_size, hidden_size,)
-                # dh_to_dweight = dh_to_dweight + u.math.einsum('bi,bh->bih', ph_to_pwx, ph_to_pwy)
-                dW = u.math.einsum('bi,bh->bih', ph_to_pwx, ph_to_pwy)
-            else:
-                # dh_to_dweight: (input_size, hidden_size,)
-                # dh_to_dbias: (hidden_size,)
-                # ph_to_pwx: (input_size,)
-                # ph_to_pwy: (hidden_size,)
-                dW = u.math.outer(ph_to_pwx, ph_to_pwy)
-
-            if self.weight_mask is not None:
-                dW = dW * self.weight_mask
-            dh_to_dweight = dh_to_dweight + dW
-            if dh_to_dbias is not None:
-                # dh_to_dbias = dh_to_dbias + ph_to_pwy
-                dh_to_dbias = dh_to_dbias + ph_to_pwy
-        return unflatten(dh_to_dweight, dh_to_dbias)
-
-    def hidden_to_etrace(
-        self,
-        mode: bst.mixin.Mode,
-        w: PyTree,
-        dl_to_dh: jax.Array,
-        dh_to_dw: PyTree
-    ):
-        """
-        This is the standard method for computing the gradient of the loss with respect to the weight operation
-        for the matrix multiplication operation.
-
-        See the :meth:`StandardETraceOp.hidden_to_etrace` for more details.
-        """
-
-        # 1. w: the wight value
-        # 2. dl_to_dh: the derivative of the loss with respect to the hidden
-        # 3. dh_to_dw: the derivative of the hidden with respect to the weight
-
-        (dh_to_dweight, dh_to_dbias), unflatten = self._format_weight(dh_to_dw)
-        dl_to_dh = remove_units(dl_to_dh)
-
-        if mode.has(bst.mixin.Batching):
-            # dl_to_dh: (batch_size, hidden_size,)
-            # dh_to_dw: (batch_size, input_size, hidden_size,)
-            dh_to_dweight = u.math.expand_dims(dl_to_dh, axis=1) * dh_to_dweight
-            if dh_to_dbias is not None:
-                dh_to_dbias = dh_to_dbias * dl_to_dh
-
-        else:
-            # dl_to_dh: (hidden_size,)
-            # dh_to_dw: (input_size, hidden_size,)
-            dh_to_dweight = dh_to_dweight * u.math.expand_dims(dl_to_dh, axis=0)
-            if dh_to_dbias is not None:
-                dh_to_dbias = dh_to_dbias * dl_to_dh
+        super().__init__(is_diagonal=False)
 
         # weight mask
+        if weight_mask is None:
+            pass
+        elif isinstance(weight_mask, (np.ndarray, jax.Array, u.Quantity)):
+            weight_mask = u.math.asarray(weight_mask)
+        else:
+            raise TypeError(f'The weight_mask must be an array-like. But got {type(weight_mask)}')
+        self.weight_mask = weight_mask
+
+        # weight function
+        assert callable(weight_fn), f'The weight_fn must be callable. But got {type(weight_fn)}'
+        self.weight_fn = weight_fn
+
+        # apply weight function before mask
+        assert isinstance(apply_weight_fn_before_mask, bool), 'apply_weight_fn_before_mask must be a boolean.'
+        self.apply_weight_fn_before_mask = apply_weight_fn_before_mask
+
+    def _check_weight(self, w: Dict[str, bst.typing.ArrayLike]):
+        if not isinstance(w, dict):
+            raise TypeError(f'{self.__class__.__name__} only supports '
+                            f'the dictionary weight. But got {type(w)}')
+        if 'weight' not in w:
+            raise ValueError(f'The weight must contain the key "weight".')
+
+    def xw_to_y(
+        self,
+        x: bst.typing.ArrayLike,
+        w: Dict[str, bst.typing.ArrayLike]
+    ):
+        r"""
+        This function is used to compute the output of the operator, mathematically:
+
+        $$
+        y = x @ f(w * m) + b
+        $$
+
+        if the bias is provided.
+
+        $$
+        y = x @ f(w * m)
+        $$
+
+        if the bias is not provided.
+
+        """
+        self._check_weight(w)
+
+        if self.apply_weight_fn_before_mask:
+
+            # Case 1: apply the weight function before the mask
+            weight = self.weight_fn(w['weight'])
+            if self.weight_mask is not None:
+                weight = weight * self.weight_mask
+            y = u.math.matmul(x, weight)
+
+        else:
+
+            # Case 2: apply the weight function after the mask
+            weight = w['weight']
+            if self.weight_mask is not None:
+                weight = weight * self.weight_mask
+            weight = self.weight_fn(weight)
+            y = u.math.matmul(x, self.weight_fn(weight))
+
+        # add bias
+        if 'bias' in w:
+            y = y + w['bias']
+        return y
+
+    def yw_to_w(
+        self,
+        hidden_dim_arr: bst.typing.ArrayLike,
+        weight_dim_tree: Dict[str, bst.typing.ArrayLike],
+    ) -> Dict[str, bst.typing.ArrayLike]:
+        """
+        This function is used to compute the weight from the hidden dimensional array.
+
+        $$
+        w = f(y, w)
+        $$
+
+        Args:
+            hidden_dim_arr: The hidden dimensional array.
+            weight_dim_tree: The weight dimensional tree.
+
+        Returns:
+            The updated weight dimensional tree.
+        """
+        if not isinstance(hidden_dim_arr, (np.ndarray, jax.Array, u.Quantity)):
+            raise TypeError(f'The hidden_dim_arr must be an array-like. But got {type(hidden_dim_arr)}')
+        self._check_weight(weight_dim_tree)
+
+        weight_like = weight_dim_tree['weight']
+        if 'bias' in weight_dim_tree:
+            bias_like = weight_dim_tree['bias']
+        else:
+            bias_like = None
+        if hidden_dim_arr.ndim == 1:
+            assert weight_like.ndim == 2, (
+                f'The weight must be a 2D array when hidden_dim_arr is 1D. '
+                f'But got the shape {weight_like.shape}'
+            )
+            if self.weight_mask is None:
+                weight_like = weight_like * u.math.expand_dims(hidden_dim_arr, axis=0)
+            else:
+                weight_like = (
+                    weight_like *
+                    self.weight_mask *
+                    u.math.expand_dims(hidden_dim_arr, axis=0)
+                )
+            if bias_like is not None:
+                assert bias_like.ndim == 1, (
+                    f'The bias must be a 1D array when hidden_dim_arr is 1D. '
+                    f'But got the shape {bias_like.shape}'
+                )
+                bias_like = bias_like * hidden_dim_arr
+        elif hidden_dim_arr.ndim == 2:
+            assert weight_like.ndim == 3, (
+                f'The weight must be a 3D array when hidden_dim_arr is 2D. '
+                f'But got the shape {weight_like.shape}'
+            )
+            # assume batch size is the first dimension
+            if self.weight_mask is None:
+                weight_like = weight_like * u.math.expand_dims(hidden_dim_arr, axis=1)
+            else:
+                weight_like = (
+                    weight_like *
+                    u.math.expand_dims(self.weight_mask, axis=0) *
+                    u.math.expand_dims(hidden_dim_arr, axis=1)
+                )
+            if bias_like is not None:
+                assert bias_like.ndim == 2, (
+                    f'The bias must be a 2D array when hidden_dim_arr is 2D. '
+                    f'But got the shape {bias_like.shape}'
+                )
+                bias_like = bias_like * hidden_dim_arr
+        else:
+            raise ValueError(f'The hidden_dim_arr must be a 1D or 2D array. But got the shape {hidden_dim_arr.shape}')
+        if bias_like is None:
+            return {'weight': weight_like}
+        else:
+            return {'weight': weight_like, 'bias': bias_like}
+
+
+class ConvOp(ETraceOp):
+    """
+    The convolution operator for eligibility trace-based gradient learning.
+
+    This operator is used to compute the output of the operator, mathematically:
+
+    $$
+    y = x \mathrm{[convolution]} f(w * m) + \mathrm{bias}
+    $$
+
+    $bias$ is the bias term, which can be optional, $m$ is the weight mask,
+    and $f$ is the weight function.
+    """
+
+    def __init__(
+        self,
+        window_strides: Sequence[int],
+        padding: str | Sequence[tuple[int, int]],
+        lhs_dilation: Sequence[int] | None = None,
+        rhs_dilation: Sequence[int] | None = None,
+        feature_group_count: int = 1,
+        batch_group_count: int = 1,
+        dimension_numbers: Any = None,
+        weight_mask: Optional[jax.Array] = None,
+        weight_fn: Callable[[X], X] = lambda w: w,
+    ):
+        super().__init__(is_diagonal=False)
+
+        self.window_strides = window_strides
+        self.padding = padding
+        self.lhs_dilation = lhs_dilation
+        self.rhs_dilation = rhs_dilation
+        self.feature_group_count = feature_group_count
+        self.batch_group_count = batch_group_count
+        self.dimension_numbers = dimension_numbers
+
+        # weight mask
+        if weight_mask is None:
+            pass
+        elif isinstance(weight_mask, (np.ndarray, jax.Array, u.Quantity)):
+            weight_mask = u.math.asarray(weight_mask)
+        else:
+            raise TypeError(f'The weight_mask must be an array-like. But got {type(weight_mask)}')
+        self.weight_mask = weight_mask
+
+        # weight function
+        assert callable(weight_fn), f'The weight_fn must be callable. But got {type(weight_fn)}'
+        self.weight_fn = weight_fn
+
+        self.xinfo = None
+
+    def _check_weight(self, w: Dict[str, bst.typing.ArrayLike]):
+        if not isinstance(w, dict):
+            raise TypeError(f'{self.__class__.__name__} only supports '
+                            f'the dictionary weight. But got {type(w)}')
+        if 'weight' not in w:
+            raise ValueError(f'The weight must contain the key "weight".')
+
+    def _pure_convolution_without_batch(
+        self,
+        inputs: X,
+        weights: W,
+    ) -> Y:
+        self._check_weight(weights)
+        inputs = u.math.expand_dims(inputs, axis=0)
+        inputs, input_unit = u.split_mantissa_unit(inputs)
+        weight, weight_unit = u.split_mantissa_unit(weights['weight'])
+
+        # convolution
+        y = jax.lax.conv_general_dilated(
+            lhs=inputs,
+            rhs=weight,
+            window_strides=self.window_strides,
+            padding=self.padding,
+            lhs_dilation=self.lhs_dilation,
+            rhs_dilation=self.rhs_dilation,
+            feature_group_count=self.feature_group_count,
+            batch_group_count=self.batch_group_count,
+            dimension_numbers=self.dimension_numbers
+        )
+        y = u.maybe_decimal(y * input_unit * weight_unit)
+
+        # bias
+        if 'bias' in weights:
+            y = y + weights['bias']
+        return y[0]
+
+    def xw_to_y(
+        self,
+        inputs: X,
+        weights: W,
+    ) -> Y:
+        self.xinfo = shaped_abstractify(inputs)
+        # weight processing
+        weights = {k: v for k, v in weights.items()}
         if self.weight_mask is not None:
-            dh_to_dweight = dh_to_dweight * self.weight_mask
-        return unflatten(dh_to_dweight, dh_to_dbias)
+            weights['weight'] = weights['weight'] * self.weight_mask
+        # convolution
+        return self._pure_convolution_without_batch(inputs, weights)
 
-
-class ElementWiseOp(StandardETraceOp):
-    """
-    The standard element-wise operator for the eligibility trace updates.
-
-    This operator is much more efficient than the :py:class:`GeneralETraceOp` for the element-wise operation.
-
-    """
-
-    def __init__(self, op: Callable[[jax.Array], jax.Array]):
-        self.true_op = op
-        super().__init__(lambda x, w: op(w), is_diagonal=True)
-
-    def etrace_update(
+    def yw_to_w(
         self,
-        mode: bst.mixin.Mode,
-        w: jax.Array,
-        dh_to_dw: List[jax.Array],
-        diag_jac: List[jax.Array],
-        ph_to_pwx: None,
-        ph_to_pwy: jax.Array,
-    ) -> jax.Array:
+        hidden_dim_arr: bst.typing.ArrayLike,
+        weight_dim_tree: Dict[str, bst.typing.ArrayLike],
+    ) -> Dict[str, bst.typing.ArrayLike]:
         """
-        This is the standard method for computing the eligibility trace updates for the matrix multiplication operation.
+        This function is used to compute the weight from the hidden dimensional array.
 
-        See the :meth:`StandardETraceOp.etrace_update` for more details.
+        $$
+        w = f(y, w)
+        $$
+
+        Args:
+            hidden_dim_arr: The hidden dimensional array.
+            weight_dim_tree: The weight dimensional tree.
+
+        Returns:
+            The updated weight dimensional tree.
         """
+        self._check_weight(weight_dim_tree)
+        if self.xinfo is None:
+            raise ValueError('The xinfo is None. Please call the xw_to_y function first.')
+        w_like = general_y2w(self._pure_convolution_without_batch,
+                             self.xinfo, hidden_dim_arr, weight_dim_tree)
+        return jax.tree.map(u.math.multiply, weight_dim_tree, w_like)
 
-        # 1. w: the wight value, a pytree
-        # 2. dh_to_dw: derivative of hidden to weight, the number equals to the number of hidden states
-        # 3. diag_jac: the diagonal Jacobian of the hidden states, the number equals to the number of hidden states
-        # 4. ph_to_pwx: the partial derivative of the hidden with respect to the weight input
-        # 5. ph_to_pwy: the partial derivative of the hidden with respect to the weight output
 
-        assert isinstance(dh_to_dw, (list, tuple)), (
-            f'The dh_to_dw must be a list of Array. Got {type(dh_to_dw)}'
+class SpMVOp(ETraceOp):
+    """
+    The sparse matrix-vector multiplication operator for eligibility trace-based gradient learning.
+
+    This operator is used to compute the output of the operator, mathematically:
+
+    $$
+    y = v @ f(w) + b,
+    $$
+
+    $b$ is the bias term, which can be optional, $f$ is the weight function, and $v$ is the input vector.
+
+    By default, the weight function is the identity function.
+
+    .. note::
+
+       The sparse matrix must be the instance of ``brainunit.sparse.SparseMatrix``,
+       which implements the protocol method ``.yw_to_w()`` that we need.
+
+    """
+
+    def __init__(
+        self,
+        sparse_mat: u.sparse.SparseMatrix,
+        weight_fn: Callable[[X], X] = lambda w: w,
+    ):
+        super().__init__(is_diagonal=False)
+
+        # sparse matrix
+        assert isinstance(sparse_mat, u.sparse.SparseMatrix), (
+            f'The sparse_mat must be a SparseMatrix. But we got {type(sparse_mat)}'
         )
-        assert isinstance(diag_jac, (list, tuple)), (
-            f'The diag_jac must be a list of jax.Array. Got {type(diag_jac)}'
-        )
-        assert len(dh_to_dw) == len(diag_jac), (
-            f'The length of dh_to_dw and diag_jac must be the same. '
-            f'Got {len(dh_to_dw)} and {len(diag_jac)}'
-        )
+        self.sparse_mat = sparse_mat
 
-        diag_mul_dhdw = [self.hidden_to_etrace(mode, w, dh, dw)
-                         for dh, dw in zip(diag_jac, dh_to_dw)]
-        diag_mul_dhdw = reduce(u.math.add, diag_mul_dhdw)
+        # weight function
+        assert callable(weight_fn), f'The weight_fn must be callable. But got {type(weight_fn)}'
+        self.weight_fn = weight_fn
 
-        if mode.has(bst.mixin.Batching):
-            # ph_to_pwy: (batch_size, hidden_size,)
-            # ph_to_pw: (batch_size, hidden_size,)
-            ph_to_pw = jax.vmap(lambda g: (jax.vjp(self.true_op, w)[1](g)))(ph_to_pwy)
-            # diag_mul_dhdw: (batch_size, hidden_size,)
-            dh_to_dweight = diag_mul_dhdw + ph_to_pw[0]
+    def _check_weight(self, w: W, check_shape: bool = True):
+        if not isinstance(w, dict):
+            raise TypeError(f'{self.__class__.__name__} only supports '
+                            f'the dictionary weight. But got {type(w)}')
+        if 'weight' not in w:
+            raise ValueError(f'The weight must contain the key "weight".')
+        if check_shape:
+            if w['weight'].shape != self.sparse_mat.data.shape:
+                raise ValueError(f'The shape of the weight must be the same as the sparse matrix data. '
+                                 f'Got {w["weight"].shape} and {self.sparse_mat.data.shape}.')
+        if w['weight'].dtype != self.sparse_mat.data.dtype:
+            raise ValueError(f'The dtype of the weight must be the same as the sparse matrix data. '
+                             f'Got {w["weight"].dtype} and {self.sparse_mat.data.dtype}.')
+        if u.get_unit(w['weight']) != u.get_unit(self.sparse_mat.data):
+            raise ValueError(f'The unit of the weight must be the same as the sparse matrix data. '
+                             f'Got {u.get_unit(w["weight"])} and {u.get_unit(self.sparse_mat.data)}.')
+
+    def xw_to_y(
+        self,
+        x: bst.typing.ArrayLike,
+        w: Dict[str, bst.typing.ArrayLike]
+    ):
+        r"""
+        This function is used to compute the output of the operator, mathematically:
+
+        $$
+        y = x @ f(w) + b
+        $$
+        """
+        self._check_weight(w)
+        weight = self.weight_fn(w['weight'])
+        sparse_mat = self.sparse_mat.with_data(weight)
+        y = x @ sparse_mat
+        if 'bias' in w:
+            y = y + w['bias']
+        return y
+
+    def yw_to_w(
+        self,
+        hidden_dim_arr: bst.typing.ArrayLike,
+        weight_dim_tree: Dict[str, bst.typing.ArrayLike],
+    ) -> Dict[str, bst.typing.ArrayLike]:
+        """
+        This function is used to compute the weight from the hidden dimensional array.
+
+        $$
+        w = f(y, w)
+        $$
+
+        Args:
+            hidden_dim_arr: The hidden dimensional array.
+            weight_dim_tree: The weight dimensional tree.
+
+        Returns:
+            The updated weight dimensional tree.
+        """
+        self._check_weight(weight_dim_tree, check_shape=False)
+        weight_like: bst.typing.ArrayLike = weight_dim_tree['weight']
+        if 'bias' in weight_dim_tree:
+            bias_like = weight_dim_tree['bias']
         else:
-            # ph_to_pwy: (hidden_size,)
-            # ph_to_pw: (hidden_size,)
-            ph_to_pw = jax.vjp(self.true_op, w)[1](ph_to_pwy)
-            # diag_mul_dhdw: (hidden_size,)
-            dh_to_dweight = diag_mul_dhdw + ph_to_pw[0]
-        return dh_to_dweight
-
-    def hidden_to_etrace(
-        self,
-        mode: bst.mixin.Mode,
-        w: jax.Array,
-        dl_to_dh: jax.Array,
-        dh_to_dw: jax.Array
-    ) -> jax.Array:
-        """
-        This is the standard method for computing the gradient of the loss with respect to the weight operation
-        for the matrix multiplication operation.
-
-        See the :meth:`StandardETraceOp.hidden_to_etrace` for more details.
-        """
-
-        # 1. w: the wight value
-        # 2. dl_to_dh: the derivative of the loss with respect to the hidden
-        # 3. dh_to_dw: the derivative of the hidden with respect to the weight
-
-        if mode.has(bst.mixin.Batching):
-            # dl_to_dh: (batch_size, hidden_size,)
-            # dh_to_dw: (batch_size, hidden_size,)
-            dh_to_dweight = dl_to_dh * dh_to_dw
+            bias_like = None
+        assert hidden_dim_arr.ndim == 1, (
+            f'The hidden_dim_arr must be a 1D array. But got the shape {hidden_dim_arr.shape}'
+        )
+        weight_like = self.sparse_mat.yw_to_w(
+            u.math.expand_dims(hidden_dim_arr, axis=0),
+            weight_like
+        )
+        if bias_like is not None:
+            assert bias_like.ndim == 1, (
+                f'The bias must be a 1D array when hidden_dim_arr is 1D. '
+                f'But got the shape {bias_like.shape}'
+            )
+            bias_like = bias_like * hidden_dim_arr
+        if bias_like is None:
+            return {'weight': weight_like}
         else:
-            # dl_to_dh: (hidden_size,)
-            # dh_to_dw: (hidden_size,)
-            dh_to_dweight = dl_to_dh * dh_to_dw
-        return dh_to_dweight
+            return {'weight': weight_like, 'bias': bias_like}
 
 
-class ElementWiseOpV2(StandardETraceOp):
+class LoraOp(ETraceOp):
+    r"""
+    The low-rank approximation operator for eligibility trace-based gradient learning.
+
+    This operator is used to compute the output of the operator, mathematically:
+
+    $$
+    y = \alpha x B A + b
+    $$
+
+    $b$ is the bias term, which can be optional, $\alpha$ is the scaling factor,
+    $A$ is the weight matrix, $B$ is the low-rank matrix, and $x$ is the input data.
+
     """
-    The standard element-wise operator for the eligibility trace updates.
 
-    This operator is much more efficient than the :py:class:`GeneralETraceOp` for the element-wise operation.
+    def __init__(
+        self,
+        alpha: Optional[bst.typing.ArrayLike] = None,
+    ):
+        super().__init__(is_diagonal=False)
 
+        # weight mask
+        if alpha is not None:
+            alpha = u.math.asarray(alpha)
+        self.alpha = alpha
+
+    def _check_weight(self, w: W):
+        if not isinstance(w, dict):
+            raise TypeError(f'{self.__class__.__name__} only supports '
+                            f'the dictionary weight. But got {type(w)}')
+        if 'B' not in w:
+            raise ValueError(f'The weight must contain the key "B".')
+        if 'A' not in w:
+            raise ValueError(f'The weight must contain the key "A".')
+
+    def xw_to_y(
+        self,
+        x: bst.typing.ArrayLike,
+        w: Dict[str, bst.typing.ArrayLike]
+    ):
+        r"""
+        This function is used to compute the output of the operator, mathematically:
+
+        $$
+        y = \alpha * x @ B @ A + b
+        $$
+
+        Args:
+            x: The input data.
+            w: The weight parameters.
+
+        Returns:
+            The output of the operator.
+        """
+        self._check_weight(w)
+        if self.alpha is not None:
+            x = self.alpha * x
+        y = x @ w['B'] @ w['A']
+        if 'bias' in w:
+            y = y + w['bias']
+        return y
+
+    def yw_to_w(
+        self,
+        hidden_dim_arr: bst.typing.ArrayLike,
+        weight_dim_tree: Dict[str, bst.typing.ArrayLike],
+    ) -> Dict[str, bst.typing.ArrayLike]:
+        """
+        This function is used to compute the weight from the hidden dimensional array.
+
+        $$
+        w = f(y, w)
+        $$
+
+        Args:
+            hidden_dim_arr: The hidden dimensional array.
+            weight_dim_tree: The weight dimensional tree.
+
+        Returns:
+            The updated weight dimensional tree.
+        """
+        if not isinstance(hidden_dim_arr, (np.ndarray, jax.Array, u.Quantity)):
+            raise TypeError(f'The hidden_dim_arr must be an array-like. But got {type(hidden_dim_arr)}')
+        self._check_weight(weight_dim_tree)
+
+        B_like = weight_dim_tree['B']
+        A_like = weight_dim_tree['A']
+        if 'bias' in weight_dim_tree:
+            bias_like = weight_dim_tree['bias']
+        else:
+            bias_like = None
+        if hidden_dim_arr.ndim == 1:
+            assert B_like.ndim == 2 and A_like.ndim == 2, (
+                f'The weight must be a 2D array when hidden_dim_arr is 1D. '
+                f'But got the shape of B = {B_like.shape}, A = {A_like.shape}.'
+            )
+            A_like = (
+                A_like *
+                u.math.expand_dims(hidden_dim_arr, axis=0)
+            )
+            if bias_like is not None:
+                assert bias_like.ndim == 1, (
+                    f'The bias must be a 1D array when hidden_dim_arr is 1D. '
+                    f'But got the shape {bias_like.shape}'
+                )
+                bias_like = bias_like * hidden_dim_arr
+        elif hidden_dim_arr.ndim == 2:
+            assert B_like.ndim == 3 and A_like.ndim == 3, (
+                f'The weight must be a 3D array when hidden_dim_arr is 2D. '
+                f'But got the shape B = {B_like.shape}, A = {A_like.shape}.'
+            )
+            # assume batch size is the first dimension
+            A_like = (
+                A_like *
+                u.math.expand_dims(hidden_dim_arr, axis=1)
+            )
+            if bias_like is not None:
+                assert bias_like.ndim == 2, (
+                    f'The bias must be a 2D array when hidden_dim_arr is 2D. '
+                    f'But got the shape {bias_like.shape}'
+                )
+                bias_like = bias_like * hidden_dim_arr
+        else:
+            raise ValueError(f'The hidden_dim_arr must be a 1D or 2D array. But got the shape {hidden_dim_arr.shape}')
+        if bias_like is None:
+            return {'B': B_like, 'A': A_like}
+        else:
+            return {'B': B_like, 'A': A_like, 'bias': bias_like}
+
+
+class ElemWiseOp(ETraceOp):
+    """
+    The element-wise operator for the eligibility trace-based gradient learning.
+    
+    This interface can be used to define any element-wise operation between weight parameters and hidden states. 
+
+    .. note::
+
+        Different from the :py:class:`StandardOp`, the element-wise operator does not require the input data.
+        Its function signature is ``(w: PyTree) -> ndarray``.
+
+        The most important thing is that the element-wise operator must generate the output with
+        the same shape as the hidden states.
+
+    Args:
+        fn: the element-wise function, which must have the signature: ``(w: PyTree) -> ndarray``.
     """
 
-    def __init__(self):
-        super().__init__(lambda x, w: x * w, is_diagonal=True)
-
-    def etrace_update(
+    def __init__(
         self,
-        mode: bst.mixin.Mode,
-        w: jax.Array,
-        dh_to_dw: List[jax.Array],
-        diag_jac: List[jax.Array],
-        ph_to_pwx: None,
-        ph_to_pwy: jax.Array,
-    ) -> jax.Array:
-        """
-        This is the standard method for computing the eligibility trace updates for the matrix multiplication operation.
+        fn: Callable = lambda w: w,
+    ):
+        self._raw_fn = fn
+        super().__init__(is_diagonal=True, name=_etrace_op_name_elemwise)
 
-        See the :meth:`StandardETraceOp.etrace_update` for more details.
-        """
+    def __pretty_repr_item__(self, k, v):
+        if k in ['_raw_fn', '_jitted_call']:
+            return None, None
+        return k, v
 
-        # 1. w: the wight value, a pytree
-        # 2. dh_to_dw: derivative of hidden to weight, the number equals to the number of hidden states
-        # 3. diag_jac: the diagonal Jacobian of the hidden states, the number equals to the number of hidden states
-        # 4. ph_to_pwx: the partial derivative of the hidden with respect to the weight input
-        # 5. ph_to_pwy: the partial derivative of the hidden with respect to the weight output
+    def _define_call(self):
+        return lambda weights: self._raw_fn(weights) * 1.0
 
-        assert isinstance(dh_to_dw, (list, tuple)), (
-            f'The dh_to_dw must be a list of Array. Got {type(dh_to_dw)}'
-        )
-        assert isinstance(diag_jac, (list, tuple)), (
-            f'The diag_jac must be a list of jax.Array. Got {type(diag_jac)}'
-        )
-        assert len(dh_to_dw) == len(diag_jac), (
-            f'The length of dh_to_dw and diag_jac must be the same. '
-            f'Got {len(dh_to_dw)} and {len(diag_jac)}'
-        )
+    def __call__(self, weights: W) -> Y:
+        return self._jitted_call(weights)
 
-        diag_mul_dhdw = [
-            self.hidden_to_etrace(mode, w, dh, dw)
-            for dh, dw in zip(diag_jac, dh_to_dw)
-        ]
-        diag_mul_dhdw = reduce(u.math.add, diag_mul_dhdw)
-        dh_to_dweight = u.get_magnitude(diag_mul_dhdw) + u.get_magnitude(ph_to_pwy)
-
-        # f = lambda x: jax.numpy.abs(x).max()
-        # jax.debug.print(
-        #     'diag = {d}, dh_to_dw = {dd}, dl2dw = {ddd}',
-        #     d=jax.tree.map(f, diag_jac),
-        #     dd=jax.tree.map(f, dh_to_dw),
-        #     ddd=jax.tree.map(f, dh_to_dweight)
-        # )
-        return u.maybe_decimal(u.Quantity(dh_to_dweight, unit=u.get_unit(w)))
-
-    def hidden_to_etrace(
+    def xw_to_y(
         self,
-        mode: bst.mixin.Mode,
-        w: jax.Array,
-        dl_to_dh: jax.Array,
-        dh_to_dw: jax.Array
-    ) -> jax.Array:
+        inputs: Optional[X],
+        weights: W
+    ) -> Y:
         """
-        This is the standard method for computing the gradient of the loss with respect to the weight operation
-        for the matrix multiplication operation.
+        This function is used to compute the output of the element-wise operator.
 
-        See the :meth:`StandardETraceOp.hidden_to_etrace` for more details.
+        It computes:
+
+        $$
+        y = f(w)
+        $$
+
+        Args:
+            inputs: The input data. It is None.
+            weights: The weight parameters.
+
+        Returns:
+            The output of the operator.
+        """
+        return self._raw_fn(weights)
+
+    def yw_to_w(
+        self,
+        hidden_dim_arr: Y,
+        weight_dim_tree: W,
+    ) -> W:
+        """
+        This function is used to compute the weight from the hidden dimensional array.
+
+        It computes:
+
+        $$
+        w = f(y, w)
+        $$
+
+        Args:
+            hidden_dim_arr: The hidden dimensional array.
+            weight_dim_tree: The weight dimensional tree.
+
+        Returns:
+            The updated weight dimensional tree.
+        """
+        prim, f_vjp = jax.vjp(
+            # dimensionless processing
+            lambda w: u.get_mantissa(self._raw_fn(w)),
+            weight_dim_tree
+        )
+        assert hidden_dim_arr.shape == prim.shape, (
+            f'The shape of the hidden_dim_arr must be the same as the weight_dim_tree. '
+            f'Got {hidden_dim_arr.shape} and {prim.shape}'
+        )
+        y_to_w = f_vjp(
+            # dimensionless processing
+            u.get_mantissa(hidden_dim_arr)
+        )[0]
+        # new_w = y_to_w * old_w
+        new_w = jax.tree.map(
+            lambda w1, w2: w1 * w2,
+            weight_dim_tree,
+            y_to_w,
+        )
+        return new_w
+
+    def xy_to_w(
+        self,
+        input_dim_arr: Optional[X],
+        hidden_dim_arr: Y,
+        weights: W,
+    ) -> W:
+        """
+        This function is used to compute the weight dimensional array from the input and hidden dimensional inputs.
+
+        It computes:
+
+        $$
+        w = f(x, y)
+        $$
+
+        Args:
+            input_dim_arr: The input dimensional array. It is None.
+            hidden_dim_arr: The hidden dimensional array.
+            weights: The weight dimensional
+
+        Returns:
+            The weight dimensional array.
         """
 
-        # 1. w: the wight value
-        # 2. dl_to_dh: the derivative of the loss with respect to the hidden
-        # 3. dh_to_dw: the derivative of the hidden with respect to the weight
-
-        # jax.debug.print('dl2dh = {dlh}, dh2dw = {dhw}', dlh=dl_to_dh, dhw=dh_to_dw)
-
-        dh_to_dweight = u.get_mantissa(dl_to_dh * dh_to_dw)
-        return u.maybe_decimal(u.Quantity(dh_to_dweight, unit=u.get_unit(w)))
-
-# class AbsMatMulETraceOp(MatMulETraceOp):
-#   """
-#   The standard matrix multiplication operator for the eligibility trace.
-#
-#   """
-#
-#   def __init__(
-#       self,
-#       weight_mask: Optional[jax.Array] = None,
-#       is_diagonal: bool = False
-#   ):
-#     super().__init__(weight_mask, is_diagonal=is_diagonal)
-#
-#   def _operation(self, x, w):
-#     (weight, bias), _ = self._format_weight(w)
-#     weight = jnp.abs(weight)
-#     if self.weight_mask is not None:
-#       weight = weight * self.weight_mask
-#     if bias is None:
-#       return jnp.matmul(x, weight)
-#     else:
-#       return jnp.matmul(x, weight) + bias
-#
-#
-# class Conv2dETraceOp(StandardETraceOp):
-#   """
-#   The etrace operator for the 2D convolution.
-#
-#   """
-#
-#   def __init__(
-#       self,
-#       weight_mask: Optional[jax.Array] = None,
-#       is_diagonal: bool = False
-#   ):
-#     super().__init__(fun=self._operation, is_diagonal=is_diagonal)
-#     self.weight_mask = weight_mask
-#
-#   def _operation(self, x, w):
-#     weight, bias = w
-#     if self.weight_mask is not None:
-#       weight = weight * self.weight_mask
-#     return jax.lax.conv_general_dilated(x, weight, (1, 1), 'SAME') + bias
+        primals, f_vjp = jax.vjp(
+            # dimensionless processing
+            lambda w: u.get_mantissa(self._raw_fn(w)),
+            weights
+        )
+        assert hidden_dim_arr.shape == primals.shape, (
+            f'The shape of the hidden_dim_arr must be the same as the primals. '
+            f'Got {hidden_dim_arr.shape} and {primals.shape}'
+        )
+        return f_vjp(
+            # dimensionless processing
+            u.get_mantissa(hidden_dim_arr)
+        )[0]

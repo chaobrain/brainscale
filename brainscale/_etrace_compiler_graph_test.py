@@ -34,8 +34,6 @@ from brainscale._etrace_model_test import (
     ALIF_STPExpCu_Dense_Layer,
 )
 
-pprint
-
 
 class TestCompileGraphRNN(unittest.TestCase):
     def test_gru_one_layer(self):
@@ -46,18 +44,18 @@ class TestCompileGraphRNN(unittest.TestCase):
         bst.nn.init_all_states(gru)
 
         input = bst.random.rand(n_in)
-        graph = brainscale.compile_graph(gru, False, input)
+        graph = brainscale.compile_etrace_graph(gru, input, include_hidden_perturb=False)
 
-        self.assertTrue(isinstance(graph, brainscale.CompiledGraph))
-        self.assertTrue(graph.num_out == 1)
-        self.assertTrue(len(graph.stateful_fn_states) == 4)
+        self.assertTrue(isinstance(graph, brainscale.ETraceGraph))
+        self.assertTrue(graph.module_info.num_var_out == 1)
+        self.assertTrue(len(graph.module_info.compiled_model_states) == 4)
         self.assertTrue(len(graph.hidden_groups) == 1)
 
         param_states = gru.states(bst.ParamState)
         self.assertTrue(len(param_states) == 3)
         self.assertTrue(len(graph.hidden_param_op_relations) == 2)
 
-        # pprint(graph)
+        pprint(graph)
 
     def test_lru_one_layer(self):
         n_in = 3
@@ -67,14 +65,14 @@ class TestCompileGraphRNN(unittest.TestCase):
         bst.nn.init_all_states(lru)
 
         input = bst.random.rand(n_in)
-        graph = brainscale.compile_graph(lru, False, input)
+        graph = brainscale.compile_etrace_graph(lru, input, include_hidden_perturb=False)
 
         self.assertTrue(len(graph.hidden_groups) == 1)
         self.assertTrue(len(graph.hidden_groups[0].hidden_paths) == 2)
 
         for relation in graph.hidden_param_op_relations:
             if relation.path[0] in ['C_re', 'C_im', 'D']:
-                self.assertTrue(len(relation.hidden_paths) == 0)
+                self.assertTrue(len(relation.connected_hidden_paths) == 0)
 
         # pprint(graph)
 
@@ -86,16 +84,16 @@ class TestCompileGraphRNN(unittest.TestCase):
         bst.nn.init_all_states(lstm)
 
         input = bst.random.rand(n_in)
-        graph = brainscale.compile_graph(lstm, False, input)
+        graph = brainscale.compile_etrace_graph(lstm, input, include_hidden_perturb=False)
 
-        self.assertTrue(isinstance(graph, brainscale.CompiledGraph))
-        self.assertTrue(graph.num_out == 1)
+        self.assertTrue(isinstance(graph, brainscale.ETraceGraph))
+        self.assertTrue(graph.module_info.num_var_out == 1)
         self.assertTrue(len(graph.hidden_groups) == 1)
         self.assertTrue(len(graph.hidden_groups[0].hidden_paths) == 2)
-        self.assertTrue(len(graph.stateful_fn_states) == 6)
+        self.assertTrue(len(graph.module_info.compiled_model_states) == 6)
 
         hid_states = lstm.states(brainscale.ETraceState)
-        self.assertTrue(len(hid_states) == len(graph.hid_path_to_transition))
+        self.assertTrue(len(hid_states) == len(graph.hid_path_to_group))
 
         param_states = lstm.states(bst.ParamState)
         self.assertTrue(len(param_states) == len(graph.hidden_param_op_relations))
@@ -103,9 +101,9 @@ class TestCompileGraphRNN(unittest.TestCase):
         hidden_paths = set(graph.hidden_groups[0].hidden_paths)
         for relation in graph.hidden_param_op_relations:
             if relation.path[0] == 'Wo':
-                self.assertTrue(set(relation.hidden_paths) == set([('h',)]))
+                self.assertTrue(set(relation.connected_hidden_paths) == set([('h',)]))
             else:
-                self.assertTrue(set(relation.hidden_paths) == hidden_paths)
+                self.assertTrue(set(relation.connected_hidden_paths) == hidden_paths)
 
         # pprint(graph)
 
@@ -121,10 +119,10 @@ class TestCompileGraphRNN(unittest.TestCase):
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
-        graph = brainscale.compile_graph(net, False, input)
+        graph = brainscale.compile_etrace_graph(net, input, include_hidden_perturb=False)
 
-        self.assertTrue(isinstance(graph, brainscale.CompiledGraph))
-        self.assertTrue(graph.num_out == 1)
+        self.assertTrue(isinstance(graph, brainscale.ETraceGraph))
+        self.assertTrue(graph.module_info.num_var_out == 1)
         self.assertTrue(len(graph.hidden_groups) == 2)
         self.assertTrue(len(graph.hidden_groups[0].hidden_paths) == 2)
         self.assertTrue(len(graph.hidden_groups[1].hidden_paths) == 2)
@@ -135,10 +133,10 @@ class TestCompileGraphRNN(unittest.TestCase):
         for relation in graph.hidden_param_op_relations:
             if relation.path[1] == 0:
                 if relation.path[2] != 'Wo':
-                    self.assertTrue(set(relation.hidden_paths) == hidden_group1_path)
+                    self.assertTrue(set(relation.connected_hidden_paths) == hidden_group1_path)
             if relation.path[1] == 2:
                 if relation.path[2] != 'Wo':
-                    self.assertTrue(set(relation.hidden_paths) == hidden_group2_path)
+                    self.assertTrue(set(relation.connected_hidden_paths) == hidden_group2_path)
 
         # pprint(graph)
 
@@ -154,7 +152,7 @@ class TestCompileGraphRNN(unittest.TestCase):
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
-        graph = brainscale.compile_graph(net, False, input)
+        graph = brainscale.compile_etrace_graph(net, input, include_hidden_perturb=False)
 
         self.assertTrue(len(graph.hidden_groups) == 2)
         self.assertTrue(len(graph.hidden_groups[0].hidden_paths) == 2)
@@ -166,9 +164,9 @@ class TestCompileGraphRNN(unittest.TestCase):
 
         for relation in graph.hidden_param_op_relations:
             if relation.path[1] == 0 and relation.path[2] not in ['B_im', 'B_re']:
-                self.assertTrue(set(relation.hidden_paths) == layer1_hiddens)
+                self.assertTrue(set(relation.connected_hidden_paths) == layer1_hiddens)
             if relation.path[1] == 2 and relation.path[2] not in ['B_im', 'B_re']:
-                self.assertTrue(set(relation.hidden_paths) == layer2_hiddens)
+                self.assertTrue(set(relation.connected_hidden_paths) == layer2_hiddens)
 
     def test_lru_two_layers_v2(self):
         n_in = 4
@@ -182,7 +180,7 @@ class TestCompileGraphRNN(unittest.TestCase):
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
-        graph = brainscale.compile_graph(net, False, input)
+        graph = brainscale.compile_etrace_graph(net, input, include_hidden_perturb=False)
 
         self.assertTrue(len(graph.hidden_groups) == 2)
         self.assertTrue(len(graph.hidden_groups[0].hidden_paths) == 2)
@@ -194,9 +192,9 @@ class TestCompileGraphRNN(unittest.TestCase):
 
         for relation in graph.hidden_param_op_relations:
             if relation.path[1] == 0 and relation.path[2] not in ['B_im', 'B_re']:
-                self.assertTrue(set(relation.hidden_paths) == layer1_hiddens)
+                self.assertTrue(set(relation.connected_hidden_paths) == layer1_hiddens)
             if relation.path[1] == 2 and relation.path[2] not in ['B_im', 'B_re']:
-                self.assertTrue(set(relation.hidden_paths) == layer2_hiddens)
+                self.assertTrue(set(relation.connected_hidden_paths) == layer2_hiddens)
 
 
 class TestCompileGraphSNN(unittest.TestCase):
@@ -213,7 +211,7 @@ class TestCompileGraphSNN(unittest.TestCase):
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
-        graph = brainscale.compile_graph(net, False, input)
+        graph = brainscale.compile_etrace_graph(net, input, include_hidden_perturb=False)
 
         pprint(graph)
         pass
@@ -226,7 +224,7 @@ class TestCompileGraphSNN(unittest.TestCase):
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
-        graph = brainscale.compile_graph(net, False, input)
+        graph = brainscale.compile_etrace_graph(net, input, include_hidden_perturb=False)
 
         pprint(graph)
 
@@ -238,7 +236,7 @@ class TestCompileGraphSNN(unittest.TestCase):
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
-        graph = brainscale.compile_graph(net, False, input)
+        graph = brainscale.compile_etrace_graph(net, input, include_hidden_perturb=False)
 
         pprint(graph)
 
@@ -250,7 +248,7 @@ class TestCompileGraphSNN(unittest.TestCase):
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
-        graph = brainscale.compile_graph(net, False, input)
+        graph = brainscale.compile_etrace_graph(net, input, include_hidden_perturb=False)
 
         pprint(graph)
 
@@ -262,7 +260,7 @@ class TestCompileGraphSNN(unittest.TestCase):
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
-        graph = brainscale.compile_graph(net, False, input)
+        graph = brainscale.compile_etrace_graph(net, input, include_hidden_perturb=False)
 
         pprint(graph)
 
@@ -274,7 +272,7 @@ class TestCompileGraphSNN(unittest.TestCase):
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
-        graph = brainscale.compile_graph(net, False, input)
+        graph = brainscale.compile_etrace_graph(net, input, include_hidden_perturb=False)
 
         pprint(graph)
 
@@ -286,7 +284,7 @@ class TestCompileGraphSNN(unittest.TestCase):
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
-        graph = brainscale.compile_graph(net, False, input)
+        graph = brainscale.compile_etrace_graph(net, input, include_hidden_perturb=False)
 
         pprint(graph)
 
@@ -298,7 +296,7 @@ class TestCompileGraphSNN(unittest.TestCase):
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
-        graph = brainscale.compile_graph(net, False, input)
+        graph = brainscale.compile_etrace_graph(net, input, include_hidden_perturb=False)
 
         pprint(graph)
 
@@ -310,7 +308,7 @@ class TestCompileGraphSNN(unittest.TestCase):
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
-        graph = brainscale.compile_graph(net, False, input)
+        graph = brainscale.compile_etrace_graph(net, input, include_hidden_perturb=False)
 
         pprint(graph)
 
@@ -322,6 +320,10 @@ class TestCompileGraphSNN(unittest.TestCase):
         bst.nn.init_all_states(net)
 
         input = bst.random.rand(n_in)
-        graph = brainscale.compile_graph(net, False, input)
+        graph = brainscale.compile_etrace_graph(net, input, include_hidden_perturb=False)
 
         pprint(graph)
+
+
+class TestStateConsistency(unittest.TestCase):
+    pass

@@ -26,10 +26,7 @@ import jax.numpy as jnp
 import numpy as np
 from jax._src.sharding_impls import UNSPECIFIED
 
-if jax.__version_info__ < (0, 4, 38):
-    from jax.core import Var, Jaxpr, Literal, Var, Jaxpr
-else:
-    from jax.extend.core import Var, Jaxpr, Literal, Var, Jaxpr
+from ._compatible_imports import Literal, Var, Jaxpr
 
 __all__ = [
     'fn_to_python_code',

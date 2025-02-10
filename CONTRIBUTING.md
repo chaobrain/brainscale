@@ -1,4 +1,7 @@
 # Contributing to BrainScale
 
-For information on how to contribute to BrainScale, see
-[Contributing to BrainScale](https://brainpy.readthedocs.io/en/latest/tutorial_advanced/contributing.html).
+We welcome contributions to BrainScale! 
+Please fork this repository and submit a pull request with your changes. 
+We will review your changes and merge them if they are appropriate.
+
+If you have any questions, please open an issue on this repository.

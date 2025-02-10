@@ -20,10 +20,7 @@ from typing import Tuple, Union, List
 
 import jax
 
-if jax.__version_info__ < (0, 4, 38):
-    from jax.core import Var
-else:
-    from jax.extend.core import Var
+from ._compatible_imports import Var
 
 pydot_is_installed = importlib.util.find_spec("pydot") is not None
 

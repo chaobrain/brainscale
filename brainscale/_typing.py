@@ -17,33 +17,19 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Sequence, Union, FrozenSet, List, Tuple
+from typing import Dict, Sequence, Union, FrozenSet, List, Tuple
 
 import brainstate as bst
 import jax
 
-if jax.__version_info__ < (0, 4, 38):
-    from jax.core import Var
-else:
-    from jax.extend.core import Var
-
-__all__ = [
-    'PyTree', 'StateID', 'WeightID', 'Size', 'Axis', 'Axes',
-    'Inputs', 'Outputs',
-    'HiddenVals', 'StateVals', 'WeightVals', 'ETraceVals',
-    'HiddenInVar', 'HiddenOutVar',
-    'dG_Inputs', 'dG_Weight', 'dG_Hidden', 'dG_State',
-    'ArrayLike', 'DType', 'DTypeLike', 'WeightXVar', 'WeightYVar',
-    'WeightXs', 'WeightDfs', 'TempData', 'Current', 'Conductance', 'Spike',
-    'Hid2WeightJacobian', 'Hid2HidJacobian', 'Hid2HidDiagJacobian',
-]
+from ._compatible_imports import Var
 
 ArrayLike = bst.typing.ArrayLike
 DType = bst.typing.DType
 DTypeLike = bst.typing.DTypeLike
 
 # --- types --- #
-PyTree = Any
+PyTree = bst.typing.PyTree
 StateID = int
 WeightID = int
 Size = bst.typing.Size
@@ -70,13 +56,14 @@ dG_Weight = Sequence[PyTree]  # gradients of weights
 dG_Hidden = Sequence[PyTree]  # gradients of hidden states
 dG_State = Sequence[PyTree]  # gradients of other states
 
+HiddenGroupName = str
 ETraceX_Key = Var
 ETraceY_Key = Var
-ETraceDF_Key = Tuple[Var, Path]
+ETraceDF_Key = Tuple[Var, HiddenGroupName]
 
 _WeightPath = Path
 _HiddenPath = Path
-ETraceWG_Key = Tuple[_WeightPath, ETraceY_Key, _HiddenPath]
+ETraceWG_Key = Tuple[_WeightPath, ETraceY_Key, HiddenGroupName]
 
 HidHidJac_Key = Tuple[Path, Path]
 
@@ -96,3 +83,4 @@ Hid2WeightJacobian = Tuple[
     Dict[ETraceDF_Key, jax.Array]
 ]
 Hid2HidJacobian = Dict[HidHidJac_Key, jax.Array]
+HiddenGroupJacobian = Sequence[jax.Array]

@@ -18,28 +18,73 @@ from typing import Any
 
 import brainstate as bst
 import jax
+from jax.tree_util import register_pytree_node_class
 
 __all__ = [
     'SingleStepData',
-    'MultiStepData'
+    'MultiStepData',
 ]
 
 
-@bst.util.dataclass
-class SingleStepData:
-    data: Any
+class ETraceInputData:
+    __module__ = 'brainscale'
+
+    def __init__(self, data: Any):
+        self.data = data
+
+    def tree_flatten(self):
+        return (self.data,), ()
+
+    @classmethod
+    def tree_unflatten(cls, aux, data):
+        return cls(*data)
 
 
-@bst.util.dataclass
-class MultiStepData:
-    data: Any
+@register_pytree_node_class
+class SingleStepData(ETraceInputData):
+    """
+    The data at a single time step.
+
+    Examples::
+
+        >>> import brainstate as bst
+        >>> data = SingleStepData(bst.random.randn(2, 3))
+
+    """
+    __module__ = 'brainscale'
+
+
+@register_pytree_node_class
+class MultiStepData(ETraceInputData):
+    """
+    The data at multiple time steps.
+
+    The first dimension of the data represents the time steps.
+
+    Examples::
+
+        >>> import brainstate as bst
+        # data at 10 time steps, each time step has 2 samples, each sample has 3 features
+        >>> data = MultiStepData(bst.random.randn(10, 2, 3))
+
+
+    Another example::
+
+        >>> import brainstate as bst
+        >>> data = MultiStepData(
+        ...     bst.random.randn(10, 2, 3),
+        ...     bst.random.randn(10, 5),
+        ... )
+
+    """
+    __module__ = 'brainscale'
 
 
 def is_input(x):
     return isinstance(x, (SingleStepData, MultiStepData))
 
 
-def split_data_types(*args) -> tuple[dict[int, SingleStepData], dict[int, MultiStepData], dict]:
+def split_input_data_types(*args) -> tuple[dict[int, SingleStepData], dict[int, MultiStepData], dict]:
     leaves, tree_def = jax.tree.flatten(args, is_leaf=is_input)
     data_at_single_step = dict()
     data_at_multi_step = dict()

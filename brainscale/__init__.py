@@ -15,45 +15,69 @@
 
 # -*- coding: utf-8 -*-
 
-__version__ = "0.0.3"
+__version__ = "0.0.4"
 
 from brainscale._etrace_algorithms import (
     ETraceAlgorithm,
-    DiagETraceAlgorithmForVJP,
-    DiagIODimAlgorithm,
-    DiagParamDimAlgorithm,
-    DiagHybridDimAlgorithm,
+    EligibilityTrace,
 )
-from brainscale._etrace_compiler import (
-    compile_graph,
+from brainscale._etrace_compiler_graph import (
+    ETraceGraph,
+    compile_etrace_graph,
+)
+from brainscale._etrace_compiler_hid_param_op import (
+    HiddenParamOpRelation,
+    find_hidden_param_op_relations_from_module,
+)
+from brainscale._etrace_compiler_hidden_group import (
     HiddenGroup,
-    HiddenTransition,
-    WeightOpHiddenRelation,
-    CompiledGraph
+    find_hidden_groups_from_module,
+)
+from brainscale._etrace_compiler_hidden_pertubation import (
+    HiddenPerturbation,
+    add_hidden_perturbation_in_module,
+)
+from brainscale._etrace_compiler_module_info import (
+    ModuleInfo,
+    extract_module_info,
 )
 from brainscale._etrace_concepts import (
+    # state
     ETraceState,
+    ETraceGroupState,
+    ETraceTreeState,
+    # parameter
     ETraceParam,
-    ETraceParamOp,
-    ETraceOp,
-    NonTempParamOp,
-    ElementWiseParamOp,
-    ElementWiseParam,
-    FakedParamOp,
-    stop_param_gradients
+    ElemWiseParam,
+    NonTempParam,
+    # fake parameter
+    FakeETraceParam,
+    FakeElemWiseParam,
 )
-from brainscale._etrace_graph import (
-    ETraceGraph,
+from brainscale._etrace_graph_executor import (
+    ETraceGraphExecutor,
 )
 from brainscale._etrace_input_data import (
     SingleStepData,
     MultiStepData,
 )
 from brainscale._etrace_operators import (
-    StandardETraceOp,
-    GeneralETraceOp,
-    MatMulETraceOp,
-    ElementWiseOp,
+    ETraceOp,
+    ElemWiseOp,
+    MatMulOp,
+    LoraOp,
+)
+from brainscale._etrace_vjp_algorithms import (
+    ETraceVjpAlgorithm,
+    IODimVjpAlgorithm,
+    ParamDimVjpAlgorithm,
+    HybridDimVjpAlgorithm,
+)
+from brainscale._etrace_vjp_graph_executor import (
+    ETraceVjpGraphExecutor,
+)
+from brainscale._grad_exponential import (
+    GradExpon,
 )
 from brainscale._misc import (
     CompilationError,
@@ -61,9 +85,9 @@ from brainscale._misc import (
 )
 from . import nn
 
-# Added 2024-10-27
-from ._misc import deprecation_getattr
-
-_deprecations = {k: (f"'brainscale.{k}' has been moved into brainscale.nn.{k}", getattr(nn, k)) for k in nn.__all__}
-__getattr__ = deprecation_getattr(__name__, _deprecations)
-del deprecation_getattr
+# # Added 2024-10-27
+# from ._misc import deprecation_getattr
+#
+# _deprecations = {k: (f"'brainscale.{k}' has been moved into brainscale.nn.{k}", getattr(nn, k)) for k in nn.__all__}
+# __getattr__ = deprecation_getattr(__name__, _deprecations)
+# del deprecation_getattr

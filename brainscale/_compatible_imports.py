@@ -13,10 +13,18 @@
 # limitations under the License.
 # ==============================================================================
 
+import jax
 
-import unittest
+__all__ = [
+    'Primitive',
+    'Var',
+    'JaxprEqn',
+    'Jaxpr',
+    'ClosedJaxpr',
+    'Literal',
+]
 
-import brainstate as bst
-import jax.numpy as jnp
-
-import brainscale
+if jax.__version_info__ < (0, 4, 38):
+    from jax.core import Primitive, Var, JaxprEqn, Jaxpr, ClosedJaxpr, Literal
+else:
+    from jax.extend.core import Primitive, Var, JaxprEqn, Jaxpr, ClosedJaxpr, Literal
