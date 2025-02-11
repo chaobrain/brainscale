@@ -140,14 +140,21 @@ context = CONTEXT()
 @contextmanager
 def compiler_context(name: str) -> None:
     """
-    The context manager for the eligibility trace compiler.
+    Provides a context manager for managing the eligibility trace compiler context.
+
+    This function manages the context for compiling eligibility trace graphs, ensuring
+    that recursive graph compilations are detected and handled appropriately.
 
     Args:
-        name: The name of the compiler.
+        name (str): The name of the compiler to be added to the context.
+
+    Yields:
+        None: This context manager does not yield any value.
+
+    Raises:
+        NotImplementedError: If a recursive call to "compile_graph" is detected.
     """
-
     try:
-
         # add the compiler to the context
         context.add_compiler(name)
 
@@ -169,7 +176,7 @@ def compile_etrace_graph(
     include_hidden_perturb: bool = True,
 ) -> ETraceGraph:
     """
-    Building the eligibility trace graph for the model according to the given inputs.
+    Constructs the eligibility trace graph for a given model based on the provided inputs.
 
     This is the most important method for the eligibility trace graph. It builds the
     graph for the model, tracking the relationship between the etrace weights
@@ -177,10 +184,20 @@ def compile_etrace_graph(
     operations :py:class:`ETraceOp`, which will be used for computing the weight
     spatial gradients, the hidden state Jacobian, and the hidden state-weight Jacobian.
 
+    This function is crucial for building the eligibility trace graph, which tracks the
+    relationships between eligibility trace weights, states, and operations. These relationships
+    are used to compute weight spatial gradients, hidden state Jacobians, and hidden state-weight
+    Jacobians.
+
     Args:
-        model: The model for the eligibility trace.
-        model_args: tuple, The model arguments.
-        include_hidden_perturb: bool. Whether to include the hidden perturbation. Default is True.
+        model (bst.nn.Module): The model for which the eligibility trace graph is to be built.
+        model_args (Tuple): The arguments required by the model.
+        include_hidden_perturb (bool): Indicates whether to include hidden perturbations in the graph.
+            Defaults to True.
+
+    Returns:
+        ETraceGraph: The compiled eligibility trace graph containing module information, hidden groups,
+        hidden parameter operation relations, and optional hidden perturbations.
     """
 
     with compiler_context('compile_graph'):

@@ -119,12 +119,27 @@ class ETraceState(bst.ShortTermState):
     @property
     def varshape(self) -> Tuple[int, ...]:
         """
-        The variable shape of the hidden state.
+        Get the shape of the hidden state variable.
+
+        This property returns the shape of the hidden state variable stored in the instance.
+        It provides the dimensions of the array representing the hidden state.
+
+        Returns:
+            Tuple[int, ...]: A tuple representing the shape of the hidden state variable.
         """
         return self.value.shape
 
     @property
     def num_state(self) -> int:
+        """
+        Get the number of hidden states.
+
+        This property returns the number of hidden states represented by the instance.
+        For the `ETraceState` class, this is always 1, as it represents a single hidden state.
+
+        Returns:
+            int: The number of hidden states, which is 1 for this class.
+        """
         return 1
 
     def _check_value(self, value: bst.typing.ArrayLike):
@@ -193,15 +208,52 @@ class ETraceGroupState(ETraceState):
     @property
     def varshape(self) -> Tuple[int, ...]:
         """
-        The shape of each hidden state variable.
+        Get the shape of each hidden state variable.
+
+        This property returns the shape of the hidden state variables, excluding
+        the last dimension which represents the number of hidden states.
+
+        Returns:
+            Tuple[int, ...]: A tuple representing the shape of each hidden state variable.
         """
         return self.value.shape[:-1]
 
     @property
     def num_state(self) -> int:
+        """
+        Get the number of hidden states.
+
+        This property returns the number of hidden states represented by the last dimension
+        of the value array.
+
+        Returns:
+            int: The number of hidden states.
+        """
         return self.value.shape[-1]
 
     def _check_value(self, value) -> Tuple[bst.typing.ArrayLike, Dict[str, int]]:
+        """
+        Validates the input value for hidden states and returns a tuple containing
+        the processed value and a dictionary mapping state names to indices.
+
+        This function ensures that the input value is of a supported type and has
+        the required dimensionality for hidden states. It also constructs a mapping
+        from string representations of indices to their integer counterparts.
+
+        Parameters:
+        value (bst.typing.ArrayLike): The input value representing hidden states.
+            It must be an instance of numpy.ndarray, jax.Array, or brainunit.Quantity
+            with at least two dimensions.
+
+        Returns:
+        Tuple[bst.typing.ArrayLike, Dict[str, int]]: A tuple containing:
+            - The validated and possibly modified input value.
+            - A dictionary mapping string representations of indices to integer indices.
+
+        Raises:
+        TypeError: If the input value is not of a supported type.
+        ValueError: If the input value does not have the required number of dimensions.
+        """
         if not isinstance(value, (np.ndarray, jax.Array, u.Quantity)):
             raise TypeError(
                 f'Currently, {self.__class__.__name__} only supports '
@@ -248,7 +300,19 @@ class ETraceGroupState(ETraceState):
 
     def set_value(self, val: Dict[int | str, bst.typing.ArrayLike] | Sequence[bst.typing.ArrayLike]) -> None:
         """
-        Set the value of the hidden state with the item.
+        Set the value of the hidden state with the specified item.
+
+        This method updates the hidden state values based on the provided dictionary or sequence.
+        The values are set according to the indices or names specified in the input.
+
+        Parameters:
+        val (Dict[int | str, bst.typing.ArrayLike] | Sequence[bst.typing.ArrayLike]): 
+            A dictionary or sequence containing the new values for the hidden states.
+            - If a dictionary, keys can be integers (indices) or strings (names) of the hidden states.
+            - If a sequence, it is converted to a dictionary with indices as keys.
+
+        Returns:
+        None: This method does not return any value. It updates the hidden state values in place.
         """
         if isinstance(val, (tuple, list)):
             val = {i: v for i, v in enumerate(val)}
@@ -404,6 +468,29 @@ class ETraceTreeState(ETraceGroupState):
         self,
         value: dict | Sequence
     ) -> Tuple[bst.typing.ArrayLike, Dict[str, u.Unit], Dict[str, int]]:
+        """
+        Validates and processes the input value to ensure it conforms to the expected format
+        and structure for hidden states.
+
+        This function checks if the input value is a dictionary or sequence of hidden states,
+        verifies that all hidden states have the same shape, and extracts units and indices
+        for each hidden state.
+
+        Args:
+            value (dict | Sequence): A dictionary or sequence representing hidden states.
+                - If a sequence, it is converted to a dictionary with string indices as keys.
+                - Each hidden state should be a numpy.ndarray, jax.Array, or brainunit.Quantity.
+
+        Returns:
+            Tuple[bst.typing.ArrayLike, Dict[str, u.Unit], Dict[str, int]]:
+                - A stacked array of hidden state magnitudes.
+                - A dictionary mapping hidden state names to their units.
+                - A dictionary mapping hidden state names to their indices.
+
+        Raises:
+            TypeError: If any hidden state is not a numpy.ndarray, jax.Array, or brainunit.Quantity.
+            ValueError: If hidden states do not have the same shape.
+        """
         if isinstance(value, (tuple, list)):
             value = {str(i): v for i, v in enumerate(value)}
         assert isinstance(value, dict), (
@@ -460,9 +547,24 @@ class ETraceTreeState(ETraceGroupState):
         else:
             return val * self.index2unit[item]
 
-    def set_value(self, val: Dict[int | str, bst.typing.ArrayLike] | Sequence[bst.typing.ArrayLike]) -> None:
+    def set_value(
+        self,
+        val: Dict[int | str, bst.typing.ArrayLike] | Sequence[bst.typing.ArrayLike]
+    ) -> None:
         """
-        Set the value of the hidden state with the item.
+        Set the value of the hidden state with the specified item.
+
+        This method updates the hidden state values based on the provided dictionary or sequence.
+        The values are set according to the indices or names specified in the input.
+
+        Parameters:
+        val (Dict[int | str, bst.typing.ArrayLike] | Sequence[bst.typing.ArrayLike]): 
+            A dictionary or sequence containing the new values for the hidden states.
+            - If a dictionary, keys can be integers (indices) or strings (names) of the hidden states.
+            - If a sequence, it is converted to a dictionary with indices as keys.
+
+        Returns:
+        None: This method does not return any value. It updates the hidden state values in place.
         """
         if isinstance(val, (tuple, list)):
             val = {i: v for i, v in enumerate(val)}
@@ -546,6 +648,15 @@ class ETraceParam(bst.ParamState):
     def execute(self, x: X) -> Y:
         """
         Execute the operator with the input.
+
+        This method applies the associated operator to the input data and the stored
+        parameter value, performing the defined operation.
+
+        Args:
+            x (X): The input data on which the operator will be executed.
+
+        Returns:
+            Y: The result of applying the operator to the input data and the parameter value.
         """
         return self.op(x, self.value)
 
@@ -636,6 +747,15 @@ class ElemWiseParam(ETraceParam):
         )
 
     def execute(self) -> Y:
+        """
+        Executes the associated operator on the stored weight.
+
+        This method applies the operator to the weight of the element-wise parameter
+        state, performing the defined element-wise operation.
+
+        Returns:
+            Y: The result of applying the operator to the weight.
+        """
         return self.op(self.value)
 
 
@@ -678,10 +798,19 @@ class NonTempParam(bst.ParamState):
 
         # operation
         if isinstance(op, ETraceOp):
-            op = op.xy_to_w
+            op = op.xw_to_y
         self.op = op
 
     def execute(self, x: jax.Array) -> jax.Array:
+        """
+        Executes the associated operator on the input data and the stored parameter value.
+
+        Args:
+            x (jax.Array): The input data on which the operator will be executed.
+
+        Returns:
+            jax.Array: The result of applying the operator to the input data and the parameter value.
+        """
         return self.op(x, self.value)
 
 
@@ -710,10 +839,19 @@ class FakeETraceParam(object):
 
         self.value = value
         if isinstance(op, ETraceOp):
-            op = op.xy_to_w
+            op = op.xw_to_y
         self.op = op
 
     def execute(self, x: bst.typing.ArrayLike) -> bst.typing.ArrayLike:
+        """
+        Executes the associated operator on the input data and the stored parameter value.
+
+        Args:
+            x (bst.typing.ArrayLike): The input data on which the operator will be executed.
+
+        Returns:
+            bst.typing.ArrayLike: The result of applying the operator to the input data and the parameter value.
+        """
         return self.op(x, self.value)
 
 
@@ -752,4 +890,13 @@ class FakeElemWiseParam(object):
         self.name = name
 
     def execute(self) -> bst.typing.ArrayLike:
+        """
+        Executes the associated operator on the stored weight.
+
+        This method applies the operator to the weight of the fake element-wise parameter
+        state, simulating the behavior of an element-wise operation without computing gradients.
+
+        Returns:
+            bst.typing.ArrayLike: The result of applying the operator to the weight.
+        """
         return self.op(None, self.value)

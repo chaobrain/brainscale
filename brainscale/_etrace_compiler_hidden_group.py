@@ -796,12 +796,20 @@ def group_merging(groups, version: int = 1) -> List[frozenset[HiddenOutVar]]:
          (h_4, h_5)]
 
 
+    This function takes a list of hidden groups and merges them if they share
+    any common hidden states. The merging process is controlled by the specified
+    version of the algorithm.
+
     Args:
-        groups: The hidden groups.
-        version: The version of the hidden group merging algorithm. Default is 1.
+        groups: A list of hidden groups, where each group is a collection of
+            hidden states represented as frozensets.
+        version: An integer specifying the version of the merging algorithm to use.
+            Default is 1. Version 0 and 1 are supported, with version 1 being
+            more efficient and readable.
 
     Returns:
-        The merged hidden groups.
+        A list of merged hidden groups, where each group is a frozenset of
+        HiddenOutVar objects. The groups are merged based on shared hidden states.
     """
 
     if version == 0:

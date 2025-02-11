@@ -52,6 +52,16 @@ class OperatorContext(threading.local):
     """
 
     def __init__(self, *args, **kwargs):
+        """
+        Initializes a new instance of the OperatorContext class.
+
+        This constructor initializes the context for the eligibility trace operator,
+        setting up the initial state for stopping parameter gradients.
+
+        Args:
+            *args: Variable length argument list.
+            **kwargs: Arbitrary keyword arguments.
+        """
         super().__init__(*args, **kwargs)
         self.stop_param_gradient = [False]
 
@@ -81,27 +91,69 @@ def stop_param_gradients(stop_or_not: bool = True):
 
 
 def wrap_etrace_fun(fun, name: str = _etrace_op_name):
+    """
+    Wraps a function by assigning it a new name.
+
+    This utility function is used to rename a given function, which can be useful
+    for tracking or identifying functions during debugging or logging.
+
+    Args:
+        fun: The function to be wrapped and renamed.
+        name: The new name to assign to the function. Defaults to '_etrace_operator_call'.
+
+    Returns:
+        The original function with its name attribute set to the specified name.
+    """
     fun.__name__ = name
     return fun
 
 
 def is_etrace_op(jit_param_name: str):
     """
-    Check whether the jitted parameter name is the operator.
+    Determines if a given jitted parameter name corresponds to an eligibility trace operator.
+
+    This function checks if the provided parameter name starts with a predefined prefix
+    that identifies it as an eligibility trace operator.
+
+    Args:
+        jit_param_name (str): The name of the jitted parameter to check.
+
+    Returns:
+        bool: True if the parameter name indicates an eligibility trace operator, False otherwise.
     """
     return jit_param_name.startswith(_etrace_op_name)
 
 
-def is_etrace_op_enable_gradient(jit_param_name: str):
+def is_etrace_op_enable_gradient(jit_param_name: str) -> bool:
     """
-    Check whether the jitted parameter name is the operator with the gradient enabled.
+    Determines if a given jitted parameter name corresponds to an eligibility trace operator
+    with the gradient enabled.
+
+    This function checks if the provided parameter name starts with a predefined prefix
+    that identifies it as an eligibility trace operator with gradient capabilities.
+
+    Args:
+        jit_param_name (str): The name of the jitted parameter to check.
+
+    Returns:
+        bool: True if the parameter name indicates an eligibility trace operator with
+        gradient enabled, False otherwise.
     """
     return jit_param_name.startswith(_etrace_op_name_enable_grad)
 
 
 def is_etrace_op_elemwise(jit_param_name: str):
     """
-    Check whether the jitted parameter name is the element-wise operator.
+    Determines if a given jitted parameter name corresponds to an element-wise eligibility trace operator.
+
+    This function checks if the provided parameter name starts with a predefined prefix
+    that identifies it as an element-wise eligibility trace operator.
+
+    Args:
+        jit_param_name (str): The name of the jitted parameter to check.
+
+    Returns:
+        bool: True if the parameter name indicates an element-wise eligibility trace operator, False otherwise.
     """
     return jit_param_name.startswith(_etrace_op_name_elemwise)
 
@@ -248,24 +300,22 @@ class ETraceOp(bst.util.PrettyReprTree):
         weights: W,
     ) -> W:
         """
-        This function is used to compute the weight dimensional array from the input and hidden dimensional inputs.
+        Computes the weight dimensional array from the input and hidden dimensional inputs.
 
-        It computes:
-
-        $$
-        w = f(x, y)
-        $$
-
-        This function is mainly used when computing eligibility trace updates based on
-        :py:class:`IODimVjpAlgorithm`.
+        This function is primarily used for computing eligibility trace updates based on
+        the IODimVjpAlgorithm. It calculates the weight updates by performing a vector-Jacobian
+        product (VJP) operation.
 
         Args:
-            input_dim_arr: The input dimensional array.
-            hidden_dim_arr: The hidden dimensional array.
-            weights: The weight dimensional array.
+            input_dim_arr (X): The input dimensional array, representing the input data.
+            hidden_dim_arr (Y): The hidden dimensional array, representing the intermediate
+                outputs or activations.
+            weights (W): The weight dimensional array, representing the current weights
+                of the operator.
 
         Returns:
-            The weight dimensional array.
+            W: The updated weight dimensional array, computed based on the input and hidden
+            dimensional arrays.
         """
         primals, f_vjp = jax.vjp(
             # dimensionless processing

@@ -90,62 +90,21 @@ class ETraceGraphExecutor:
 
     @property
     def graph(self) -> ETraceGraph:
-        r"""
-        The compiled graph for the model.
+        """
+        Retrieve the compiled eligibility trace graph for the model.
 
-        It is the most important data structure for the eligibility trace graph.
-        The instance of :py:class:`CompiledVjpGraph`.
+        This property provides access to the compiled graph, which is a crucial data structure
+        for the eligibility trace algorithm. It contains various attributes that describe the
+        relationships between the model's variables, states, and operations.
 
-        It contains the following attributes:
+        Returns:
+            ETraceGraph: The compiled graph for the model. This graph includes detailed
+            information about the model's structure, such as output variables, state variables,
+            hidden-to-hidden variable relationships, and more.
 
-        - ``out_all_jaxvars``: List[jex.core.Var]  # all outvars except the function returns
-        - ``out_state_jaxvars``: List[jex.core.Var]  # the state vars
-        - ``out_wx_jaxvars``: List[jex.core.Var]  # the weight x
-        - ``hid2hid_jaxvars``: List[jex.core.Var]  # the hidden to hidden vars
-        - ``num_out``: int  # the number of function returns
-
-
-        Hidden states information: input `jex.core.Var` to `ETraceState`, and output `jex.core.Var` to `ETraceState`.
-
-        - ``hidden_invar_to_hidden``: Dict[jex.core.Var, ETraceState]
-        - ``hidden_outvar_to_hidden``: Dict[jex.core.Var, ETraceState]
-
-
-        Intermediate variable relationship: input `jex.core.Var` to `jex.core.Var`,
-        and output `jex.core.Var` to `jex.core.Var`.
-
-        - ``hidden_outvar_to_invar``: Dict[jex.core.Var, jex.core.Var]
-        - ``hidden_invar_to_outvar``: Dict[jex.core.Var, jex.core.Var]
-
-
-        The most important data structure for the graph, which implementing
-        the relationship between the etrace weights and the etrace states.
-
-        - ``hidden_param_op_relations``: Tuple[HiddenParamOpRelation, ...]
-
-
-        The relationship between the hidden states, and state transitions.
-
-        - ``hidden_groups``: Sequence[HiddenGroupV1]
-        - ``hidden_to_group``: Dict[Path, HiddenGroupV1]  # Path is the hidden state path
-        - ``hidden_to_transition``: Dict[Path, Hidden2GroupTransition]  # Path is the hidden state path
-
-
-        The augmented jaxpr is nearly identical to the original jaxpr, except that
-        that it will return all necessary variables, for example, the intermediate
-        variables, the hidden states, the weight x, the y-to-hidden variables, and
-        the hidden-hidden transition variables.
-
-        - ``augmented_jaxpr``: jax.core.ClosedJaxpr = None
-
-
-        The revised jaxpr with hidden state perturbations is essential for computing
-        the learning signal :math:`\partial L / \partial h`, where :math:`L` is the loss and h is the hidden state.
-        It also returns necessary variables. Note, this jaxpr is only needed when the "vjp_time" is "t".
-
-        - ``jaxpr_with_hidden_perturb``: jax.core.ClosedJaxpr = None
-
-
+        Raises:
+            ValueError: If the graph has not been compiled yet. Ensure to call the
+            `compile_graph()` method before accessing this property.
         """
         if self._compiled_graph is None:
             raise ValueError('The graph is not compiled yet. Please call ".compile_graph()" first.')
@@ -185,14 +144,23 @@ class ETraceGraphExecutor:
 
     def compile_graph(self, *args) -> None:
         r"""
-        Building the eligibility trace graph for the model according to the given inputs.
+        Build the eligibility trace graph for the model based on the provided inputs.
 
-        This is the most important method for the eligibility trace graph. It builds the
-        graph for the model, which is used for computing the weight spatial gradients and
-        the hidden state Jacobian.
+        This method is crucial for constructing the graph used in the eligibility trace
+        algorithm, which is essential for calculating weight spatial gradients and the
+        hidden state Jacobian.
 
-        Args:
-            *args: The positional arguments for the model.
+        Parameters
+        ----------
+        *args : tuple
+            Positional arguments for the model, which may include inputs, parameters, or
+            other necessary data required for graph compilation.
+
+        Returns
+        -------
+        None
+            This method does not return any value. It initializes the compiled graph
+            attribute of the instance.
         """
 
         # process the inputs
@@ -207,7 +175,23 @@ class ETraceGraphExecutor:
         return_msg: bool = False,
     ) -> None | str:
         """
-        Showing the graph about the relationship between weight, operator, and hidden states.
+        Display the graph illustrating the relationships between weights, operators, and hidden states.
+
+        This function generates a detailed message that describes the structure of the graph, including
+        hidden groups, dynamic states, and weight parameters associated with hidden states. It can either
+        print this message to the console or return it as a string.
+
+        Parameters
+        ----------
+        verbose : bool, optional
+            If True, the function will print the graph details to the console. Default is True.
+        return_msg : bool, optional
+            If True, the function will return the graph details as a string. Default is False.
+
+        Returns
+        -------
+        None or str
+            If `return_msg` is True, returns a string containing the graph details. Otherwise, returns None.
         """
 
         # hidden group
@@ -265,9 +249,12 @@ class ETraceGraphExecutor:
         *args,
     ) -> Any:
         r"""
-        Solving the hidden-to-weight and hidden-to-hidden Jacobian according to the given inputs and parameters.
+        Compute the hidden-to-weight and hidden-to-hidden Jacobian matrices.
 
-        This function is typically used for computing the forward propagation of hidden-to-weight Jacobian.
+        This function is designed to calculate the forward propagation of the hidden-to-weight Jacobian
+        and the hidden-to-hidden Jacobian based on the provided inputs and parameters. It is a crucial
+        part of the eligibility trace algorithm, which helps in understanding the influence of weights
+        and previous hidden states on the current hidden state.
 
         Now we mathematically define what computations are done in this function.
 
@@ -278,11 +265,20 @@ class ETraceGraphExecutor:
         3. The Jacobian matrix of hidden-to-weight, i.e., $\partial h^t / \partial \theta^t$.
         2. The Jacobian matrix of hidden-to-hidden, i.e., $\partial h^t / \partial h^{t-1}$.
 
-        Args:
-            *args: The positional arguments for the model.
+        Parameters
+        ----------
+        *args : tuple
+            Positional arguments for the model, which may include inputs, parameters, or other necessary
+            data required for the computation of the Jacobians.
 
-        Returns:
-            The outputs, hidden states, other states, and the spatial gradients of the weights.
+        Returns
+        -------
+        Any
+            A tuple containing the following elements:
+            - The function output (e.g., model predictions).
+            - The updated hidden states after the current computation step.
+            - Other states that may be relevant to the model's operation.
+            - The spatial gradients of the weights, represented by the hidden-to-weight Jacobian.
         """
         raise NotImplementedError('The method "solve_h2w_h2h_jacobian" should be '
                                   'implemented in the subclass.')
@@ -291,11 +287,13 @@ class ETraceGraphExecutor:
         self, *args,
     ) -> Any:
         r"""
-        Solving the hidden-to-weight and hidden-to-hidden Jacobian and the VJP transformed loss-to-hidden
-        gradients according to the given inputs.
+        Compute the hidden-to-weight and hidden-to-hidden Jacobian matrices, along with the VJP transformed
+        loss-to-hidden gradients based on the provided inputs.
 
-        This function is typically used for computing both the forward propagation of hidden-to-weight Jacobian
-        and the loss-to-hidden gradients at the current time-step.
+        This function is designed to calculate both the forward propagation of the hidden-to-weight Jacobian
+        and the loss-to-hidden gradients at the current time-step. It is essential for understanding the
+        influence of weights and previous hidden states on the current hidden state, as well as the impact
+        of the loss on the hidden states.
 
         Particularly, this function aims to solve:
 
@@ -306,11 +304,21 @@ class ETraceGraphExecutor:
         3. The partial gradients of the loss with respect to the hidden states.
            That is, :math:`\partial L / \partial h`, where :math:`L` is the loss and :math:`h` is the hidden state.
 
-        Args:
-          *args: The positional arguments for the model.
+        Parameters
+        ----------
+        *args : tuple
+            Positional arguments for the model, which may include inputs, parameters, or other necessary
+            data required for the computation of the Jacobians and gradients.
 
-        Returns:
-          The outputs, hidden states, other states, the spatial gradients of the weights, and the residuals.
+        Returns
+        -------
+        Any
+            A tuple containing the following elements:
+            - The function output (e.g., model predictions).
+            - The updated hidden states after the current computation step.
+            - Other states that may be relevant to the model's operation.
+            - The spatial gradients of the weights, represented by the hidden-to-weight Jacobian.
+            - The residuals, which are the partial gradients of the loss with respect to the hidden states.
         """
         raise NotImplementedError('The method "solve_h2w_h2h_jacobian_and_l2h_vjp" '
                                   'should be implemented in the subclass.')

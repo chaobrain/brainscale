@@ -93,7 +93,7 @@ def _check_consistent_states_between_model_and_compiler(
             if verbose:
                 print(f"Warning: the state {st} is not found in the retrieved model. "
                       f"We have added this state.")
-            retrieved_model_states[(unknown_state_path(i=i_unknown),)] = st
+            retrieved_model_states[unknown_state_path(i=i_unknown)] = st
             i_unknown += 1
 
 
@@ -125,6 +125,23 @@ def abstractify_model(
     *model_args,
     **model_kwargs
 ):
+    """
+    Abstracts a model into a stateful representation suitable for compilation and state extraction.
+
+    This function ensures that the model is an instance of `bst.nn.Module` and compiles it into a 
+    stateful function. It retrieves the model's states and checks for consistency between the 
+    compiled states and the retrieved states.
+
+    Args:
+        model (bst.nn.Module): The model to be abstracted. It must be an instance of `bst.nn.Module`.
+        *model_args: Positional arguments to be passed to the model during compilation.
+        **model_kwargs: Keyword arguments to be passed to the model during compilation.
+
+    Returns:
+        Tuple[bst.compile.StatefulFunction, Dict[Path, bst.State]]: 
+            - A stateful function representing the compiled model.
+            - A dictionary of the model's retrieved states with their paths.
+    """
     assert isinstance(model, bst.nn.Module), (
         "The model should be an instance of bst.nn.Module. "
         "Since it allows the explicit definition of the model structure."

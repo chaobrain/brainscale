@@ -368,8 +368,15 @@ def add_hidden_perturbation_in_module(
     **model_kwargs,
 ) -> HiddenPerturbation:
     """
-    Adding perturbations to the hidden states in the module,
-    and replacing the hidden states with the perturbed states.
+    Adds perturbations to the hidden states in the given module and replaces the hidden states with the perturbed states.
+
+    Parameters:
+    model (bst.nn.Module): The neural network module to which hidden state perturbations will be added.
+    *model_args: Additional positional arguments to be passed to the model.
+    **model_kwargs: Additional keyword arguments to be passed to the model.
+
+    Returns:
+    HiddenPerturbation: An object containing information about the perturbations added to the hidden states, including the perturbed variables, paths, states, and the revised jaxpr.
     """
     minfo = extract_module_info(model, *model_args, **model_kwargs)
     return add_hidden_perturbation_from_minfo(minfo)
