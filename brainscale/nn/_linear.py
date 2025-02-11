@@ -37,7 +37,28 @@ __all__ = [
 
 class Linear(bst.nn.Module):
     """
-    Linear layer.
+    A Linear layer that performs a linear transformation on the input data.
+
+    This class represents a fully connected linear layer, which applies a linear
+    transformation to the incoming data: `y = xW + b`, where `x` is the input,
+    `W` is the weight matrix, and `b` is the bias vector.
+
+    Attributes
+    ----------
+    in_size : Union[int, Sequence[int]]
+        The size of the input features.
+    out_size : Union[int, Sequence[int]]
+        The size of the output features.
+    w_mask : Optional[Union[ArrayLike, Callable]]
+        An optional mask for the weights.
+    weight_op : ETraceParam
+        The parameter object that holds the weights and the operation to be
+        performed on them.
+        
+    Methods
+    -------
+    update(x)
+        Applies the linear transformation to the input data.
     """
     __module__ = 'brainscale.nn'
 
@@ -51,6 +72,27 @@ class Linear(bst.nn.Module):
         name: Optional[str] = None,
         param_type: type = ETraceParam,
     ):
+        """
+        Initializes a Linear layer.
+
+        Parameters
+        ----------
+        in_size : Union[int, Sequence[int]]
+            The size of the input features.
+        out_size : Union[int, Sequence[int]]
+            The size of the output features.
+        w_init : Union[Callable, ArrayLike], optional
+            The initializer for the weights. Defaults to KaimingNormal.
+        b_init : Optional[Union[Callable, ArrayLike]], optional
+            The initializer for the bias. Defaults to ZeroInit.
+        w_mask : Optional[Union[ArrayLike, Callable]], optional
+            An optional mask for the weights.
+        name : Optional[str], optional
+            The name of the layer.
+        param_type : type, optional
+            The type of the parameter, defaults to ETraceParam.
+
+        """
         super().__init__(name=name)
 
         # input and output shape
@@ -74,12 +116,44 @@ class Linear(bst.nn.Module):
         )
 
     def update(self, x):
+        """
+        Updates the layer with the given input.
+
+        Parameters
+        ----------
+        x : ArrayLike
+            The input data to be processed by the layer.
+
+        Returns
+        -------
+        ArrayLike
+            The result of the linear transformation applied to the input.
+        """
         return self.weight_op.execute(x)
 
 
 class SignedWLinear(bst.nn.Module):
     """
-    Linear layer with signed weights.
+    A Linear layer with signed weights.
+
+    This class represents a linear layer where the weights can be constrained
+    to have specific signs. It applies a linear transformation to the input
+    data, with the option to mask the weights with a sign matrix.
+
+    Attributes
+    ----------
+    in_size : Union[int, Sequence[int]]
+        The size of the input features.
+    out_size : Union[int, Sequence[int]]
+        The size of the output features.
+    weight_op : ETraceParam
+        The parameter object that holds the weights and the operation to be
+        performed on them.
+
+    Methods
+    -------
+    update(x)
+        Applies the signed weight linear transformation to the input data.
     """
     __module__ = 'brainscale.nn'
 
@@ -108,6 +182,19 @@ class SignedWLinear(bst.nn.Module):
         self.weight_op = param_type({'weight': weight}, op=op)
 
     def update(self, x):
+        """
+        Applies the signed weight linear transformation to the input data.
+
+        Parameters
+        ----------
+        x : ArrayLike
+            The input data to be processed by the layer.
+
+        Returns
+        -------
+        ArrayLike
+            The result of the signed weight linear transformation applied to the input.
+        """
         return self.weight_op.execute(x)
 
 
@@ -189,13 +276,54 @@ class ScaledWSLinear(bst.nn.Module):
 
 class SparseLinear(bst.nn.Module):
     """
+    A Linear layer that utilizes a sparse matrix for efficient computation.
+
+    This class represents a linear transformation layer where the weight matrix
+    is sparse, allowing for efficient storage and computation. It supports various
+    sparse matrix formats such as CSR, CSC, and COO, provided by the `brainunit.sparse`
+    module.
+
     Linear layer with Sparse Matrix (can be ``brainunit.sparse.CSR``,
     ``brainunit.sparse.CSC``, ``brainunit.sparse.COO``, or any other sparse matrix).
 
-    Args:
-        sparse_mat: brainunit.sparse.SparseMatrix. The sparse weight matrix.
-        in_size: Size. The input size.
-        name: str. The object name.
+
+    Attributes
+    ----------
+    in_size : bst.typing.Size, optional
+        The size of the input features. If provided, it must match the first n-1
+        dimensions of the output size.
+    out_size : int
+        The size of the output features, determined by the last dimension of the
+        sparse matrix.
+    weight_op : ETraceParam
+        The parameter object that holds the sparse weights and the operation to
+        be performed on them.
+
+    Methods
+    -------
+    update(x)
+        Applies the sparse linear transformation to the input data.
+
+    Parameters
+    ----------
+    sparse_mat : u.sparse.SparseMatrix
+        The sparse weight matrix to be used in the linear transformation.
+    b_init : Optional[Union[Callable, ArrayLike]], optional
+        The initializer for the bias. If None, no bias is used.
+    in_size : bst.typing.Size, optional
+        The size of the input features. If provided, it must match the first n-1
+        dimensions of the output size.
+    name : Optional[str], optional
+        The name of the layer.
+    param_type : type, optional
+        The type of the parameter, defaults to ETraceParam.
+
+    Raises
+    ------
+    AssertionError
+        If the first n-1 dimensions of "in_size" and "out_size" do not match.
+        If "sparse_mat" is not an instance of u.sparse.SparseMatrix.
+
     """
     __module__ = 'brainscale.nn'
 
@@ -207,6 +335,29 @@ class SparseLinear(bst.nn.Module):
         name: Optional[str] = None,
         param_type: type = ETraceParam,
     ):
+        """
+        Initializes a SparseLinear layer with a sparse weight matrix.
+
+        Parameters
+        ----------
+        sparse_mat : u.sparse.SparseMatrix
+            The sparse weight matrix to be used in the linear transformation.
+        b_init : Optional[Union[Callable, ArrayLike]], optional
+            The initializer for the bias. If None, no bias is used.
+        in_size : bst.typing.Size, optional
+            The size of the input features. If provided, it must match the
+            first n-1 dimensions of the output size.
+        name : Optional[str], optional
+            The name of the layer.
+        param_type : type, optional
+            The type of the parameter, defaults to ETraceParam.
+
+        Raises
+        ------
+        AssertionError
+            If the first n-1 dimensions of "in_size" and "out_size" do not match.
+            If "sparse_mat" is not an instance of u.sparse.SparseMatrix.
+        """
         super().__init__(name=name)
 
         # input and output shape
@@ -228,15 +379,38 @@ class SparseLinear(bst.nn.Module):
         self.weight_op = param_type(params, op=op)
 
     def update(self, x):
+        """
+        Applies the sparse linear transformation to the input data.
+
+        Parameters
+        ----------
+        x : ArrayLike
+            The input data to be processed by the layer.
+
+        Returns
+        -------
+        ArrayLike
+            The result of the sparse linear transformation applied to the input.
+        """
         return self.weight_op.execute(x)
 
 
 class LoRA(bst.nn.Module):
     r"""A standalone LoRA layer.
 
+    LoRA (Low-Rank Adaptation) is a technique used to adapt pre-trained models
+    by introducing low-rank matrices into the model's weight matrices. This
+    allows for efficient fine-tuning of large models with a reduced number of
+    parameters.
+
     $$
         W_\mathrm{L o R A}=W_{\text {orig }}+\frac{\alpha}{r} B A
     $$
+
+    The LoRA layer modifies the original weight matrix $ W $ by adding a
+    low-rank component $ \frac{\alpha}{r} B A $, where $ B $ and $ A $
+    are learnable matrices of rank $ r $, and $ \alpha $ is a scaling factor.
+
 
     Example usage::
 
@@ -258,14 +432,45 @@ class LoRA(bst.nn.Module):
         >>> y.shape
         (16, 4)
 
-    Args:
-        in_features: the number of input features.
-        lora_rank: the rank of the LoRA dimension.
-        out_features: the number of output features.
-        base_module: a base module to call and substitute, if possible.
-        B_init: initializer function for the weight matrix $B$.
-        A_init: initializer function for the weight matrix $A$.
-        param_type: the type of the LoRA params.
+    Attributes
+    ----------
+    in_features : bst.typing.Size
+        The number of input features.
+    lora_rank : int
+        The rank of the LoRA dimension.
+    out_features : bst.typing.Size
+        The number of output features.
+    alpha : float
+        A scaling factor for the LoRA operation.
+    base_module : Optional[Callable]
+        A base module to call and substitute, if possible.
+    weight_op : ETraceParam
+        The parameter object that holds the LoRA weights and the operation to
+        be performed on them.
+
+    Methods
+    -------
+    update(x)
+        Applies the LoRA transformation to the input data.
+
+    Parameters
+    ----------
+    in_features : bst.typing.Size
+        The number of input features.
+    lora_rank : int
+        The rank of the LoRA dimension.
+    out_features : bst.typing.Size
+        The number of output features.
+    alpha : float, optional
+        A scaling factor for the LoRA operation, by default 1.
+    base_module : Optional[Callable], optional
+        A base module to call and substitute, if possible, by default None.
+    B_init : Union[Callable, ArrayLike], optional
+        Initializer function for the weight matrix B, by default ZeroInit.
+    A_init : Union[Callable, ArrayLike], optional
+        Initializer function for the weight matrix A, by default LecunNormal.
+    param_type : type, optional
+        The type of the LoRA parameters, by default ETraceParam.
     """
 
     def __init__(
@@ -280,6 +485,33 @@ class LoRA(bst.nn.Module):
         A_init: Union[Callable, ArrayLike] = init.LecunNormal(),
         param_type: type = ETraceParam,
     ):
+        """
+        Initializes a LoRA (Low-Rank Adaptation) layer.
+
+        This constructor sets up the LoRA layer with the specified input and output
+        features, LoRA rank, and other optional parameters. It initializes the
+        weight matrices B and A using the provided initializers and sets up the
+        LoRA operation.
+
+        Parameters
+        ----------
+        in_features : bst.typing.Size
+            The number of input features.
+        lora_rank : int
+            The rank of the LoRA dimension.
+        out_features : bst.typing.Size
+            The number of output features.
+        alpha : float, optional
+            A scaling factor for the LoRA operation, by default 1.
+        base_module : Optional[Callable], optional
+            A base module to call and substitute, if possible, by default None.
+        B_init : Union[Callable, ArrayLike], optional
+            Initializer function for the weight matrix B, by default ZeroInit.
+        A_init : Union[Callable, ArrayLike], optional
+            Initializer function for the weight matrix A, by default LecunNormal.
+        param_type : type, optional
+            The type of the LoRA parameters, by default ETraceParam.
+        """
         super().__init__()
 
         # input and output shape
@@ -303,7 +535,24 @@ class LoRA(bst.nn.Module):
         op = LoraOp(alpha=self.alpha / self.lora_rank)
         self.weight_op = param_type(param, op=op)
 
-    def __call__(self, x: ArrayLike):
+    def update(self, x: ArrayLike):
+        """
+        Applies the LoRA transformation to the input data.
+
+        This method executes the LoRA operation on the input data and, if a base
+        module is provided, adds its output to the result of the LoRA operation.
+
+        Parameters
+        ----------
+        x : ArrayLike
+            The input data to be processed by the LoRA layer.
+
+        Returns
+        -------
+        ArrayLike
+            The result of the LoRA transformation applied to the input, optionally
+            combined with the output of the base module if it is provided.
+        """
         out = self.weight_op.execute(x)
         if self.base_module is not None:
             out += self.base_module(x)
