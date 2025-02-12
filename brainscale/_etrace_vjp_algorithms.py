@@ -578,6 +578,37 @@ def _init_param_dim_state(
         )
 
 
+def _normalize_matrix_spectrum(matrix):
+    # Compute the eigenvalues of the matrix
+    eigenvalues = jnp.linalg.eigvals(matrix)
+
+    # Get the maximum eigenvalue
+    max_eigenvalue = jnp.max(jnp.abs(eigenvalues))
+
+    # Normalize the matrix by dividing it by the maximum eigenvalue
+    normalized_matrix = jax.lax.cond(
+        max_eigenvalue > 1,
+        lambda: matrix / max_eigenvalue,
+        lambda: matrix,
+    )
+
+    return normalized_matrix
+
+
+def _normalize_vector(v):
+    max_elem = jnp.abs(v).max()
+    normalized_vector = jax.lax.cond(
+        max_elem > 1,
+        lambda: v / max_elem,
+        lambda: v,
+    )
+
+    # # Normalize the vector by dividing it by its norm
+    # normalized_vector = v / jnp.linalg.norm(v)
+    #
+    return normalized_vector
+
+
 def _update_param_dim_etrace_scan_fn(
     hist_etrace_vals: Dict[ETraceWG_Key, jax.Array],
     jacobians: Tuple[
@@ -588,6 +619,7 @@ def _update_param_dim_etrace_scan_fn(
     weight_path_to_vals: Dict[Path, PyTree],
     hidden_param_op_relations,
     mode: bst.mixin.Mode,
+    normalize_matrix_spectrum: bool = False,
 ):
     """
     Update the eligibility trace values for parameter dimensions.
@@ -639,7 +671,16 @@ def _update_param_dim_etrace_scan_fn(
     #
     hid_group_jacobians: Sequence[jax.Array] = jacobians[2]
 
-    #
+    if normalize_matrix_spectrum:
+        normalized_hid_group_jacobians = []
+        for diag in hid_group_jacobians:
+            fn = _normalize_matrix_spectrum
+            for i in range(diag.ndim - 2):
+                fn = jax.vmap(fn)
+            normalized_hid_group_jacobians.append(fn(diag))
+    else:
+        normalized_hid_group_jacobians = hid_group_jacobians
+
     # The etrace weight gradients at the current time step.
     # i.e., The "hist_etrace_vals" at the next time step
     #
@@ -679,6 +720,8 @@ def _update_param_dim_etrace_scan_fn(
             #       \partial h^t / \partial W^t = vjp(f(x, w))(df)
             #
             df = etrace_ys_at_t[(relation.y, hid_group_key(group.index))]
+            # jax.debug.print('df = {g}', g=jax.tree.map(lambda x: jnp.abs(x).max(), df))
+
             #
             # vmap over the different hidden states,
             #
@@ -686,6 +729,8 @@ def _update_param_dim_etrace_scan_fn(
             # df: (n_hidden, ..., n_state)
             # phg_to_pw: (n_param, ..., n_state)
             phg_to_pw = jax.vmap(fn_dw, in_axes=-1, out_axes=-1)(df)
+            phg_to_pw = jax.tree.map(_normalize_vector, phg_to_pw)
+            # jax.debug.print('phg_to_pw = {g}', g=jax.tree.map(lambda x: jnp.abs(x).max(), phg_to_pw))
 
             #
             # Step 3:
@@ -698,13 +743,23 @@ def _update_param_dim_etrace_scan_fn(
             #  ∂V^t/∂θ1 = ∂V^t/∂V^t-1 * ∂V^t-1/∂θ1 + ∂V^t/∂a^t-1 * ∂a^t-1/∂θ1 + ...
             #
             w_key = etrace_param_key(weight_path, relation.y, group.index)
-            old_bwg = hist_etrace_vals[w_key]
-            diag = hid_group_jacobians[group.index]
+            diag = normalized_hid_group_jacobians[group.index]
+
+            # def max_diag(diag):
+            #     indices = list(range(diag.ndim))
+            #     max_index= jnp.argmax(jnp.abs(diag).sum(axis=indices[1:]))
+            #     return diag[max_index]
+            #
+            # jax.debug.print('diag = {g}', g=diag[0])
+            # jax.debug.print('max diag = {g}', g=jax.tree.map(lambda x: jnp.abs(x).max(), diag))
+            # jax.debug.print('max diag = {g}', g=jax.tree.map(max_diag, diag))
+
             #
             # vmap over j, over the different hidden states \partial h_i^t / \partial h_j^t
             #
-            # diag: (n_hidden, ..., n_state, [n_state])
+            # d: (n_hidden, ..., [n_state])
             # old_bwg: (n_param, ..., [n_state])
+            old_bwg = hist_etrace_vals[w_key]
             fn_bwg_pre = lambda d: _sum_last_dim(
                 jax.vmap(etrace_op.yw_to_w, in_axes=-1, out_axes=-1)(d, old_bwg)
             )
@@ -716,6 +771,8 @@ def _update_param_dim_etrace_scan_fn(
             # old_bwg: (n_param, ..., n_state)
             # new_bwg_pre: (n_param, ..., n_state)
             new_bwg_pre = jax.vmap(fn_bwg_pre, in_axes=-2, out_axes=-1)(diag)
+            # jax.debug.print('old_bwg = {g}', g=jax.tree.map(lambda x: jnp.abs(x).max(), old_bwg))
+            # jax.debug.print('new_bwg_pre = {g}\n', g=jax.tree.map(lambda x: jnp.abs(x).max(), new_bwg_pre))
 
             #
             # Step 4:
@@ -723,7 +780,9 @@ def _update_param_dim_etrace_scan_fn(
             # update: eligibility trace * hidden diagonal Jacobian + new hidden df
             #        ϵ^t = ϵ^t_{pre} + df^t, where D_h is the hidden-to-hidden Jacobian diagonal matrix.
             #
-            new_etrace_bwg[w_key] = jax.tree.map(u.math.add, new_bwg_pre, phg_to_pw, is_leaf=u.math.is_quantity)
+            new_bwg = jax.tree.map(u.math.add, new_bwg_pre, phg_to_pw, is_leaf=u.math.is_quantity)
+            new_bwg = jax.tree.map(_normalize_vector, new_bwg)
+            new_etrace_bwg[w_key] = new_bwg
 
     return new_etrace_bwg, None
 

@@ -50,7 +50,8 @@ class LeakyRateReadout(nn.Module):
     the Brain Dynamics Programming ecosystem, providing a biologically
     inspired approach to neural computation.
 
-    Attributes:
+    Attributes
+    ----------
     in_size : Size
         The size of the input to the readout module.
     out_size : Size
@@ -171,7 +172,7 @@ class LeakyRateReadout(nn.Module):
         return r
 
 
-class LeakySpikeReadout(nn.LeakySpikeReadout):
+class LeakySpikeReadout(nn.Module):
     """
     Integrate-and-fire neuron model for spike-based readout.
 
@@ -185,7 +186,8 @@ class LeakySpikeReadout(nn.LeakySpikeReadout):
     integrate with the Brain Dynamics Programming ecosystem, providing
     a biologically inspired approach to neural computation.
 
-    Attributes:
+    Attributes
+    ----------
     in_size : Size
         The size of the input to the readout module.
     keep_size : bool
@@ -211,6 +213,7 @@ class LeakySpikeReadout(nn.LeakySpikeReadout):
     def __init__(
         self,
         in_size: Size,
+        out_size: Size,
         tau: ArrayLike = 5. * u.ms,
         V_th: ArrayLike = 1. * u.mV,
         w_init: Callable = init.KaimingNormal(unit=u.mV),

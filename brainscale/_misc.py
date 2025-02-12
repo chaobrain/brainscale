@@ -25,7 +25,7 @@ import brainunit as u
 import jax.tree
 
 from ._compatible_imports import Var
-from ._typing import Path
+from ._typing import Path, ETraceDF_Key, ETraceWG_Key
 
 
 def _remove_quantity(tree):
@@ -91,7 +91,7 @@ def hid_group_key(hidden_group_id: int) -> str:
 def etrace_df_key(
     y_key: Var,
     hidden_group_id: int,
-):
+) -> ETraceDF_Key:
     """
     Generate a key for the eligibility trace dataframe.
 
@@ -115,7 +115,7 @@ def etrace_param_key(
     weight_path: Path,
     y_key: Var,
     hidden_group_id: int,
-):
+) -> ETraceWG_Key:
     """
     Generate a key for the eligibility trace parameter.
 
@@ -153,7 +153,7 @@ def unknown_state_path(i: int) -> Path:
     Path
         A tuple containing a string that represents the path of the unknown state.
     """
-    return (f'_unknown_path_{i}', )
+    return (f'_unknown_path_{i}',)
 
 
 def _dimensionless(x):
@@ -213,6 +213,7 @@ def deprecation_getattr(module, deprecations):
     function
         A custom getattr function that handles deprecated attributes.
     """
+
     def getattr(name):
         if name in deprecations:
             message, fn = deprecations[name]
@@ -296,6 +297,7 @@ def set_module_as(module: str = 'brainscale'):
         A decorator function that sets the `__module__` attribute of the
         decorated function to the specified module name.
     """
+
     def wrapper(fun: callable):
         fun.__module__ = module
         return fun
@@ -311,7 +313,7 @@ class BaseEnum(Enum):
     methods for retrieving enumeration members by name or directly
     from an instance.
     """
-    
+
     @classmethod
     def get_by_name(cls, name: str):
         """
