@@ -193,7 +193,7 @@ def general_y2w(
     return w_like
 
 
-class ETraceOp(bst.util.PrettyReprTree):
+class ETraceOp(bst.util.PrettyObject):
     """
     The Eligibility Trace Operator.
 
@@ -503,7 +503,7 @@ class MatMulOp(ETraceOp):
 
 
 class ConvOp(ETraceOp):
-    """
+    r"""
     The convolution operator for eligibility trace-based gradient learning.
 
     This operator is used to compute the output of the operator, mathematically:
