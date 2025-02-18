@@ -35,7 +35,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Callable, Optional, Dict, Tuple, Sequence
 
-import brainstate as bst
+import brainstate
 import brainunit as u
 import jax
 import numpy as np
@@ -64,9 +64,9 @@ __all__ = [
     'FakeElemWiseParam',  # the fake element-wise parameter state with an associated operator
 ]
 
-X = bst.typing.ArrayLike
-W = bst.typing.PyTree
-Y = bst.typing.ArrayLike
+X = brainstate.typing.ArrayLike
+W = brainstate.typing.PyTree
+Y = brainstate.typing.ArrayLike
 
 
 class ETraceGrad(BaseEnum):
@@ -85,7 +85,7 @@ class ETraceGrad(BaseEnum):
     adaptive = 'adaptive'
 
 
-class ETraceState(bst.ShortTermState):
+class ETraceState(brainstate.HiddenState):
     """
     The Hidden State for Eligibility Trace-based Learning.
 
@@ -106,11 +106,11 @@ class ETraceState(bst.ShortTermState):
     """
     __module__ = 'brainscale'
 
-    value: bst.typing.ArrayLike
+    value: brainstate.typing.ArrayLike
 
     def __init__(
         self,
-        value: bst.typing.PyTree,
+        value: brainstate.typing.PyTree,
         name: Optional[str] = None
     ):
         self._check_value(value)
@@ -142,7 +142,7 @@ class ETraceState(bst.ShortTermState):
         """
         return 1
 
-    def _check_value(self, value: bst.typing.ArrayLike):
+    def _check_value(self, value: brainstate.typing.ArrayLike):
         if not isinstance(value, (np.ndarray, jax.Array, u.Quantity)):
             raise TypeError(
                 f'Currently, {ETraceState.__name__} only supports '
@@ -194,16 +194,16 @@ class ETraceGroupState(ETraceState):
     """
 
     __module__ = 'brainscale'
-    value: bst.typing.ArrayLike
+    value: brainstate.typing.ArrayLike
     name2index: Dict[str, int]
 
     def __init__(
         self,
-        value: bst.typing.PyTree,
+        value: brainstate.typing.PyTree,
     ):
         value, name2index = self._check_value(value)
         self.name2index = name2index
-        bst.ShortTermState.__init__(self, value)
+        brainstate.ShortTermState.__init__(self, value)
 
     @property
     def varshape(self) -> Tuple[int, ...]:
@@ -231,7 +231,7 @@ class ETraceGroupState(ETraceState):
         """
         return self.value.shape[-1]
 
-    def _check_value(self, value) -> Tuple[bst.typing.ArrayLike, Dict[str, int]]:
+    def _check_value(self, value) -> Tuple[brainstate.typing.ArrayLike, Dict[str, int]]:
         """
         Validates the input value for hidden states and returns a tuple containing
         the processed value and a dictionary mapping state names to indices.
@@ -271,7 +271,7 @@ class ETraceGroupState(ETraceState):
         name2index = {str(i): i for i in range(value.shape[-1])}
         return value, name2index
 
-    def get_value(self, item: int | str) -> bst.typing.ArrayLike:
+    def get_value(self, item: int | str) -> brainstate.typing.ArrayLike:
         """
         Get the value of the hidden state with the item.
 
@@ -298,7 +298,8 @@ class ETraceGroupState(ETraceState):
                 f'But we got {type(item)}.'
             )
 
-    def set_value(self, val: Dict[int | str, bst.typing.ArrayLike] | Sequence[bst.typing.ArrayLike]) -> None:
+    def set_value(self,
+                  val: Dict[int | str, brainstate.typing.ArrayLike] | Sequence[brainstate.typing.ArrayLike]) -> None:
         """
         Set the value of the hidden state with the specified item.
 
@@ -433,18 +434,18 @@ class ETraceTreeState(ETraceGroupState):
     """
 
     __module__ = 'brainscale'
-    value: bst.typing.ArrayLike
+    value: brainstate.typing.ArrayLike
 
     def __init__(
         self,
-        value: Dict[str, bst.typing.ArrayLike] | Sequence[bst.typing.ArrayLike],
+        value: Dict[str, brainstate.typing.ArrayLike] | Sequence[brainstate.typing.ArrayLike],
     ):
         value, name2unit, name2index = self._check_value(value)
         self.name2unit: Dict[str, u.Unit] = name2unit
         self.name2index: Dict[str, int] = name2index
         self.index2unit: Dict[int, u.Unit] = {i: v for i, v in enumerate(name2unit.values())}
         self.index2name: Dict[int, str] = {v: k for k, v in name2index.items()}
-        bst.ShortTermState.__init__(self, value)
+        brainstate.ShortTermState.__init__(self, value)
 
     @property
     def varshape(self) -> Tuple[int, ...]:
@@ -467,7 +468,7 @@ class ETraceTreeState(ETraceGroupState):
     def _check_value(
         self,
         value: dict | Sequence
-    ) -> Tuple[bst.typing.ArrayLike, Dict[str, u.Unit], Dict[str, int]]:
+    ) -> Tuple[brainstate.typing.ArrayLike, Dict[str, u.Unit], Dict[str, int]]:
         """
         Validates and processes the input value to ensure it conforms to the expected format
         and structure for hidden states.
@@ -518,7 +519,7 @@ class ETraceTreeState(ETraceGroupState):
         value = u.math.stack([u.get_magnitude(v) for v in value.values()], axis=-1)
         return value, name2unit, name2index
 
-    def get_value(self, item: str | int) -> bst.typing.ArrayLike:
+    def get_value(self, item: str | int) -> brainstate.typing.ArrayLike:
         """
         Get the value of the hidden state with the key.
 
@@ -549,7 +550,7 @@ class ETraceTreeState(ETraceGroupState):
 
     def set_value(
         self,
-        val: Dict[int | str, bst.typing.ArrayLike] | Sequence[bst.typing.ArrayLike]
+        val: Dict[int | str, brainstate.typing.ArrayLike] | Sequence[brainstate.typing.ArrayLike]
     ) -> None:
         """
         Set the value of the hidden state with the specified item.
@@ -594,7 +595,7 @@ class ETraceTreeState(ETraceGroupState):
         self.value = self.value.at[..., indices].set(values)
 
 
-class ETraceParam(bst.ParamState):
+class ETraceParam(brainstate.ParamState):
     """
     The Eligibility Trace Weight and its Associated Operator.
 
@@ -616,13 +617,13 @@ class ETraceParam(bst.ParamState):
     """
     __module__ = 'brainscale'
 
-    value: bst.typing.PyTree  # weight
+    value: brainstate.typing.PyTree  # weight
     op: ETraceOp  # operator
     is_etrace: bool  # whether the operator is a true eligibility trace
 
     def __init__(
         self,
-        weight: bst.typing.PyTree,
+        weight: brainstate.typing.PyTree,
         op: ETraceOp,
         grad: Optional[str | Enum] = None,
         name: Optional[str] = None
@@ -724,12 +725,12 @@ class ElemWiseParam(ETraceParam):
         name: The name of the weight-operator.
     """
     __module__ = 'brainscale'
-    value: bst.typing.PyTree  # weight
+    value: brainstate.typing.PyTree  # weight
     op: ElemWiseOp  # operator
 
     def __init__(
         self,
-        weight: bst.typing.PyTree,
+        weight: brainstate.typing.PyTree,
         op: ElemWiseOp | Callable[[W], Y] = (lambda w: w),
         name: Optional[str] = None,
     ):
@@ -759,7 +760,7 @@ class ElemWiseParam(ETraceParam):
         return self.op(self.value)
 
 
-class NonTempParam(bst.ParamState):
+class NonTempParam(brainstate.ParamState):
     r"""
     The Parameter State with an Associated Operator with no temporal dependent gradient learning.
 
@@ -785,11 +786,11 @@ class NonTempParam(bst.ParamState):
     """
     __module__ = 'brainscale'
     op: Callable[[X, W], Y]  # operator
-    value: bst.typing.PyTree  # weight
+    value: brainstate.typing.PyTree  # weight
 
     def __init__(
         self,
-        value: bst.typing.PyTree,
+        value: brainstate.typing.PyTree,
         op: Callable,
         name: Optional[str] = None,
         **kwargs
@@ -828,11 +829,11 @@ class FakeETraceParam(object):
     """
     __module__ = 'brainscale'
     op: Callable[[X, W], Y]  # operator
-    value: bst.typing.PyTree  # weight
+    value: brainstate.typing.PyTree  # weight
 
     def __init__(
         self,
-        value: bst.typing.PyTree,
+        value: brainstate.typing.PyTree,
         op: Callable
     ):
         super().__init__()
@@ -842,7 +843,7 @@ class FakeETraceParam(object):
             op = op.xw_to_y
         self.op = op
 
-    def execute(self, x: bst.typing.ArrayLike) -> bst.typing.ArrayLike:
+    def execute(self, x: brainstate.typing.ArrayLike) -> brainstate.typing.ArrayLike:
         """
         Executes the associated operator on the input data and the stored parameter value.
 
@@ -870,11 +871,11 @@ class FakeElemWiseParam(object):
     """
     __module__ = 'brainscale'
     op: Callable[[W], Y]  # operator
-    value: bst.typing.PyTree  # weight
+    value: brainstate.typing.PyTree  # weight
 
     def __init__(
         self,
-        weight: bst.typing.PyTree,
+        weight: brainstate.typing.PyTree,
         op: ElemWiseOp | Callable[[W], Y] = (lambda w: w),
         name: Optional[str] = None,
     ):
@@ -889,7 +890,7 @@ class FakeElemWiseParam(object):
         self.value = weight
         self.name = name
 
-    def execute(self) -> bst.typing.ArrayLike:
+    def execute(self) -> brainstate.typing.ArrayLike:
         """
         Executes the associated operator on the stored weight.
 

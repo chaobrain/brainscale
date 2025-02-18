@@ -41,7 +41,7 @@ from __future__ import annotations
 
 from typing import Dict, Tuple
 
-import brainstate as bst
+import brainstate
 import brainunit as u
 import jax.core
 import jax.numpy as jnp
@@ -151,7 +151,7 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
 
     def __init__(
         self,
-        model: bst.nn.Module,
+        model: brainstate.nn.Module,
         vjp_method: str = 'single-step'
     ):
         super().__init__(model)

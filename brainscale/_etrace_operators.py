@@ -19,7 +19,7 @@ import contextlib
 import threading
 from typing import Callable, Optional, Dict, Sequence, Any
 
-import brainstate as bst
+import brainstate
 import brainunit as u
 import jax
 import numpy as np
@@ -41,9 +41,9 @@ _etrace_op_name = '_etrace_operator_call'
 _etrace_op_name_enable_grad = f'{_etrace_op_name}_enable_grad_'
 _etrace_op_name_elemwise = f'{_etrace_op_name}_enable_grad_elemwise_'
 
-X = bst.typing.ArrayLike
-W = bst.typing.PyTree
-Y = bst.typing.ArrayLike
+X = brainstate.typing.ArrayLike
+W = brainstate.typing.PyTree
+Y = brainstate.typing.ArrayLike
 
 
 class OperatorContext(threading.local):
@@ -193,7 +193,7 @@ def general_y2w(
     return w_like
 
 
-class ETraceOp(bst.util.PrettyObject):
+class ETraceOp(brainstate.util.PrettyObject):
     """
     The Eligibility Trace Operator.
 
@@ -375,7 +375,7 @@ class MatMulOp(ETraceOp):
         assert isinstance(apply_weight_fn_before_mask, bool), 'apply_weight_fn_before_mask must be a boolean.'
         self.apply_weight_fn_before_mask = apply_weight_fn_before_mask
 
-    def _check_weight(self, w: Dict[str, bst.typing.ArrayLike]):
+    def _check_weight(self, w: Dict[str, brainstate.typing.ArrayLike]):
         if not isinstance(w, dict):
             raise TypeError(f'{self.__class__.__name__} only supports '
                             f'the dictionary weight. But got {type(w)}')
@@ -384,8 +384,8 @@ class MatMulOp(ETraceOp):
 
     def xw_to_y(
         self,
-        x: bst.typing.ArrayLike,
-        w: Dict[str, bst.typing.ArrayLike]
+        x: brainstate.typing.ArrayLike,
+        w: Dict[str, brainstate.typing.ArrayLike]
     ):
         r"""
         This function is used to compute the output of the operator, mathematically:
@@ -429,9 +429,9 @@ class MatMulOp(ETraceOp):
 
     def yw_to_w(
         self,
-        hidden_dim_arr: bst.typing.ArrayLike,
-        weight_dim_tree: Dict[str, bst.typing.ArrayLike],
-    ) -> Dict[str, bst.typing.ArrayLike]:
+        hidden_dim_arr: brainstate.typing.ArrayLike,
+        weight_dim_tree: Dict[str, brainstate.typing.ArrayLike],
+    ) -> Dict[str, brainstate.typing.ArrayLike]:
         """
         This function is used to compute the weight from the hidden dimensional array.
 
@@ -553,7 +553,7 @@ class ConvOp(ETraceOp):
 
         self.xinfo = None
 
-    def _check_weight(self, w: Dict[str, bst.typing.ArrayLike]):
+    def _check_weight(self, w: Dict[str, brainstate.typing.ArrayLike]):
         if not isinstance(w, dict):
             raise TypeError(f'{self.__class__.__name__} only supports '
                             f'the dictionary weight. But got {type(w)}')
@@ -604,9 +604,9 @@ class ConvOp(ETraceOp):
 
     def yw_to_w(
         self,
-        hidden_dim_arr: bst.typing.ArrayLike,
-        weight_dim_tree: Dict[str, bst.typing.ArrayLike],
-    ) -> Dict[str, bst.typing.ArrayLike]:
+        hidden_dim_arr: brainstate.typing.ArrayLike,
+        weight_dim_tree: Dict[str, brainstate.typing.ArrayLike],
+    ) -> Dict[str, brainstate.typing.ArrayLike]:
         """
         This function is used to compute the weight from the hidden dimensional array.
 
@@ -686,8 +686,8 @@ class SpMVOp(ETraceOp):
 
     def xw_to_y(
         self,
-        x: bst.typing.ArrayLike,
-        w: Dict[str, bst.typing.ArrayLike]
+        x: brainstate.typing.ArrayLike,
+        w: Dict[str, brainstate.typing.ArrayLike]
     ):
         r"""
         This function is used to compute the output of the operator, mathematically:
@@ -706,9 +706,9 @@ class SpMVOp(ETraceOp):
 
     def yw_to_w(
         self,
-        hidden_dim_arr: bst.typing.ArrayLike,
-        weight_dim_tree: Dict[str, bst.typing.ArrayLike],
-    ) -> Dict[str, bst.typing.ArrayLike]:
+        hidden_dim_arr: brainstate.typing.ArrayLike,
+        weight_dim_tree: Dict[str, brainstate.typing.ArrayLike],
+    ) -> Dict[str, brainstate.typing.ArrayLike]:
         """
         This function is used to compute the weight from the hidden dimensional array.
 
@@ -724,7 +724,7 @@ class SpMVOp(ETraceOp):
             The updated weight dimensional tree.
         """
         self._check_weight(weight_dim_tree, check_shape=False)
-        weight_like: bst.typing.ArrayLike = weight_dim_tree['weight']
+        weight_like: brainstate.typing.ArrayLike = weight_dim_tree['weight']
         if 'bias' in weight_dim_tree:
             bias_like = weight_dim_tree['bias']
         else:
@@ -765,7 +765,7 @@ class LoraOp(ETraceOp):
 
     def __init__(
         self,
-        alpha: Optional[bst.typing.ArrayLike] = None,
+        alpha: Optional[brainstate.typing.ArrayLike] = None,
     ):
         super().__init__(is_diagonal=False)
 
@@ -785,8 +785,8 @@ class LoraOp(ETraceOp):
 
     def xw_to_y(
         self,
-        x: bst.typing.ArrayLike,
-        w: Dict[str, bst.typing.ArrayLike]
+        x: brainstate.typing.ArrayLike,
+        w: Dict[str, brainstate.typing.ArrayLike]
     ):
         r"""
         This function is used to compute the output of the operator, mathematically:
@@ -812,9 +812,9 @@ class LoraOp(ETraceOp):
 
     def yw_to_w(
         self,
-        hidden_dim_arr: bst.typing.ArrayLike,
-        weight_dim_tree: Dict[str, bst.typing.ArrayLike],
-    ) -> Dict[str, bst.typing.ArrayLike]:
+        hidden_dim_arr: brainstate.typing.ArrayLike,
+        weight_dim_tree: Dict[str, brainstate.typing.ArrayLike],
+    ) -> Dict[str, brainstate.typing.ArrayLike]:
         """
         This function is used to compute the weight from the hidden dimensional array.
 

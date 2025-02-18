@@ -39,7 +39,7 @@ from __future__ import annotations
 
 from typing import Dict, Any
 
-import brainstate as bst
+import brainstate
 
 from ._etrace_compiler_graph import (
     ETraceGraph,
@@ -73,10 +73,10 @@ class ETraceGraphExecutor:
 
     def __init__(
         self,
-        model: bst.nn.Module,
+        model: brainstate.nn.Module,
     ):
         # The original model
-        if not isinstance(model, bst.nn.Module):
+        if not isinstance(model, brainstate.nn.Module):
             raise TypeError(
                 'The model should be an instance of "bst.nn.Module" since '
                 'we can extract the program structure from the model for '
@@ -111,7 +111,7 @@ class ETraceGraphExecutor:
         return self._compiled_graph
 
     @property
-    def states(self) -> bst.util.FlattedDict[Path, bst.State]:
+    def states(self) -> brainstate.util.FlattedDict[Path, brainstate.State]:
         """
         The states for the model.
 
@@ -121,7 +121,7 @@ class ETraceGraphExecutor:
         return self.graph.module_info.retrieved_model_states
 
     @property
-    def path_to_states(self) -> bst.util.FlattedDict[Path, bst.State]:
+    def path_to_states(self) -> brainstate.util.FlattedDict[Path, brainstate.State]:
         """
         The path to the states.
 
@@ -207,7 +207,7 @@ class ETraceGraphExecutor:
 
         # other hidden states
         other_states = []
-        short_states = self.states.filter(bst.ShortTermState)
+        short_states = self.states.filter(brainstate.ShortTermState)
         for i, path in enumerate(short_states.keys()):
             if path not in hidden_paths:
                 other_states.append(path)
@@ -231,7 +231,7 @@ class ETraceGraphExecutor:
             msg += '\n\n'
 
         # non etrace weights
-        non_etratce_weight_paths = set(self.states.filter(bst.ParamState).keys())
+        non_etratce_weight_paths = set(self.states.filter(brainstate.ParamState).keys())
         non_etratce_weight_paths = non_etratce_weight_paths.difference(etratce_weight_paths)
         if len(non_etratce_weight_paths):
             msg += 'The non-etrace weight parameters are:\n\n'

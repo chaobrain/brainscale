@@ -20,7 +20,7 @@ from __future__ import annotations
 from functools import partial
 from typing import Callable, Union, Sequence, Optional, Any
 
-import brainstate as bst
+import brainstate
 import brainunit as u
 import jax
 from brainstate.nn._interaction._normalizations import _BatchNorm
@@ -68,8 +68,8 @@ class _BatchNormETrace(_BatchNorm):
         epsilon: float = 1e-5,
         momentum: float = 0.99,
         affine: bool = True,
-        bias_initializer: Union[ArrayLike, Callable] = bst.init.Constant(0.),
-        scale_initializer: Union[ArrayLike, Callable] = bst.init.Constant(1.),
+        bias_initializer: Union[ArrayLike, Callable] = brainstate.init.Constant(0.),
+        scale_initializer: Union[ArrayLike, Callable] = brainstate.init.Constant(1.),
         axis_name: Optional[Union[str, Sequence[str]]] = None,
         axis_index_groups: Optional[Sequence[Sequence[int]]] = None,
         name: Optional[str] = None,
@@ -104,31 +104,31 @@ class _BatchNormETrace(_BatchNorm):
 
 class BatchNorm0d(_BatchNormETrace):
     __module__ = 'brainscale.nn'
-    __doc__ = bst.nn.BatchNorm0d.__doc__
+    __doc__ = brainstate.nn.BatchNorm0d.__doc__
     num_spatial_dims: int = 0
 
 
 class BatchNorm1d(_BatchNormETrace):
     __module__ = 'brainscale.nn'
-    __doc__ = bst.nn.BatchNorm1d.__doc__
+    __doc__ = brainstate.nn.BatchNorm1d.__doc__
     num_spatial_dims: int = 1
 
 
 class BatchNorm2d(_BatchNormETrace):
     __module__ = 'brainscale.nn'
-    __doc__ = bst.nn.BatchNorm2d.__doc__
+    __doc__ = brainstate.nn.BatchNorm2d.__doc__
     num_spatial_dims: int = 2
 
 
 class BatchNorm3d(_BatchNormETrace):
     __module__ = 'brainscale.nn'
-    __doc__ = bst.nn.BatchNorm3d.__doc__
+    __doc__ = brainstate.nn.BatchNorm3d.__doc__
     num_spatial_dims: int = 3
 
 
-class LayerNorm(bst.nn.LayerNorm):
+class LayerNorm(brainstate.nn.LayerNorm):
     __module__ = 'brainscale.nn'
-    __doc__ = bst.nn.LayerNorm.__doc__
+    __doc__ = brainstate.nn.LayerNorm.__doc__
 
     def __init__(
         self,
@@ -145,9 +145,9 @@ class LayerNorm(bst.nn.LayerNorm):
         super().__init__(*args, param_type=weight_type, **kwargs)
 
 
-class RMSNorm(bst.nn.RMSNorm):
+class RMSNorm(brainstate.nn.RMSNorm):
     __module__ = 'brainscale.nn'
-    __doc__ = bst.nn.RMSNorm.__doc__
+    __doc__ = brainstate.nn.RMSNorm.__doc__
 
     def __init__(
         self,
@@ -164,9 +164,9 @@ class RMSNorm(bst.nn.RMSNorm):
         super().__init__(*args, param_type=weight_type, **kwargs)
 
 
-class GroupNorm(bst.nn.GroupNorm):
+class GroupNorm(brainstate.nn.GroupNorm):
     __module__ = 'brainscale.nn'
-    __doc__ = bst.nn.GroupNorm.__doc__
+    __doc__ = brainstate.nn.GroupNorm.__doc__
 
     def __init__(
         self,

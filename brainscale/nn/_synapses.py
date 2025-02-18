@@ -17,7 +17,7 @@
 
 from __future__ import annotations
 
-import brainstate as bst
+import brainstate
 
 from brainscale._etrace_concepts import ETraceState
 
@@ -27,44 +27,44 @@ __all__ = [
 ]
 
 
-class Expon(bst.nn.Expon):
-    __doc__ = bst.nn.Expon.__doc__
+class Expon(brainstate.nn.Expon):
+    __doc__ = brainstate.nn.Expon.__doc__
     __module__ = 'brainscale.nn'
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.g = ETraceState(bst.init.param(self.g_initializer, self.varshape, batch_size))
+        self.g = ETraceState(brainstate.init.param(self.g_initializer, self.varshape, batch_size))
 
 
-class Alpha(bst.nn.Alpha):
-    __doc__ = bst.nn.Alpha.__doc__
+class Alpha(brainstate.nn.Alpha):
+    __doc__ = brainstate.nn.Alpha.__doc__
     __module__ = 'brainscale.nn'
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.g = ETraceState(bst.init.param(self.g_initializer, self.varshape, batch_size))
-        self.h = ETraceState(bst.init.param(self.g_initializer, self.varshape, batch_size))
+        self.g = ETraceState(brainstate.init.param(self.g_initializer, self.varshape, batch_size))
+        self.h = ETraceState(brainstate.init.param(self.g_initializer, self.varshape, batch_size))
 
 
-class DualExpon(bst.nn.DualExpon):
-    __doc__ = bst.nn.DualExpon.__doc__
+class DualExpon(brainstate.nn.DualExpon):
+    __doc__ = brainstate.nn.DualExpon.__doc__
     __module__ = 'brainscale.nn'
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.g_rise = ETraceState(bst.init.param(self.g_initializer, self.varshape, batch_size))
-        self.g_decay = ETraceState(bst.init.param(self.g_initializer, self.varshape, batch_size))
+        self.g_rise = ETraceState(brainstate.init.param(self.g_initializer, self.varshape, batch_size))
+        self.g_decay = ETraceState(brainstate.init.param(self.g_initializer, self.varshape, batch_size))
 
 
-class STP(bst.nn.STP):
-    __doc__ = bst.nn.STP.__doc__
+class STP(brainstate.nn.STP):
+    __doc__ = brainstate.nn.STP.__doc__
     __module__ = 'brainscale.nn'
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.x = ETraceState(bst.init.param(bst.init.Constant(1.), self.varshape, batch_size))
-        self.u = ETraceState(bst.init.param(bst.init.Constant(self.U), self.varshape, batch_size))
+        self.x = ETraceState(brainstate.init.param(brainstate.init.Constant(1.), self.varshape, batch_size))
+        self.u = ETraceState(brainstate.init.param(brainstate.init.Constant(self.U), self.varshape, batch_size))
 
 
-class STD(bst.nn.STD):
-    __doc__ = bst.nn.STD.__doc__
+class STD(brainstate.nn.STD):
+    __doc__ = brainstate.nn.STD.__doc__
     __module__ = 'brainscale.nn'
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.x = ETraceState(bst.init.param(bst.init.Constant(1.), self.varshape, batch_size))
+        self.x = ETraceState(brainstate.init.param(brainstate.init.Constant(1.), self.varshape, batch_size))

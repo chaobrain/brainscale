@@ -20,7 +20,7 @@ from __future__ import annotations
 import numbers
 from typing import Callable, Optional
 
-import brainstate as bst
+import brainstate
 import brainunit as u
 import jax
 import jax.numpy as jnp
@@ -106,7 +106,7 @@ class LeakyRateReadout(nn.Module):
         self.in_size = (in_size,) if isinstance(in_size, numbers.Integral) else tuple(in_size)
         self.out_size = (out_size,) if isinstance(out_size, numbers.Integral) else tuple(out_size)
         self.tau = init.param(tau, self.in_size)
-        self.decay = jnp.exp(-bst.environ.get_dt() / self.tau)
+        self.decay = jnp.exp(-brainstate.environ.get_dt() / self.tau)
         self.r_initializer = r_initializer
 
         # weights
@@ -147,7 +147,7 @@ class LeakyRateReadout(nn.Module):
 
         """
         self.r.value = init.param(self.r_initializer, self.out_size, batch_size)
-    
+
     def update(self, x):
         """
         Updates the state of the readout module with the given input.
@@ -259,7 +259,7 @@ class LeakySpikeReadout(nn.Module):
         # weights
         weight = init.param(w_init, (self.in_size[0], self.out_size[0]))
         self.weight_op = ETraceParam({'weight': weight}, op=MatMulOp())
-    
+
     def init_state(self, batch_size, **kwargs):
         """
         Initializes the state of the LeakySpikeReadout module.

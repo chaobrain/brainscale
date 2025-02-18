@@ -14,9 +14,3 @@
 # ==============================================================================
 
 
-import unittest
-
-import brainstate as bst
-import jax.numpy as jnp
-
-import brainscale

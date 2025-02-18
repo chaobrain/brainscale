@@ -20,7 +20,7 @@ import warnings
 from enum import Enum
 from typing import Sequence
 
-import brainstate as bst
+import brainstate
 import brainunit as u
 import jax.tree
 
@@ -134,7 +134,8 @@ def etrace_param_key(
         A tuple containing the weight path, variable key, and a string key representing the hidden group.
     """
     assert isinstance(weight_path, (list, tuple)), f'weight_path must be a list or tuple, but got {weight_path}.'
-    assert all(isinstance(x, str) for x in weight_path), f'weight_path must be a list of str, but got {weight_path}.'
+    assert all(
+        isinstance(x, (str, int)) for x in weight_path), f'weight_path must be a list of str, but got {weight_path}.'
     assert isinstance(y_key, Var), f'y_key must be a Var, but got {y_key}.'
     return (weight_path, y_key, hid_group_key(hidden_group_id))
 
@@ -247,7 +248,7 @@ class CompilationError(Exception):
     __module__ = 'brainscale'
 
 
-def state_traceback(states: Sequence[bst.State]):
+def state_traceback(states: Sequence[brainstate.State]):
     """
     Generate a traceback string for a sequence of brain model states.
 

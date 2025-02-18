@@ -18,8 +18,8 @@ from __future__ import annotations
 
 from typing import Dict, Set, Sequence, NamedTuple, Any
 
+import brainstate
 import brainunit as u
-import brainstate as bst
 import jax.core
 
 from ._compatible_imports import (
@@ -152,7 +152,7 @@ class HiddenPerturbation(NamedTuple):
         return self._asdict()
 
     def __repr__(self) -> str:
-        return repr(bst.util.PrettyMapping(self._asdict(), type_name=self.__class__.__name__))
+        return repr(brainstate.util.PrettyMapping(self._asdict(), type_name=self.__class__.__name__))
 
 
 HiddenPerturbation.__module__ = 'brainscale'
@@ -240,9 +240,9 @@ class JaxprEvalForHiddenPerturbation(JaxprEvaluation):
         perturb_hidden_paths = [self.outvar_to_hidden_path[v] for v in self.hidden_outvars]
         perturb_hidden_states = [self.path_to_state[self.outvar_to_hidden_path[v]] for v in self.hidden_outvars]
         info = HiddenPerturbation(
-            perturb_vars=bst.util.PrettyList(self.perturb_invars.values()),
-            perturb_hidden_paths=bst.util.PrettyList(perturb_hidden_paths),
-            perturb_hidden_states=bst.util.PrettyList(perturb_hidden_states),
+            perturb_vars=brainstate.util.PrettyList(self.perturb_invars.values()),
+            perturb_hidden_paths=brainstate.util.PrettyList(perturb_hidden_paths),
+            perturb_hidden_states=brainstate.util.PrettyList(perturb_hidden_states),
             perturb_jaxpr=revised_closed_jaxpr
         )
 
@@ -363,7 +363,7 @@ def add_hidden_perturbation_from_minfo(
 
 
 def add_hidden_perturbation_in_module(
-    model: bst.nn.Module,
+    model: brainstate.nn.Module,
     *model_args,
     **model_kwargs,
 ) -> HiddenPerturbation:

@@ -19,7 +19,7 @@ from __future__ import annotations
 import warnings
 from typing import List, Dict, Tuple, Sequence, NamedTuple, Any
 
-import brainstate as bst
+import brainstate
 import jax.core
 from jax.extend import source_info_util
 
@@ -170,7 +170,7 @@ class HiddenParamOpRelation(NamedTuple):
         return self._asdict()
 
     def __repr__(self) -> str:
-        return repr(bst.util.PrettyMapping(self._asdict(), type_name=self.__class__.__name__))
+        return repr(brainstate.util.PrettyMapping(self._asdict(), type_name=self.__class__.__name__))
 
 
 HiddenParamOpRelation.__module__ = 'brainscale'
@@ -322,9 +322,9 @@ def _trace_simplify(
         path=state_id_to_path[id(tracer.weight)],
         x=tracer.x,
         y=tracer.y,
-        hidden_groups=bst.util.PrettyList(connected_hidden_groups),
+        hidden_groups=brainstate.util.PrettyList(connected_hidden_groups),
         y_to_hidden_group_jaxprs=y_to_hid_group_jaxprs,
-        connected_hidden_paths=bst.util.PrettyList(connected_hidden_paths),
+        connected_hidden_paths=brainstate.util.PrettyList(connected_hidden_paths),
     )
 
 
@@ -407,7 +407,7 @@ class HiddenWeightOpTracer(NamedTuple):
         return self._asdict()
 
     def __repr__(self) -> str:
-        return repr(bst.util.PrettyMapping(self._asdict(), type_name=self.__class__.__name__))
+        return repr(brainstate.util.PrettyMapping(self._asdict(), type_name=self.__class__.__name__))
 
 
 class JaxprEvalForWeightOpHiddenRelation(JaxprEvaluation):
@@ -431,7 +431,7 @@ class JaxprEvalForWeightOpHiddenRelation(JaxprEvaluation):
         hidden_outvar_to_invar: Dict[HiddenOutVar, HiddenInVar],
         weight_path_to_invars: Dict[Path, List[Var]],
         invar_to_weight_path: Dict[Var, Path],
-        path_to_state: Dict[Path, bst.State],
+        path_to_state: Dict[Path, brainstate.State],
         state_id_to_path: Dict[int, Path],
         weight_invars: set[Var],
         hid_path_to_group: Dict[Path, HiddenGroup],
@@ -726,7 +726,7 @@ def find_hidden_param_op_relations_from_jaxpr(
     hidden_outvar_to_invar: Dict[HiddenOutVar, HiddenInVar],
     weight_path_to_invars: Dict[Path, List[Var]],
     invar_to_weight_path: Dict[Var, Path],
-    path_to_state: Dict[Path, bst.State],
+    path_to_state: Dict[Path, brainstate.State],
     state_id_to_path: Dict[int, Path],
     weight_invars: set[Var],
     hid_path_to_group: Dict[Path, HiddenGroup],
@@ -794,7 +794,7 @@ def find_hidden_param_op_relations_from_minfo(
 
 
 def find_hidden_param_op_relations_from_module(
-    model: bst.nn.Module,
+    model: brainstate.nn.Module,
     *model_args,
     **model_kwargs,
 ) -> Sequence[HiddenParamOpRelation]:

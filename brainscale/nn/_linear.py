@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import Callable, Union, Sequence, Optional
 
-import brainstate as bst
+import brainstate
 import brainunit as u
 from brainstate import init
 
@@ -35,7 +35,7 @@ __all__ = [
 ]
 
 
-class Linear(bst.nn.Module):
+class Linear(brainstate.nn.Module):
     """
     A Linear layer that performs a linear transformation on the input data.
 
@@ -110,10 +110,7 @@ class Linear(bst.nn.Module):
             params['bias'] = init.param(b_init, b_shape, allow_none=False)
 
         # weight + op
-        self.weight_op = param_type(
-            params,
-            op=MatMulOp(self.w_mask),
-        )
+        self.weight_op = param_type(params, op=MatMulOp(self.w_mask))
 
     def update(self, x):
         """
@@ -132,7 +129,7 @@ class Linear(bst.nn.Module):
         return self.weight_op.execute(x)
 
 
-class SignedWLinear(bst.nn.Module):
+class SignedWLinear(brainstate.nn.Module):
     """
     A Linear layer with signed weights.
 
@@ -198,7 +195,7 @@ class SignedWLinear(bst.nn.Module):
         return self.weight_op.execute(x)
 
 
-class ScaledWSLinear(bst.nn.Module):
+class ScaledWSLinear(brainstate.nn.Module):
     """
     Linear Layer with Weight Standardization.
 
@@ -263,7 +260,8 @@ class ScaledWSLinear(bst.nn.Module):
         # operation
         op = MatMulOp(
             weight_mask=self.w_mask,
-            weight_fn=lambda w: bst.functional.weight_standardization(w['weight'], self.eps, w.get('gain', None)),
+            weight_fn=lambda w: brainstate.functional.weight_standardization(w['weight'], self.eps,
+                                                                             w.get('gain', None)),
             apply_weight_fn_before_mask=True
         )
 
@@ -274,7 +272,7 @@ class ScaledWSLinear(bst.nn.Module):
         return self.weight_op.execute(x)
 
 
-class SparseLinear(bst.nn.Module):
+class SparseLinear(brainstate.nn.Module):
     """
     A Linear layer that utilizes a sparse matrix for efficient computation.
 
@@ -331,7 +329,7 @@ class SparseLinear(bst.nn.Module):
         self,
         sparse_mat: u.sparse.SparseMatrix,
         b_init: Optional[Union[Callable, ArrayLike]] = None,
-        in_size: bst.typing.Size = None,
+        in_size: brainstate.typing.Size = None,
         name: Optional[str] = None,
         param_type: type = ETraceParam,
     ):
@@ -395,7 +393,7 @@ class SparseLinear(bst.nn.Module):
         return self.weight_op.execute(x)
 
 
-class LoRA(bst.nn.Module):
+class LoRA(brainstate.nn.Module):
     r"""A standalone LoRA layer.
 
     LoRA (Low-Rank Adaptation) is a technique used to adapt pre-trained models
@@ -475,9 +473,9 @@ class LoRA(bst.nn.Module):
 
     def __init__(
         self,
-        in_features: bst.typing.Size,
+        in_features: brainstate.typing.Size,
         lora_rank: int,
-        out_features: bst.typing.Size,
+        out_features: brainstate.typing.Size,
         *,
         alpha: float = 1.,
         base_module: Optional[Callable] = None,

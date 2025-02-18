@@ -17,15 +17,15 @@ from __future__ import annotations
 
 from typing import Sequence, Tuple, List, Hashable, Dict
 
-import brainstate as bst
+import brainstate
 
 from ._etrace_concepts import ETraceState, ETraceParam
 from ._typing import Path, WeightVals, HiddenVals, StateVals
 
 
 def assign_state_values(
-    states: Sequence[bst.State],
-    state_values: Sequence[bst.typing.PyTree],
+    states: Sequence[brainstate.State],
+    state_values: Sequence[brainstate.typing.PyTree],
     write: bool = True
 ):
     """
@@ -57,8 +57,8 @@ def assign_state_values(
 
 
 def assign_dict_state_values(
-    states: Dict[Path, bst.State],
-    state_values: Dict[Path, bst.typing.PyTree],
+    states: Dict[Path, brainstate.State],
+    state_values: Dict[Path, brainstate.typing.PyTree],
     write: bool = True
 ):
     """
@@ -96,8 +96,8 @@ def assign_dict_state_values(
 
 
 def assign_state_values_v2(
-    states: Dict[Hashable, bst.State],
-    state_values: Dict[Hashable, bst.typing.PyTree],
+    states: Dict[Hashable, brainstate.State],
+    state_values: Dict[Hashable, brainstate.typing.PyTree],
     write: bool = True
 ):
     """
@@ -139,8 +139,8 @@ def assign_state_values_v2(
 
 
 def split_states(
-    states: Sequence[bst.State]
-) -> Tuple[List[bst.ParamState], List[ETraceState], List[bst.State]]:
+    states: Sequence[brainstate.State]
+) -> Tuple[List[brainstate.ParamState], List[ETraceState], List[brainstate.State]]:
     """
     Split the states into weight states, hidden states, and other states.
 
@@ -165,7 +165,7 @@ def split_states(
     for st in states:
         if isinstance(st, ETraceState):  # etrace hidden variables
             hidden_states.append(st)
-        elif isinstance(st, bst.ParamState):  # including all weight states, ParamState, ETraceParam
+        elif isinstance(st, brainstate.ParamState):  # including all weight states, ParamState, ETraceParam
             param_states.append(st)
         else:
             other_states.append(st)
@@ -173,12 +173,12 @@ def split_states(
 
 
 def split_states_v2(
-    states: Sequence[bst.State]
+    states: Sequence[brainstate.State]
 ) -> Tuple[
     List[ETraceParam],
     List[ETraceState],
-    List[bst.ParamState],
-    List[bst.State]
+    List[brainstate.ParamState],
+    List[brainstate.State]
 ]:
     """
     Categorize a sequence of states into etrace parameter states, hidden states, 
@@ -216,7 +216,7 @@ def split_states_v2(
                 param_states.append(st)
 
         else:
-            if isinstance(st, bst.ParamState):
+            if isinstance(st, brainstate.ParamState):
                 # The ParamState which is not an ETraceParam,
                 # should be treated as a normal parameter state
                 # and be trained with spatial gradients only
@@ -227,13 +227,13 @@ def split_states_v2(
 
 
 def sequence_split_state_values(
-    states: Sequence[bst.State],
-    state_values: List[bst.typing.PyTree],
+    states: Sequence[brainstate.State],
+    state_values: List[brainstate.typing.PyTree],
     include_weight: bool = True
 ) -> (
-    Tuple[Sequence[bst.typing.PyTree], Sequence[bst.typing.PyTree], Sequence[bst.typing.PyTree]]
+    Tuple[Sequence[brainstate.typing.PyTree], Sequence[brainstate.typing.PyTree], Sequence[brainstate.typing.PyTree]]
     |
-    Tuple[Sequence[bst.typing.PyTree], Sequence[bst.typing.PyTree]]
+    Tuple[Sequence[brainstate.typing.PyTree], Sequence[brainstate.typing.PyTree]]
 ):
     """
     Split the state values into the weight values, the hidden values, and the other state values.
@@ -266,7 +266,7 @@ def sequence_split_state_values(
     if include_weight:
         weight_vals, hidden_vals, other_vals = [], [], []
         for st, val in zip(states, state_values):
-            if isinstance(st, bst.ParamState):
+            if isinstance(st, brainstate.ParamState):
                 weight_vals.append(val)
             elif isinstance(st, ETraceState):
                 hidden_vals.append(val)
@@ -276,7 +276,7 @@ def sequence_split_state_values(
     else:
         hidden_vals, other_vals = [], []
         for st, val in zip(states, state_values):
-            if isinstance(st, bst.ParamState):
+            if isinstance(st, brainstate.ParamState):
                 pass
             elif isinstance(st, ETraceState):
                 hidden_vals.append(val)
@@ -286,8 +286,8 @@ def sequence_split_state_values(
 
 
 def dict_split_state_values(
-    states: Dict[Path, bst.State],
-    state_values: Dict[Path, bst.typing.PyTree],
+    states: Dict[Path, brainstate.State],
+    state_values: Dict[Path, brainstate.typing.PyTree],
 ) -> Tuple[WeightVals, HiddenVals, StateVals]:
     """
     Split the state values into weight values, hidden values, and other state values.
@@ -315,7 +315,7 @@ def dict_split_state_values(
     other_vals = dict()
     for path, state in states.items():
         val = state_values[path]
-        if isinstance(state, bst.ParamState):
+        if isinstance(state, brainstate.ParamState):
             weight_vals[path] = val
         elif isinstance(state, ETraceState):
             hidden_vals[path] = val
@@ -325,11 +325,11 @@ def dict_split_state_values(
 
 
 def split_dict_states_v1(
-    states: Dict[Path, bst.State]
+    states: Dict[Path, brainstate.State]
 ) -> Tuple[
     Dict[Path, ETraceState],
-    Dict[Path, bst.ParamState],
-    Dict[Path, bst.State]
+    Dict[Path, brainstate.ParamState],
+    Dict[Path, brainstate.State]
 ]:
     """
     Categorize the given states into hidden states, parameter states, and other states.
@@ -360,7 +360,7 @@ def split_dict_states_v1(
     for key, st in states.items():
         if isinstance(st, ETraceState):
             hidden_states[key] = st
-        elif isinstance(st, bst.ParamState):
+        elif isinstance(st, brainstate.ParamState):
             # The ParamState which is not an ETraceParam,
             # should be treated as a normal parameter state
             # and be trained with spatial gradients only
@@ -371,12 +371,12 @@ def split_dict_states_v1(
 
 
 def split_dict_states_v2(
-    states: Dict[Path, bst.State]
+    states: Dict[Path, brainstate.State]
 ) -> Tuple[
     Dict[Path, ETraceParam],
     Dict[Path, ETraceState],
-    Dict[Path, bst.ParamState],
-    Dict[Path, bst.State]
+    Dict[Path, brainstate.ParamState],
+    Dict[Path, brainstate.State]
 ]:
     """
     Split the states into etrace parameter states, hidden states, parameter states, and other states.
@@ -421,7 +421,7 @@ def split_dict_states_v2(
                 # and be trained with spatial gradients only
                 param_states[key] = st
         else:
-            if isinstance(st, bst.ParamState):
+            if isinstance(st, brainstate.ParamState):
                 # The ParamState which is not an ETraceParam,
                 # should be treated as a normal parameter state
                 # and be trained with spatial gradients only

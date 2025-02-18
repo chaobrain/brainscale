@@ -20,7 +20,7 @@ import threading
 from contextlib import contextmanager
 from typing import Dict, Sequence, Tuple, Optional, NamedTuple
 
-import brainstate as bst
+import brainstate
 import jax
 
 from ._etrace_compiler_hid_param_op import (
@@ -113,7 +113,7 @@ class ETraceGraph(NamedTuple):
         return self._asdict()
 
     def __repr__(self) -> str:
-        return repr(bst.util.PrettyMapping(self._asdict(), type_name=self.__class__.__name__))
+        return repr(brainstate.util.PrettyMapping(self._asdict(), type_name=self.__class__.__name__))
 
 
 ETraceGraph.__module__ = 'brainscale'
@@ -171,7 +171,7 @@ def compiler_context(name: str) -> None:
 
 
 def compile_etrace_graph(
-    model: bst.nn.Module,
+    model: brainstate.nn.Module,
     *model_args: Tuple,
     include_hidden_perturb: bool = True,
 ) -> ETraceGraph:

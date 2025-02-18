@@ -30,7 +30,7 @@ from collections import defaultdict
 from functools import partial
 from typing import Dict, Tuple, Any, List, Optional, Sequence
 
-import brainstate as bst
+import brainstate
 import brainunit as u
 import jax
 import jax.numpy as jnp
@@ -235,8 +235,8 @@ def _batched_zeros_like(
 
 
 def _init_IO_dim_state(
-    etrace_xs: Dict[ETraceX_Key, bst.State],
-    etrace_dfs: Dict[ETraceDF_Key, bst.State],
+    etrace_xs: Dict[ETraceX_Key, brainstate.State],
+    etrace_dfs: Dict[ETraceDF_Key, brainstate.State],
     etrace_xs_to_weights: defaultdict[ETraceX_Key, List[Path]],
     state_id_to_path: Dict[int, Path],
     relation: HiddenParamOpRelation,
@@ -531,8 +531,8 @@ def _solve_IO_dim_weight_gradients(
 
 
 def _init_param_dim_state(
-    mode: bst.mixin.Mode,
-    etrace_bwg: Dict[ETraceWG_Key, bst.State],
+    mode: brainstate.mixin.Mode,
+    etrace_bwg: Dict[ETraceWG_Key, brainstate.State],
     relation: HiddenParamOpRelation
 ):
     """
@@ -564,7 +564,7 @@ def _init_param_dim_state(
 
     # TODO: assume the batch size is the first dimension
     y_shape = relation.y.aval.shape
-    batch_size = y_shape[0] if mode.has(bst.mixin.Batching) else None
+    batch_size = y_shape[0] if mode.has(brainstate.mixin.Batching) else None
     for group in relation.hidden_groups:
         group: HiddenGroup
         bwg_key = etrace_param_key(relation.path, relation.y, group.index)
@@ -618,7 +618,7 @@ def _update_param_dim_etrace_scan_fn(
     ],
     weight_path_to_vals: Dict[Path, PyTree],
     hidden_param_op_relations,
-    mode: bst.mixin.Mode,
+    mode: brainstate.mixin.Mode,
     normalize_matrix_spectrum: bool = False,
 ):
     """
@@ -706,7 +706,7 @@ def _update_param_dim_etrace_scan_fn(
         else:
             x = etrace_xs_at_t[relation.x]
         fn_dw = lambda df_: jax.vjp(lambda w: u.get_mantissa(etrace_op.xw_to_y(x, w)), weight_val)[1](df_)[0]
-        if mode.has(bst.mixin.Batching):
+        if mode.has(brainstate.mixin.Batching):
             fn_dw = jax.vmap(fn_dw)
 
         for group in relation.hidden_groups:
@@ -792,7 +792,7 @@ def _solve_param_dim_weight_gradients(
     dG_weights: Dict[Path, dG_Weight],  # weight gradients
     dG_hidden_groups: Sequence[jax.Array],  # hidden group gradients
     weight_hidden_relations: Sequence[HiddenParamOpRelation],
-    mode: bst.mixin.Mode,
+    mode: brainstate.mixin.Mode,
 ):
     """
     Compute and update the weight gradients for parameter dimensions using eligibility trace data.
@@ -830,7 +830,7 @@ def _solve_param_dim_weight_gradients(
         #
         weight_path = relation.path
         etrace_op: ETraceOp = relation.weight.op
-        yw_to_w = jax.vmap(etrace_op.yw_to_w) if mode.has(bst.mixin.Batching) else etrace_op.yw_to_w
+        yw_to_w = jax.vmap(etrace_op.yw_to_w) if mode.has(brainstate.mixin.Batching) else etrace_op.yw_to_w
 
         for group in relation.hidden_groups:
             group: HiddenGroup
@@ -869,7 +869,7 @@ def _solve_param_dim_weight_gradients(
     # Step 3:
     #
     # sum up the batched weight gradients
-    if mode.has(bst.mixin.Batching):
+    if mode.has(brainstate.mixin.Batching):
         for key, val in temp_data.items():
             temp_data[key] = jax.tree_map(lambda x: u.math.sum(x, axis=0), val)
 
@@ -878,7 +878,7 @@ def _solve_param_dim_weight_gradients(
         _update_dict(dG_weights, key, val)
 
 
-def _remove_units(xs_maybe_quantity: bst.typing.PyTree):
+def _remove_units(xs_maybe_quantity: brainstate.typing.PyTree):
     """
     Removes units from a PyTree of quantities, returning a unitless PyTree and a function to restore the units.
 
@@ -901,7 +901,7 @@ def _remove_units(xs_maybe_quantity: bst.typing.PyTree):
         new_leaves.append(leaf)
         units.append(unit)
 
-    def restore_units(xs_unitless: bst.typing.PyTree):
+    def restore_units(xs_unitless: brainstate.typing.PyTree):
         leaves, treedef2 = jax.tree.flatten(xs_unitless)
         assert treedef == treedef2, 'The tree structure should be the same. '
         new_leaves = [
@@ -964,7 +964,7 @@ def _zeros_like_batch_or_not(
 
 
 def _reset_state_in_a_dict(
-    state_dict: Dict[Any, bst.State],
+    state_dict: Dict[Any, brainstate.State],
     batch_size: Optional[int],
 ):
     """
@@ -1008,7 +1008,7 @@ def _numel(pytree: PyTree):
 
 def _is_weight_need_full_grad(
     relation: HiddenParamOpRelation,
-    mode: bst.mixin.Mode
+    mode: brainstate.mixin.Mode
 ):
     """
     Determine whether the weight requires a full gradient computation.
@@ -1059,7 +1059,7 @@ def _is_weight_need_full_grad(
         #
         return True
 
-    batch_size = relation.x.aval.shape[0] if mode.has(bst.mixin.Batching) else 1
+    batch_size = relation.x.aval.shape[0] if mode.has(brainstate.mixin.Batching) else 1
     if _numel(relation.x) + _numel(relation.y) > batch_size * _numel(relation.weight.value):
         #
         # When the number of elements in the inputs and outputs are bigger than the weight number,
@@ -1133,7 +1133,7 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
 
     def __init__(
         self,
-        model: bst.nn.Module,
+        model: brainstate.nn.Module,
         name: Optional[str] = None,
         vjp_method: str = 'single-step'
     ):
@@ -2062,10 +2062,10 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
     __module__ = 'brainscale'
 
     # the spatial gradients of the weights
-    etrace_xs: Dict[ETraceX_Key, bst.State]
+    etrace_xs: Dict[ETraceX_Key, brainstate.State]
 
     # the spatial gradients of the hidden states
-    etrace_dfs: Dict[ETraceDF_Key, bst.State]
+    etrace_dfs: Dict[ETraceDF_Key, brainstate.State]
 
     # the mapping from the etrace x to the weight operations
     etrace_xs_to_weights = Dict[ETraceX_Key, List[Path]]
@@ -2075,16 +2075,16 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
 
     def __init__(
         self,
-        model: bst.nn.Module,
+        model: brainstate.nn.Module,
         decay_or_rank: float | int,
-        mode: Optional[bst.mixin.Mode] = None,
+        mode: Optional[brainstate.mixin.Mode] = None,
         name: Optional[str] = None,
         vjp_method: str = 'single-step'
     ):
         super().__init__(model, name=name, vjp_method=vjp_method)
 
         # computing mode
-        self.mode = bst.mixin.Mode() if mode is None else mode
+        self.mode = brainstate.mixin.Mode() if mode is None else mode
 
         # the learning parameters
         self.decay, num_rank = _format_decay_and_rank(decay_or_rank)
@@ -2119,7 +2119,7 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
         _reset_state_in_a_dict(self.etrace_xs, batch_size)
         _reset_state_in_a_dict(self.etrace_dfs, batch_size)
 
-    def get_etrace_of(self, weight: bst.ParamState | Path) -> Tuple[Dict, Dict]:
+    def get_etrace_of(self, weight: brainstate.ParamState | Path) -> Tuple[Dict, Dict]:
         """
         Get the eligibility trace of the given weight.
 
@@ -2131,7 +2131,7 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
         # the weight ID
         weight_id = (
             id(weight)
-            if isinstance(weight, bst.ParamState) else
+            if isinstance(weight, brainstate.ParamState) else
             id(self.graph_executor.path_to_states[weight])
         )
 
@@ -2345,17 +2345,17 @@ class ParamDimVjpAlgorithm(ETraceVjpAlgorithm):
     """
 
     # batch of weight gradients
-    etrace_bwg: Dict[ETraceWG_Key, bst.State]
+    etrace_bwg: Dict[ETraceWG_Key, brainstate.State]
 
     def __init__(
         self,
-        model: bst.nn.Module,
-        mode: Optional[bst.mixin.Mode] = None,
+        model: brainstate.nn.Module,
+        mode: Optional[brainstate.mixin.Mode] = None,
         name: Optional[str] = None,
         vjp_method: str = 'single-step'
     ):
         super().__init__(model, name=name, vjp_method=vjp_method)
-        self.mode = bst.mixin.Mode() if mode is None else mode
+        self.mode = brainstate.mixin.Mode() if mode is None else mode
 
     def init_etrace_state(self, *args, **kwargs):
         """
@@ -2380,7 +2380,7 @@ class ParamDimVjpAlgorithm(ETraceVjpAlgorithm):
         self.running_index.value = 0
         _reset_state_in_a_dict(self.etrace_bwg, batch_size)
 
-    def get_etrace_of(self, weight: bst.ParamState | Path) -> Dict:
+    def get_etrace_of(self, weight: brainstate.ParamState | Path) -> Dict:
         """
         Get the eligibility trace of the given weight.
 
@@ -2393,7 +2393,7 @@ class ParamDimVjpAlgorithm(ETraceVjpAlgorithm):
         # get the wight id
         weight_id = (
             id(weight)
-            if isinstance(weight, bst.ParamState) else
+            if isinstance(weight, brainstate.ParamState) else
             id(self.graph_executor.path_to_states[weight])
         )
 
@@ -2525,32 +2525,32 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
     """
 
     # the spatial gradients of the weights
-    etrace_xs: Dict[ETraceX_Key, bst.State]
+    etrace_xs: Dict[ETraceX_Key, brainstate.State]
 
     # the spatial gradients of the hidden states
-    etrace_dfs: Dict[ETraceDF_Key, bst.State]
+    etrace_dfs: Dict[ETraceDF_Key, brainstate.State]
 
     # the mapping from the etrace x to the weight operations
     etrace_xs_to_weights = Dict[ETraceX_Key, List[Path]]
 
     # batch of weight gradients
-    etrace_bwg: Dict[ETraceWG_Key, bst.State]
+    etrace_bwg: Dict[ETraceWG_Key, brainstate.State]
 
     # the exponential smoothing decay factor
     decay: float
 
     def __init__(
         self,
-        model: bst.nn.Module,
+        model: brainstate.nn.Module,
         decay_or_rank: float | int,
-        mode: Optional[bst.mixin.Mode] = None,
+        mode: Optional[brainstate.mixin.Mode] = None,
         name: Optional[str] = None,
         vjp_method: str = 'single-step'
     ):
         super().__init__(model, name=name, vjp_method=vjp_method)
 
         # computing mode
-        self.mode = bst.mixin.Mode() if mode is None else mode
+        self.mode = brainstate.mixin.Mode() if mode is None else mode
 
         # the learning parameters
         self.decay, num_rank = _format_decay_and_rank(decay_or_rank)
@@ -2619,7 +2619,7 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
         _reset_state_in_a_dict(self.etrace_dfs, batch_size)
         _reset_state_in_a_dict(self.etrace_bwg, batch_size)
 
-    def get_etrace_of(self, weight: bst.ParamState | Path) -> Tuple[Dict, Dict, Dict]:
+    def get_etrace_of(self, weight: brainstate.ParamState | Path) -> Tuple[Dict, Dict, Dict]:
         """
         Retrieve the eligibility trace for a specified weight.
 
@@ -2652,7 +2652,7 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
         # the weight ID
         weight_id = (
             id(weight)
-            if isinstance(weight, bst.ParamState) else
+            if isinstance(weight, brainstate.ParamState) else
             id(self.graph_executor.path_to_states[weight])
         )
 
