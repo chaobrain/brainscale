@@ -17,7 +17,7 @@
 
 from __future__ import annotations
 
-import brainstate as bst
+import brainstate
 from brainstate import init
 
 from brainscale._etrace_concepts import ETraceState
@@ -28,24 +28,24 @@ __all__ = [
 ]
 
 
-class IF(bst.nn.IF):
+class IF(brainstate.nn.IF):
     __module__ = 'brainscale.nn'
-    __doc__ = bst.nn.IF.__doc__
+    __doc__ = brainstate.nn.IF.__doc__
 
     def init_state(self, batch_size: int = None, **kwargs):
         self.V = ETraceState(init.param(self.V_initializer, self.varshape, batch_size))
 
 
-class LIF(bst.nn.LIF):
+class LIF(brainstate.nn.LIF):
     __module__ = 'brainscale.nn'
-    __doc__ = bst.nn.LIF.__doc__
+    __doc__ = brainstate.nn.LIF.__doc__
 
     def init_state(self, batch_size: int = None, **kwargs):
         self.V = ETraceState(init.param(self.V_initializer, self.varshape, batch_size))
 
 
-class ALIF(bst.nn.ALIF):
-    __doc__ = bst.nn.ALIF.__doc__
+class ALIF(brainstate.nn.ALIF):
+    __doc__ = brainstate.nn.ALIF.__doc__
     __module__ = 'brainscale.nn'
 
     def init_state(self, batch_size: int = None, **kwargs):

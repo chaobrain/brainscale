@@ -20,7 +20,7 @@ from __future__ import annotations
 import collections.abc
 from typing import Callable, Tuple, Union, Sequence, Optional, TypeVar
 
-import brainstate as bst
+import brainstate
 import jax
 from brainstate import init
 
@@ -80,7 +80,7 @@ def replicate(
         )
 
 
-class _Conv(bst.nn.Module):
+class _Conv(brainstate.nn.Module):
     # the number of spatial dimensions
     num_spatial_dims: int
 

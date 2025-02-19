@@ -16,7 +16,7 @@
 
 from __future__ import annotations
 
-import brainstate as bst
+import brainstate
 import brainunit as u
 import jax.tree
 
@@ -25,7 +25,7 @@ __all__ = [
 ]
 
 
-class GradExpon(bst.nn.Module):
+class GradExpon(brainstate.nn.Module):
     r"""
     Accumulates gradients exponentially.
 
@@ -45,7 +45,7 @@ class GradExpon(bst.nn.Module):
 
     def __init__(
         self,
-        grad_shape: bst.typing.PyTree,
+        grad_shape: brainstate.typing.PyTree,
         tau_or_decay: u.Quantity[u.second] | float,
     ):
         super().__init__()
@@ -57,7 +57,7 @@ class GradExpon(bst.nn.Module):
 
         # decay time constant
         if isinstance(tau_or_decay, u.Quantity):
-            tau = u.maybe_decimal(tau_or_decay / bst.environ.get_dt())
+            tau = u.maybe_decimal(tau_or_decay / brainstate.environ.get_dt())
             decay = u.math.exp(-1.0 / tau)
         elif isinstance(tau_or_decay, float):
             assert 0.0 < tau_or_decay < 1.0, f"Decay must be between 0 and 1, but got {tau_or_decay}"
@@ -66,7 +66,19 @@ class GradExpon(bst.nn.Module):
             raise TypeError(f"tau_or_decay must be a Quantity or a float, but got {tau_or_decay}")
         self.decay = decay
 
-    def update(self, grads: bst.typing.PyTree):
+    def update(self, grads: brainstate.typing.PyTree):
+        """
+        Updates the accumulated gradients using the exponential decay rule.
+
+        This method applies the update rule g_{t+1} = decay * g_t + grads, where g_t is the
+        accumulated gradient at time t, grads is the new gradient, and decay is the decay factor.
+
+        Args:
+            grads (bst.typing.PyTree): The new gradients to be incorporated into the accumulated gradients.
+
+        Returns:
+            None. The method updates the `self.gradients` attribute in-place.
+        """
         self.gradients = jax.tree.map(
             lambda x, y: x * self.decay + y,
             self.gradients,

@@ -208,6 +208,21 @@ class HiddenGroup(NamedTuple):
         )
 
     def concat_hidden(self, splitted_hid_vals: Sequence[jax.Array]):
+        """
+        Concatenate split hidden state values into a single array.
+
+        This function takes a sequence of split hidden state values and concatenates them
+        along the last axis. For non-ETraceGroupState values, it adds an extra dimension
+        before concatenation.
+
+        Args:
+            splitted_hid_vals (Sequence[jax.Array]): A sequence of split hidden state
+                values, each corresponding to a hidden state in the group.
+
+        Returns:
+            jax.Array: A single concatenated array containing all hidden state values.
+                The concatenation is performed along the last axis.
+        """
         splitted_hid_vals = [
             val
             if isinstance(st, ETraceGroupState) else
@@ -216,10 +231,25 @@ class HiddenGroup(NamedTuple):
         ]
         return u.math.concatenate(splitted_hid_vals, axis=-1)
 
-    def split_hidden(self, concated_hid_vals: jax.Array):
+    def split_hidden(self, concat_hid_vals: jax.Array):
+        """
+        Split concatenated hidden state values into individual arrays.
+
+        This function takes a concatenated array of hidden state values and splits it
+        into separate arrays for each hidden state in the group. It handles both
+        ETraceGroupState and non-ETraceGroupState values differently.
+
+        Args:
+            concat_hid_vals (jax.Array): A concatenated array of hidden state values.
+                The last dimension is assumed to contain the concatenated states.
+
+        Returns:
+            List[jax.Array]: A list of split hidden state arrays. For non-ETraceGroupState
+            values, the last dimension is squeezed.
+        """
         num_states = [st.num_state for st in self.hidden_states]
         indices = np.cumsum(num_states)
-        splitted_hid_vals = u.math.split(concated_hid_vals, indices, axis=-1)
+        splitted_hid_vals = u.math.split(concat_hid_vals, indices, axis=-1)
         splitted_hid_vals = [
             val
             if isinstance(st, ETraceGroupState) else
@@ -241,7 +271,30 @@ HiddenGroup.__module__ = 'brainscale'
 def jacrev_last_dim(
     fn: Callable[[...], jax.Array],
     hid_vals: jax.Array,
-):
+) -> jax.Array:
+    """
+    Compute the Jacobian of a function with respect to its last dimension.
+
+    This function calculates the Jacobian matrix of the given function 'fn'
+    with respect to the last dimension of the input 'hid_vals'. It uses
+    JAX's vector-Jacobian product (vjp) and vmap for efficient computation.
+
+    Args:
+        fn (Callable[[...], jax.Array]): The function for which to compute
+            the Jacobian. It should take a JAX array as input and return
+            a JAX array.
+        hid_vals (jax.Array): The input values for which to compute the
+            Jacobian. The last dimension is considered as the dimension
+            of interest.
+
+    Returns:
+        jax.Array: The Jacobian matrix. Its shape is (*varshape, num_state, num_state),
+        where varshape is the shape of the input excluding the last dimension,
+        and num_state is the size of the last dimension.
+
+    Raises:
+        AssertionError: If the number of input and output states are not the same.
+    """
     new_hid_vals, f_vjp = jax.vjp(fn, hid_vals)
     num_state = new_hid_vals.shape[-1]
     varshape = new_hid_vals.shape[:-1]
@@ -682,17 +735,18 @@ def write_jaxpr_of_hidden_group_transition(
     all_invars = set()
     all_outvars = set()
     for invar in hidden_invars:
-        transition = hidden_invar_to_transition[invar]
-        for eq in transition.transition_jaxpr.eqns:
-            this_eq_exist = False
-            for outvar in eq.outvars:
-                if outvar in all_outvars:
-                    this_eq_exist = True
-                    break
-            if not this_eq_exist:
-                eqns.append(eq.replace())
-                all_invars.update([invar for invar in eq.invars if not isinstance(invar, Literal)])
-                all_outvars.update(eq.outvars)
+        if invar in hidden_invar_to_transition:
+            transition = hidden_invar_to_transition[invar]
+            for eq in transition.transition_jaxpr.eqns:
+                this_eq_exist = False
+                for outvar in eq.outvars:
+                    if outvar in all_outvars:
+                        this_eq_exist = True
+                        break
+                if not this_eq_exist:
+                    eqns.append(eq.replace())
+                    all_invars.update([invar for invar in eq.invars if not isinstance(invar, Literal)])
+                    all_outvars.update(eq.outvars)
     other_invars = all_invars.difference(all_outvars).difference(hidden_invars)
     other_invars = list(other_invars)
 
@@ -743,12 +797,20 @@ def group_merging(groups, version: int = 1) -> List[frozenset[HiddenOutVar]]:
          (h_4, h_5)]
 
 
+    This function takes a list of hidden groups and merges them if they share
+    any common hidden states. The merging process is controlled by the specified
+    version of the algorithm.
+
     Args:
-        groups: The hidden groups.
-        version: The version of the hidden group merging algorithm. Default is 1.
+        groups: A list of hidden groups, where each group is a collection of
+            hidden states represented as frozensets.
+        version: An integer specifying the version of the merging algorithm to use.
+            Default is 1. Version 0 and 1 are supported, with version 1 being
+            more efficient and readable.
 
     Returns:
-        The merged hidden groups.
+        A list of merged hidden groups, where each group is a frozenset of
+        HiddenOutVar objects. The groups are merged based on shared hidden states.
     """
 
     if version == 0:
@@ -807,34 +869,32 @@ def find_hidden_groups_from_jaxpr(
     invar_to_hidden_path: Dict[HiddenInVar, Path],
     outvar_to_hidden_path: Dict[HiddenOutVar, Path],
     path_to_state: Dict[Path, bst.State],
-):
+) -> Tuple[Sequence[HiddenGroup], bst.util.PrettyDict]:
     """
-    Finding the hidden groups from the jaxpr.
+    Find hidden groups from the jaxpr.
 
     Args:
         jaxpr: The jaxpr for the model.
-        hidden_outvar_to_invar: The mapping from the hidden output variable to the hidden input variable.
-        weight_invars: The weight input variables.
-        invar_to_hidden_path: The mapping from the weight input variable to the hidden state path.
-        outvar_to_hidden_path: The mapping from the hidden output variable to the hidden state path.
-        path_to_state: The mapping from the hidden state path to the state.
+        hidden_outvar_to_invar: Mapping from hidden output variable to hidden input variable.
+        weight_invars: Set of weight input variables.
+        invar_to_hidden_path: Mapping from weight input variable to hidden state path.
+        outvar_to_hidden_path: Mapping from hidden output variable to hidden state path.
+        path_to_state: Mapping from hidden state path to state.
 
     Returns:
-        The hidden groups,
-        and the mapping from the hidden state path to the hidden group.
+        A tuple containing:
+        - Sequence of HiddenGroup objects
+        - PrettyDict mapping hidden state paths to hidden groups
     """
-    (
-        hidden_groups,
-        hid_path_to_group,
-    ) = JaxprEvalForHiddenGroup(
+    evaluator = JaxprEvalForHiddenGroup(
         jaxpr=jaxpr,
         hidden_outvar_to_invar=hidden_outvar_to_invar,
         weight_invars=weight_invars,
         invar_to_hidden_path=invar_to_hidden_path,
         outvar_to_hidden_path=outvar_to_hidden_path,
         path_to_state=path_to_state,
-    ).compile()
-
+    )
+    hidden_groups, hid_path_to_group = evaluator.compile()
     return hidden_groups, bst.util.PrettyDict(hid_path_to_group)
 
 
@@ -869,9 +929,9 @@ def find_hidden_groups_from_module(
     model: bst.nn.Module,
     *model_args,
     **model_kwargs,
-):
+) -> Tuple[Sequence[HiddenGroup], bst.util.PrettyDict]:
     """
-    Finding the hidden groups from the model.
+    Find hidden groups from the model.
 
     Args:
         model: The model.
@@ -879,12 +939,9 @@ def find_hidden_groups_from_module(
         model_kwargs: The model keyword arguments.
 
     Returns:
-        The hidden groups,
-        and the mapping from the hidden state path to the hidden group.
+        A tuple containing:
+        - Sequence of HiddenGroup objects
+        - PrettyDict mapping hidden state paths to hidden groups
     """
     minfo = extract_module_info(model, *model_args, **model_kwargs)
-    (
-        hidden_groups,
-        hid_path_to_group,
-    ) = find_hidden_groups_from_minfo(minfo)
-    return hidden_groups, hid_path_to_group
+    return find_hidden_groups_from_minfo(minfo)

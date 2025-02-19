@@ -95,6 +95,7 @@ class ETraceAlgorithm(bst.nn.Module):
                 f'The model should be a brainstate.nn.Module, this can help us to '
                 f'better obtain the program structure. But we got {type(model)}.'
             )
+        self.model4compile = model
 
         # the graph
         if not isinstance(graph_executor, ETraceGraphExecutor):
