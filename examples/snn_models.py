@@ -401,8 +401,9 @@ class OnlineTrainer(Trainer):
 
         # initialize the online learning model
         # model = brainscale.ParamDimVjpAlgorithm(self.target, mode=bst.mixin.Batching())
-        model = brainscale.DiagIODimAlgorithm(self.target, self.decay_or_rank)
-        model.compile_etrace_graph(inputs[0])
+        model = brainscale.IODimVjpAlgorithm(self.target, self.decay_or_rank)
+        model.compile_graph(inputs[0])
+        model.show_graph()
 
         def _etrace_grad(inp):
             # call the model
