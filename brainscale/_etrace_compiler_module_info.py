@@ -18,7 +18,7 @@ from __future__ import annotations
 import functools
 from typing import Dict, Sequence, List, Tuple, Optional, NamedTuple, Any
 
-import brainstate as bst
+import brainstate
 import brainunit as u
 import jax
 
@@ -54,11 +54,11 @@ __all__ = [
 
 
 def _model_that_not_allow_param_assign(model, *args_, **kwargs_):
-    with bst.StateTraceStack() as trace:
+    with brainstate.StateTraceStack() as trace:
         out = model(*args_, **kwargs_)
 
     for st, write in zip(trace.states, trace.been_writen):
-        if isinstance(st, bst.ParamState) and write:
+        if isinstance(st, brainstate.ParamState) and write:
             raise NotSupportedError(
                 f'The parameter state "{st}" is rewritten in the model. Currently, the '
                 f'online learning method we provided does not support the dynamical '
@@ -68,8 +68,8 @@ def _model_that_not_allow_param_assign(model, *args_, **kwargs_):
 
 
 def _check_consistent_states_between_model_and_compiler(
-    compiled_model_states: Sequence[bst.State],
-    retrieved_model_states: Dict[Path, bst.State],
+    compiled_model_states: Sequence[brainstate.State],
+    retrieved_model_states: Dict[Path, brainstate.State],
     verbose: bool = True,  # whether to print the information
 ):
     id_to_compiled_state = {
@@ -93,7 +93,7 @@ def _check_consistent_states_between_model_and_compiler(
             if verbose:
                 print(f"Warning: the state {st} is not found in the retrieved model. "
                       f"We have added this state.")
-            retrieved_model_states[(unknown_state_path(i=i_unknown),)] = st
+            retrieved_model_states[unknown_state_path(i=i_unknown)] = st
             i_unknown += 1
 
 
@@ -121,15 +121,32 @@ def _check_in_out_consistent_units(
 
 
 def abstractify_model(
-    model: bst.nn.Module,
+    model: brainstate.nn.Module,
     *model_args,
     **model_kwargs
 ):
-    assert isinstance(model, bst.nn.Module), (
+    """
+    Abstracts a model into a stateful representation suitable for compilation and state extraction.
+
+    This function ensures that the model is an instance of `bst.nn.Module` and compiles it into a 
+    stateful function. It retrieves the model's states and checks for consistency between the 
+    compiled states and the retrieved states.
+
+    Args:
+        model (bst.nn.Module): The model to be abstracted. It must be an instance of `bst.nn.Module`.
+        *model_args: Positional arguments to be passed to the model during compilation.
+        **model_kwargs: Keyword arguments to be passed to the model during compilation.
+
+    Returns:
+        Tuple[bst.compile.StatefulFunction, Dict[Path, bst.State]]: 
+            - A stateful function representing the compiled model.
+            - A dictionary of the model's retrieved states with their paths.
+    """
+    assert isinstance(model, brainstate.nn.Module), (
         "The model should be an instance of bst.nn.Module. "
         "Since it allows the explicit definition of the model structure."
     )
-    model_retrieved_states = bst.graph.states(model)
+    model_retrieved_states = brainstate.graph.states(model)
 
     # --- stateful model, for extracting states, weights, and variables --- #
     #
@@ -138,7 +155,7 @@ def abstractify_model(
     # Please always use ``functools.partial`` to fix the static arguments.
     #
     # wrap the model so that we can track the iteration number
-    stateful_model = bst.compile.StatefulFunction(
+    stateful_model = brainstate.compile.StatefulFunction(
         functools.partial(_model_that_not_allow_param_assign, model)
     )
 
@@ -214,17 +231,17 @@ class ModuleInfo(NamedTuple):
 
     """
     # stateful model
-    stateful_model: bst.compile.StatefulFunction
+    stateful_model: brainstate.compile.StatefulFunction
 
     # jaxpr
     closed_jaxpr: jax.core.ClosedJaxpr
 
     # states
-    retrieved_model_states: bst.util.FlattedDict[Path, bst.State]
-    compiled_model_states: Sequence[bst.State]
+    retrieved_model_states: brainstate.util.FlattedDict[Path, brainstate.State]
+    compiled_model_states: Sequence[brainstate.State]
     state_id_to_path: Dict[StateID, Path]
-    state_tree_invars: bst.typing.PyTree[Var]
-    state_tree_outvars: bst.typing.PyTree[Var]
+    state_tree_invars: brainstate.typing.PyTree[Var]
+    state_tree_outvars: brainstate.typing.PyTree[Var]
 
     # hidden states
     hidden_path_to_invar: Dict[Path, Var]
@@ -380,7 +397,7 @@ class ModuleInfo(NamedTuple):
         for st, st_val in zip(self.compiled_model_states, new_state_vals):
             if isinstance(st, ETraceState):
                 etrace_vals[self.state_id_to_path[id(st)]] = st_val
-            elif isinstance(st, bst.ParamState):
+            elif isinstance(st, brainstate.ParamState):
                 # assume they are not changed
                 pass
             else:
@@ -392,14 +409,14 @@ class ModuleInfo(NamedTuple):
         return self._asdict()
 
     def __repr__(self) -> str:
-        return repr(bst.util.PrettyMapping(self._asdict(), type_name=self.__class__.__name__))
+        return repr(brainstate.util.PrettyMapping(self._asdict(), type_name=self.__class__.__name__))
 
 
 ModuleInfo.__module__ = 'brainscale'
 
 
 def extract_module_info(
-    model: bst.nn.Module,
+    model: brainstate.nn.Module,
     *model_args,
     **model_kwargs
 ) -> ModuleInfo:
@@ -428,13 +445,13 @@ def extract_module_info(
     # state information
     cache_key = stateful_model.get_arg_cache_key(*model_args, **model_kwargs)
     compiled_states = stateful_model.get_states(cache_key)
-    compiled_states = bst.util.PrettyList(compiled_states)
+    compiled_states = brainstate.util.PrettyList(compiled_states)
 
     state_id_to_path: Dict[StateID, Path] = {
         id(state): path
         for path, state in model_retrieved_states.items()
     }
-    state_id_to_path = bst.util.PrettyDict(state_id_to_path)
+    state_id_to_path = brainstate.util.PrettyDict(state_id_to_path)
 
     closed_jaxpr = stateful_model.get_jaxpr(cache_key)
     jaxpr = closed_jaxpr.jaxpr
@@ -461,8 +478,8 @@ def extract_module_info(
     # remove the quantity from the invars and outvars
     state_tree_invars = _remove_quantity(state_tree_invars)
     state_tree_outvars = _remove_quantity(state_tree_outvars)
-    state_tree_invars = bst.util.PrettyList(state_tree_invars)
-    state_tree_outvars = bst.util.PrettyList(state_tree_outvars)
+    state_tree_invars = brainstate.util.PrettyList(state_tree_invars)
+    state_tree_outvars = brainstate.util.PrettyList(state_tree_outvars)
 
     # -- checking weights as invar -- #
     weight_path_to_invars = {
@@ -470,27 +487,27 @@ def extract_module_info(
         for invar, st in zip(state_tree_invars, compiled_states)
         if isinstance(st, ETraceParam)
     }
-    weight_path_to_invars = bst.util.PrettyDict(weight_path_to_invars)
+    weight_path_to_invars = brainstate.util.PrettyDict(weight_path_to_invars)
 
     hidden_path_to_invar = {  # one-to-many mapping
         state_id_to_path[id(st)]: invar  # ETraceState only contains one Array, "invar" is the jaxpr var
         for invar, st in zip(state_tree_invars, compiled_states)
         if isinstance(st, ETraceState)
     }
-    hidden_path_to_invar = bst.util.PrettyDict(hidden_path_to_invar)
+    hidden_path_to_invar = brainstate.util.PrettyDict(hidden_path_to_invar)
 
     invar_to_hidden_path = {
         invar: path
         for path, invar in hidden_path_to_invar.items()
     }
-    invar_to_hidden_path = bst.util.PrettyDict(invar_to_hidden_path)
+    invar_to_hidden_path = brainstate.util.PrettyDict(invar_to_hidden_path)
 
     invar_to_weight_path = {  # many-to-one mapping
         v: k
         for k, vs in weight_path_to_invars.items()
         for v in vs
     }
-    invar_to_weight_path = bst.util.PrettyDict(invar_to_weight_path)
+    invar_to_weight_path = brainstate.util.PrettyDict(invar_to_weight_path)
 
     # -- checking states as outvar -- #
     hidden_path_to_outvar = {  # one-to-one mapping
@@ -498,21 +515,21 @@ def extract_module_info(
         for outvar, st in zip(state_tree_outvars, compiled_states)
         if isinstance(st, ETraceState)
     }
-    hidden_path_to_outvar = bst.util.PrettyDict(hidden_path_to_outvar)
+    hidden_path_to_outvar = brainstate.util.PrettyDict(hidden_path_to_outvar)
 
     outvar_to_hidden_path = {  # one-to-one mapping
         v: state_id
         for state_id, v in hidden_path_to_outvar.items()
     }
-    outvar_to_hidden_path = bst.util.PrettyDict(outvar_to_hidden_path)
+    outvar_to_hidden_path = brainstate.util.PrettyDict(outvar_to_hidden_path)
 
     hidden_outvar_to_invar = {
         outvar: hidden_path_to_invar[hid]
         for hid, outvar in hidden_path_to_outvar.items()
     }
-    hidden_outvar_to_invar = bst.util.PrettyDict(hidden_outvar_to_invar)
+    hidden_outvar_to_invar = brainstate.util.PrettyDict(hidden_outvar_to_invar)
 
-    weight_invars = bst.util.PrettyList(set([v for vs in weight_path_to_invars.values() for v in vs]))
+    weight_invars = brainstate.util.PrettyList(set([v for vs in weight_path_to_invars.values() for v in vs]))
 
     return ModuleInfo(
         # stateful model

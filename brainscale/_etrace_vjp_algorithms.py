@@ -30,7 +30,7 @@ from collections import defaultdict
 from functools import partial
 from typing import Dict, Tuple, Any, List, Optional, Sequence
 
-import brainstate as bst
+import brainstate
 import brainunit as u
 import jax
 import jax.numpy as jnp
@@ -87,13 +87,24 @@ __all__ = [
 
 def _format_decay_and_rank(decay_or_rank) -> Tuple[float, int]:
     """
-    Format the decay or the rank of the approximation.
+    Determines the decay factor and the number of approximation ranks based on the input.
+
+    This function takes either a decay factor or a number of approximation ranks as input
+    and returns both the decay factor and the number of approximation ranks. If the input
+    is a float, it is treated as a decay factor, and the number of ranks is calculated.
+    If the input is an integer, it is treated as the number of ranks, and the decay factor
+    is calculated.
 
     Args:
-      decay_or_rank: float, int, the decay factor or the number of approximation rank.
+        decay_or_rank (float or int): The decay factor (a float between 0 and 1) or the 
+                                      number of approximation ranks (a positive integer).
 
     Returns:
-      Tuple[float, int], the decay factor and the number of approximation rank.
+        Tuple[float, int]: A tuple containing the decay factor and the number of approximation ranks.
+
+    Raises:
+        ValueError: If the input is neither a float nor an integer, or if the float is not in the range (0, 1),
+                    or if the integer is not greater than 0.
     """
     # number of approximation rank and the decay factor
     if isinstance(decay_or_rank, float):
@@ -111,12 +122,23 @@ def _format_decay_and_rank(decay_or_rank) -> Tuple[float, int]:
 
 def _expon_smooth(old, new, decay):
     """
-    Exponential smoothing.
+    Apply exponential smoothing to update a value.
 
-    :param old: the old value
-    :param new: the new value
-    :param decay: the decay factor
-    :return: the smoothed value
+    This function performs exponential smoothing, which is a technique used to 
+    smooth out data by applying a decay factor to the old value and combining it 
+    with the new value. If the new value is None, the function returns the old 
+    value scaled by the decay factor.
+
+    Args:
+        old: The old value to be smoothed.
+        new: The new value to be incorporated into the smoothing. If None, only 
+             the old value scaled by the decay factor is returned.
+        decay: The decay factor, a float between 0 and 1, that determines the 
+               weight of the old value in the smoothing process.
+
+    Returns:
+        The smoothed value, which is a combination of the old and new values 
+        weighted by the decay factor.
     """
     if new is None:
         return decay * old
@@ -125,12 +147,27 @@ def _expon_smooth(old, new, decay):
 
 def _low_pass_filter(old, new, alpha):
     """
-    Low-pass filter.
+    Apply a low-pass filter to smooth the transition between old and new values.
 
-    :param old: the old value
-    :param new: the new value
-    :param alpha: the filter factor
-    :return: the filtered value
+    This function implements a simple low-pass filter, which is used to smooth 
+    out fluctuations in data by blending the old value with the new value based 
+    on a specified filter factor.
+
+    Parameters:
+    old : Any
+        The previous value that needs to be smoothed.
+    new : Any
+        The current value to be incorporated into the smoothing process. If None, 
+        the function will return the old value scaled by the filter factor.
+    alpha : float
+        The filter factor, a value between 0 and 1, that determines the weight 
+        of the old value in the smoothing process. A higher alpha gives more 
+        weight to the old value, resulting in slower changes.
+
+    Returns:
+    Any
+        The filtered value, which is a combination of the old and new values 
+        weighted by the filter factor.
     """
     if new is None:
         return alpha * old
@@ -170,14 +207,26 @@ def _batched_zeros_like(
     x: jax.Array  # the input array
 ):
     """
-    Create a batched zeros array like the input array.
+    Create a batched zeros array with the same shape as the input array, 
+    extended by the number of hidden states.
+
+    This function generates a zeros array that matches the shape of the 
+    input array `x`, with an additional dimension for the number of hidden 
+    states. If a batch size is provided, the zeros array will also include 
+    a batch dimension.
 
     Args:
-      batch_size: int, the batch size.
-      x: jax.Array, the input array.
+        batch_size (Optional[int]): The size of the batch. If None, the 
+            batch dimension is not included.
+        num_state (int): The number of hidden states, which determines the 
+            size of the additional dimension in the zeros array.
+        x (jax.Array): The input array whose shape is used as a reference 
+            for creating the zeros array.
 
     Returns:
-      jax.Array, the batched zeros array.
+        jax.Array: A zeros array with the same shape as the input array, 
+        extended by the number of hidden states, and optionally including 
+        a batch dimension.
     """
     if batch_size is None:
         return u.math.zeros((*x.shape, num_state), x.dtype)
@@ -186,12 +235,40 @@ def _batched_zeros_like(
 
 
 def _init_IO_dim_state(
-    etrace_xs: Dict[ETraceX_Key, bst.State],
-    etrace_dfs: Dict[ETraceDF_Key, bst.State],
+    etrace_xs: Dict[ETraceX_Key, brainstate.State],
+    etrace_dfs: Dict[ETraceDF_Key, brainstate.State],
     etrace_xs_to_weights: defaultdict[ETraceX_Key, List[Path]],
     state_id_to_path: Dict[int, Path],
     relation: HiddenParamOpRelation,
 ):
+    """
+    Initialize the eligibility trace states for input-output dimensions.
+
+    This function sets up the eligibility trace states for the weights and 
+    differential functions (df) associated with a given relation. It ensures 
+    that the eligibility trace states are initialized for the weight x and 
+    the df, and records the target paths of the weight x if it is used 
+    repeatedly in the graph.
+
+    Args:
+        etrace_xs (Dict[ETraceX_Key, bst.State]): A dictionary to store the 
+            eligibility trace states for the weight x, keyed by ETraceX_Key.
+        etrace_dfs (Dict[ETraceDF_Key, bst.State]): A dictionary to store the 
+            eligibility trace states for the differential functions, keyed by 
+            ETraceDF_Key.
+        etrace_xs_to_weights (defaultdict[ETraceX_Key, List[Path]]): A 
+            defaultdict to record the target paths of the weight x, keyed by 
+            ETraceX_Key.
+        state_id_to_path (Dict[int, Path]): A dictionary mapping state IDs to 
+            their corresponding paths.
+        relation (HiddenParamOpRelation): The relation object containing 
+            information about the weights and hidden groups involved in the 
+            computation.
+
+    Raises:
+        ValueError: If a relation with the same key has already been added to 
+            the eligibility trace states.
+    """
     # For the relation
     #
     #   h1, h2, ... = f(x, w)
@@ -249,6 +326,35 @@ def _update_IO_dim_etrace_scan_fn(
     hid_weight_op_relations: Sequence[HiddenParamOpRelation],
     decay: float,
 ):
+    """
+    Update the eligibility trace values for input-output dimensions.
+
+    This function updates the eligibility trace values for the weight x and 
+    differential functions (df) based on the provided Jacobians and decay 
+    factor. It computes the new eligibility trace values by applying a 
+    low-pass filter to the historical values and incorporating the current 
+    Jacobian values.
+
+    Args:
+        hist_etrace_vals (Tuple[Dict[ETraceX_Key, jax.Array], Dict[ETraceDF_Key, jax.Array]]):
+            A tuple containing dictionaries of historical eligibility trace 
+            values for the weight x and df, keyed by ETraceX_Key and 
+            ETraceDF_Key, respectively.
+        jacobians (Tuple[Dict[ETraceX_Key, jax.Array], Dict[ETraceDF_Key, jax.Array], Sequence[jax.Array]]):
+            A tuple containing dictionaries of current Jacobian values for the 
+            weight x and df, and a sequence of hidden group Jacobians.
+        hid_weight_op_relations (Sequence[HiddenParamOpRelation]):
+            A sequence of HiddenParamOpRelation objects representing the 
+            relationships between hidden parameters and operations.
+        decay (float): The decay factor used in the low-pass filter, a value 
+            between 0 and 1.
+
+    Returns:
+        Tuple[Dict[ETraceX_Key, jax.Array], Dict[ETraceDF_Key, jax.Array]]:
+            A tuple containing dictionaries of updated eligibility trace values 
+            for the weight x and df, keyed by ETraceX_Key and ETraceDF_Key, 
+            respectively.
+    """
     # --- the data --- #
 
     #
@@ -349,10 +455,36 @@ def _solve_IO_dim_weight_gradients(
     running_index: int,
     decay: float,
 ):
-    #
+    """
+    Compute and update the weight gradients for input-output dimensions using eligibility trace data.
+
+    This function calculates the weight gradients by utilizing the eligibility trace data and the 
+    hidden-to-hidden Jacobians. It applies a correction factor to avoid exponential smoothing bias 
+    at the beginning of the computation.
+
+    Args:
+        hist_etrace_data (Tuple[Dict[ETraceX_Key, jax.Array], Dict[ETraceDF_Key, jax.Array]]):
+            A tuple containing dictionaries of historical eligibility trace values for the weight x 
+            and differential functions (df), keyed by ETraceX_Key and ETraceDF_Key, respectively.
+        dG_weights (Dict[Path, dG_Weight]):
+            A dictionary to store the computed weight gradients, keyed by the path of the weight.
+        dG_hidden_groups (Sequence[jax.Array]):
+            A sequence of hidden group Jacobians, with the same length as the total number of hidden groups.
+        weight_hidden_relations (Sequence[HiddenParamOpRelation]):
+            A sequence of HiddenParamOpRelation objects representing the relationships between hidden 
+            parameters and operations.
+        weight_vals (Dict[Path, WeightVals]):
+            A dictionary containing the current values of the weights, keyed by their paths.
+        running_index (int):
+            The current index in the running sequence, used to compute the correction factor.
+        decay (float):
+            The decay factor used in the exponential smoothing process, a value between 0 and 1.
+
+    Returns:
+        None: The function updates the dG_weights dictionary in place with the computed weight gradients.
+    """
     # Avoid the exponential smoothing bias at the beginning.
     # This is the correction factor for the exponential smoothing.
-    #
     correction_factor = 1. - u.math.power(1. - decay, running_index + 1)
     correction_factor = u.math.where(running_index < 1000, correction_factor, 1.)
     correction_factor = jax.lax.stop_gradient(correction_factor)
@@ -399,10 +531,31 @@ def _solve_IO_dim_weight_gradients(
 
 
 def _init_param_dim_state(
-    mode: bst.mixin.Mode,
-    etrace_bwg: Dict[ETraceWG_Key, bst.State],
+    mode: brainstate.mixin.Mode,
+    etrace_bwg: Dict[ETraceWG_Key, brainstate.State],
     relation: HiddenParamOpRelation
 ):
+    """
+    Initialize the eligibility trace states for parameter dimensions.
+
+    This function sets up the eligibility trace states for the weights and 
+    differential functions (df) associated with a given relation. It assumes 
+    that the batch size is the first dimension of the output shape if batching 
+    is enabled.
+
+    Args:
+        mode (bst.mixin.Mode): The mode indicating whether batching is enabled.
+        etrace_bwg (Dict[ETraceWG_Key, bst.State]): A dictionary to store the 
+            eligibility trace states, keyed by a unique identifier for each 
+            weight group.
+        relation (HiddenParamOpRelation): The relation object containing 
+            information about the weights and hidden groups involved in the 
+            computation.
+
+    Raises:
+        ValueError: If a relation with the same key has already been added to 
+            the eligibility trace states.
+    """
     # For the relation
     #
     #   h1, h2, ... = f(x, w)
@@ -411,7 +564,7 @@ def _init_param_dim_state(
 
     # TODO: assume the batch size is the first dimension
     y_shape = relation.y.aval.shape
-    batch_size = y_shape[0] if mode.has(bst.mixin.Batching) else None
+    batch_size = y_shape[0] if mode.has(brainstate.mixin.Batching) else None
     for group in relation.hidden_groups:
         group: HiddenGroup
         bwg_key = etrace_param_key(relation.path, relation.y, group.index)
@@ -425,6 +578,37 @@ def _init_param_dim_state(
         )
 
 
+def _normalize_matrix_spectrum(matrix):
+    # Compute the eigenvalues of the matrix
+    eigenvalues = jnp.linalg.eigvals(matrix)
+
+    # Get the maximum eigenvalue
+    max_eigenvalue = jnp.max(jnp.abs(eigenvalues))
+
+    # Normalize the matrix by dividing it by the maximum eigenvalue
+    normalized_matrix = jax.lax.cond(
+        max_eigenvalue > 1,
+        lambda: matrix / max_eigenvalue,
+        lambda: matrix,
+    )
+
+    return normalized_matrix
+
+
+def _normalize_vector(v):
+    max_elem = jnp.abs(v).max()
+    normalized_vector = jax.lax.cond(
+        max_elem > 1,
+        lambda: v / max_elem,
+        lambda: v,
+    )
+
+    # # Normalize the vector by dividing it by its norm
+    # normalized_vector = v / jnp.linalg.norm(v)
+    #
+    return normalized_vector
+
+
 def _update_param_dim_etrace_scan_fn(
     hist_etrace_vals: Dict[ETraceWG_Key, jax.Array],
     jacobians: Tuple[
@@ -434,8 +618,35 @@ def _update_param_dim_etrace_scan_fn(
     ],
     weight_path_to_vals: Dict[Path, PyTree],
     hidden_param_op_relations,
-    mode: bst.mixin.Mode,
+    mode: brainstate.mixin.Mode,
+    normalize_matrix_spectrum: bool = False,
 ):
+    """
+    Update the eligibility trace values for parameter dimensions.
+
+    This function updates the eligibility trace values for the parameter dimensions
+    based on the provided Jacobians and the current mode. It computes the new eligibility
+    trace values by applying vector-Jacobian products and incorporating the current
+    Jacobian values.
+
+    Args:
+        hist_etrace_vals (Dict[ETraceWG_Key, jax.Array]): A dictionary containing
+            historical eligibility trace values for the weight gradients, keyed by
+            ETraceWG_Key.
+        jacobians (Tuple[Dict[ETraceX_Key, jax.Array], Dict[ETraceDF_Key, jax.Array], Sequence[jax.Array]]):
+            A tuple containing dictionaries of current Jacobian values for the weight x
+            and df, and a sequence of hidden group Jacobians.
+        weight_path_to_vals (Dict[Path, PyTree]): A dictionary mapping weight paths to
+            their corresponding PyTree values.
+        hidden_param_op_relations: A sequence of HiddenParamOpRelation objects representing
+            the relationships between hidden parameters and operations.
+        mode (bst.mixin.Mode): The mode indicating whether batching is enabled.
+
+    Returns:
+        Tuple[Dict[ETraceWG_Key, jax.Array], None]: A tuple containing a dictionary of
+        updated eligibility trace values for the weight gradients, keyed by ETraceWG_Key,
+        and None.
+    """
     # --- the data --- #
 
     #
@@ -460,7 +671,16 @@ def _update_param_dim_etrace_scan_fn(
     #
     hid_group_jacobians: Sequence[jax.Array] = jacobians[2]
 
-    #
+    if normalize_matrix_spectrum:
+        normalized_hid_group_jacobians = []
+        for diag in hid_group_jacobians:
+            fn = _normalize_matrix_spectrum
+            for i in range(diag.ndim - 2):
+                fn = jax.vmap(fn)
+            normalized_hid_group_jacobians.append(fn(diag))
+    else:
+        normalized_hid_group_jacobians = hid_group_jacobians
+
     # The etrace weight gradients at the current time step.
     # i.e., The "hist_etrace_vals" at the next time step
     #
@@ -486,7 +706,7 @@ def _update_param_dim_etrace_scan_fn(
         else:
             x = etrace_xs_at_t[relation.x]
         fn_dw = lambda df_: jax.vjp(lambda w: u.get_mantissa(etrace_op.xw_to_y(x, w)), weight_val)[1](df_)[0]
-        if mode.has(bst.mixin.Batching):
+        if mode.has(brainstate.mixin.Batching):
             fn_dw = jax.vmap(fn_dw)
 
         for group in relation.hidden_groups:
@@ -500,6 +720,8 @@ def _update_param_dim_etrace_scan_fn(
             #       \partial h^t / \partial W^t = vjp(f(x, w))(df)
             #
             df = etrace_ys_at_t[(relation.y, hid_group_key(group.index))]
+            # jax.debug.print('df = {g}', g=jax.tree.map(lambda x: jnp.abs(x).max(), df))
+
             #
             # vmap over the different hidden states,
             #
@@ -507,6 +729,8 @@ def _update_param_dim_etrace_scan_fn(
             # df: (n_hidden, ..., n_state)
             # phg_to_pw: (n_param, ..., n_state)
             phg_to_pw = jax.vmap(fn_dw, in_axes=-1, out_axes=-1)(df)
+            phg_to_pw = jax.tree.map(_normalize_vector, phg_to_pw)
+            # jax.debug.print('phg_to_pw = {g}', g=jax.tree.map(lambda x: jnp.abs(x).max(), phg_to_pw))
 
             #
             # Step 3:
@@ -519,13 +743,23 @@ def _update_param_dim_etrace_scan_fn(
             #  ∂V^t/∂θ1 = ∂V^t/∂V^t-1 * ∂V^t-1/∂θ1 + ∂V^t/∂a^t-1 * ∂a^t-1/∂θ1 + ...
             #
             w_key = etrace_param_key(weight_path, relation.y, group.index)
-            old_bwg = hist_etrace_vals[w_key]
-            diag = hid_group_jacobians[group.index]
+            diag = normalized_hid_group_jacobians[group.index]
+
+            # def max_diag(diag):
+            #     indices = list(range(diag.ndim))
+            #     max_index= jnp.argmax(jnp.abs(diag).sum(axis=indices[1:]))
+            #     return diag[max_index]
+            #
+            # jax.debug.print('diag = {g}', g=diag[0])
+            # jax.debug.print('max diag = {g}', g=jax.tree.map(lambda x: jnp.abs(x).max(), diag))
+            # jax.debug.print('max diag = {g}', g=jax.tree.map(max_diag, diag))
+
             #
             # vmap over j, over the different hidden states \partial h_i^t / \partial h_j^t
             #
-            # diag: (n_hidden, ..., n_state, [n_state])
+            # d: (n_hidden, ..., [n_state])
             # old_bwg: (n_param, ..., [n_state])
+            old_bwg = hist_etrace_vals[w_key]
             fn_bwg_pre = lambda d: _sum_last_dim(
                 jax.vmap(etrace_op.yw_to_w, in_axes=-1, out_axes=-1)(d, old_bwg)
             )
@@ -537,6 +771,8 @@ def _update_param_dim_etrace_scan_fn(
             # old_bwg: (n_param, ..., n_state)
             # new_bwg_pre: (n_param, ..., n_state)
             new_bwg_pre = jax.vmap(fn_bwg_pre, in_axes=-2, out_axes=-1)(diag)
+            # jax.debug.print('old_bwg = {g}', g=jax.tree.map(lambda x: jnp.abs(x).max(), old_bwg))
+            # jax.debug.print('new_bwg_pre = {g}\n', g=jax.tree.map(lambda x: jnp.abs(x).max(), new_bwg_pre))
 
             #
             # Step 4:
@@ -544,7 +780,9 @@ def _update_param_dim_etrace_scan_fn(
             # update: eligibility trace * hidden diagonal Jacobian + new hidden df
             #        ϵ^t = ϵ^t_{pre} + df^t, where D_h is the hidden-to-hidden Jacobian diagonal matrix.
             #
-            new_etrace_bwg[w_key] = jax.tree.map(u.math.add, new_bwg_pre, phg_to_pw, is_leaf=u.math.is_quantity)
+            new_bwg = jax.tree.map(u.math.add, new_bwg_pre, phg_to_pw, is_leaf=u.math.is_quantity)
+            new_bwg = jax.tree.map(_normalize_vector, new_bwg)
+            new_etrace_bwg[w_key] = new_bwg
 
     return new_etrace_bwg, None
 
@@ -554,8 +792,29 @@ def _solve_param_dim_weight_gradients(
     dG_weights: Dict[Path, dG_Weight],  # weight gradients
     dG_hidden_groups: Sequence[jax.Array],  # hidden group gradients
     weight_hidden_relations: Sequence[HiddenParamOpRelation],
-    mode: bst.mixin.Mode,
+    mode: brainstate.mixin.Mode,
 ):
+    """
+    Compute and update the weight gradients for parameter dimensions using eligibility trace data.
+
+    This function calculates the weight gradients by utilizing the eligibility trace data and the 
+    hidden-to-hidden Jacobians. It applies a correction factor to avoid exponential smoothing bias 
+    at the beginning of the computation.
+
+    Args:
+        hist_etrace_data (Dict[ETraceWG_Key, PyTree]): A dictionary containing historical eligibility 
+            trace data for the weight gradients, keyed by ETraceWG_Key.
+        dG_weights (Dict[Path, dG_Weight]): A dictionary to store the computed weight gradients, 
+            keyed by the path of the weight.
+        dG_hidden_groups (Sequence[jax.Array]): A sequence of hidden group gradients, with the same 
+            length as the total number of hidden groups.
+        weight_hidden_relations (Sequence[HiddenParamOpRelation]): A sequence of HiddenParamOpRelation 
+            objects representing the relationships between hidden parameters and operations.
+        mode (bst.mixin.Mode): The mode indicating whether batching is enabled.
+
+    Returns:
+        None: The function updates the dG_weights dictionary in place with the computed weight gradients.
+    """
     # update the etrace weight gradients
     temp_data = dict()
     for relation in weight_hidden_relations:
@@ -571,7 +830,7 @@ def _solve_param_dim_weight_gradients(
         #
         weight_path = relation.path
         etrace_op: ETraceOp = relation.weight.op
-        yw_to_w = jax.vmap(etrace_op.yw_to_w) if mode.has(bst.mixin.Batching) else etrace_op.yw_to_w
+        yw_to_w = jax.vmap(etrace_op.yw_to_w) if mode.has(brainstate.mixin.Batching) else etrace_op.yw_to_w
 
         for group in relation.hidden_groups:
             group: HiddenGroup
@@ -610,7 +869,7 @@ def _solve_param_dim_weight_gradients(
     # Step 3:
     #
     # sum up the batched weight gradients
-    if mode.has(bst.mixin.Batching):
+    if mode.has(brainstate.mixin.Batching):
         for key, val in temp_data.items():
             temp_data[key] = jax.tree_map(lambda x: u.math.sum(x, axis=0), val)
 
@@ -619,7 +878,22 @@ def _solve_param_dim_weight_gradients(
         _update_dict(dG_weights, key, val)
 
 
-def _remove_units(xs_maybe_quantity: bst.typing.PyTree):
+def _remove_units(xs_maybe_quantity: brainstate.typing.PyTree):
+    """
+    Removes units from a PyTree of quantities, returning a unitless PyTree and a function to restore the units.
+
+    This function traverses a PyTree structure, removing units from each quantity and returning a new PyTree
+    with the same structure but without units. It also returns a function that can be used to restore the
+    original units to the unitless PyTree.
+
+    Args:
+        xs_maybe_quantity (bst.typing.PyTree): A PyTree structure containing quantities with units.
+
+    Returns:
+        Tuple[bst.typing.PyTree, Callable]: A tuple containing:
+            - A PyTree with the same structure as the input, but with units removed from each quantity.
+            - A function that takes a unitless PyTree and restores the original units to it.
+    """
     leaves, treedef = jax.tree.flatten(xs_maybe_quantity, is_leaf=u.math.is_quantity)
     new_leaves, units = [], []
     for leaf in leaves:
@@ -627,7 +901,7 @@ def _remove_units(xs_maybe_quantity: bst.typing.PyTree):
         new_leaves.append(leaf)
         units.append(unit)
 
-    def restore_units(xs_unitless: bst.typing.PyTree):
+    def restore_units(xs_unitless: brainstate.typing.PyTree):
         leaves, treedef2 = jax.tree.flatten(xs_unitless)
         assert treedef == treedef2, 'The tree structure should be the same. '
         new_leaves = [
@@ -640,6 +914,21 @@ def _remove_units(xs_maybe_quantity: bst.typing.PyTree):
 
 
 def _sum_last_dim(xs: jax.Array):
+    """
+    Sums the elements along the last dimension of each array in a PyTree.
+
+    This function applies a sum operation along the last dimension of each array
+    within a PyTree structure. It is useful for reducing the dimensionality of
+    arrays by aggregating values along the specified axis.
+
+    Args:
+        xs (jax.Array): A PyTree of arrays where each array will have its last
+                        dimension summed.
+
+    Returns:
+        jax.Array: A PyTree with the same structure as the input, where each array
+                   has been reduced by summing over its last dimension.
+    """
     return jax.tree_map(lambda x: u.math.sum(x, axis=-1), xs)
 
 
@@ -648,14 +937,24 @@ def _zeros_like_batch_or_not(
     x: jax.Array
 ):
     """
-    Create a batched zeros array like the input array.
+    Create a zeros array with the same shape and type as the input array, 
+    optionally including a batch dimension.
+
+    This function generates a zeros array that matches the shape and data type 
+    of the input array `x`. If a batch size is provided, the zeros array will 
+    include an additional batch dimension at the beginning.
 
     Args:
-      batch_size: int, the batch size.
-      x: jax.Array, the input array.
+        batch_size (Optional[int]): The size of the batch. If provided, the 
+            zeros array will include a batch dimension. If None, the zeros 
+            array will have the same shape as `x`.
+        x (jax.Array): The input array whose shape and data type are used as 
+            a reference for creating the zeros array.
 
     Returns:
-      jax.Array, the batched zeros array.
+        jax.Array: A zeros array with the same shape and data type as the 
+        input array, optionally including a batch dimension if `batch_size` 
+        is provided.
     """
     if batch_size is not None:
         assert isinstance(batch_size, int), 'The batch size should be an integer. '
@@ -665,21 +964,70 @@ def _zeros_like_batch_or_not(
 
 
 def _reset_state_in_a_dict(
-    state_dict: Dict[Any, bst.State],
+    state_dict: Dict[Any, brainstate.State],
     batch_size: Optional[int],
 ):
+    """
+    Reset the values in a dictionary of states to zero.
+
+    This function iterates over a dictionary of states and resets each state's 
+    value to a zero array. The shape of the zero array is determined by the 
+    original shape of the state's value and the specified batch size.
+
+    Args:
+        state_dict (Dict[Any, bst.State]): A dictionary where keys are any 
+            type and values are bst.State objects. Each state's value will be 
+            reset to a zero array.
+        batch_size (Optional[int]): The size of the batch. If provided, the 
+            zero array will include a batch dimension; otherwise, it will not.
+
+    Returns:
+        None: The function modifies the state_dict in place, resetting each 
+        state's value to a zero array.
+    """
     for k, v in state_dict.items():
         state_dict[k].value = jax.tree.map(partial(_zeros_like_batch_or_not, batch_size), v)
 
 
 def _numel(pytree: PyTree):
+    """
+    Calculate the total number of elements in a PyTree.
+
+    This function traverses a PyTree structure and sums up the number of elements
+    in each array contained within the PyTree.
+
+    Args:
+        pytree (PyTree): A PyTree structure, which can be a nested combination of
+                         lists, tuples, and dictionaries containing JAX arrays.
+
+    Returns:
+        int: The total number of elements across all arrays in the PyTree.
+    """
     return sum(u.math.size(x) for x in jax.tree_leaves(pytree))
 
 
 def _is_weight_need_full_grad(
     relation: HiddenParamOpRelation,
-    mode: bst.mixin.Mode
+    mode: brainstate.mixin.Mode
 ):
+    """
+    Determine whether the weight requires a full gradient computation.
+
+    This function evaluates the type of gradient computation needed for a given weight
+    based on its characteristics and the current mode. It decides whether to use an
+    O(n^2) algorithm for full gradient computation or an O(n) algorithm for approximate
+    gradient computation.
+
+    Args:
+        relation (HiddenParamOpRelation): The relation object containing information
+            about the weights and hidden groups involved in the computation.
+        mode (bst.mixin.Mode): The mode indicating whether batching is enabled.
+
+    Returns:
+        bool: True if the weight requires a full gradient computation using the O(n^2)
+        algorithm, False if an approximate gradient computation using the O(n) algorithm
+        is sufficient.
+    """
     if isinstance(relation.weight, ETraceParam):
         #
         # When
@@ -711,7 +1059,7 @@ def _is_weight_need_full_grad(
         #
         return True
 
-    batch_size = relation.x.aval.shape[0] if mode.has(bst.mixin.Batching) else 1
+    batch_size = relation.x.aval.shape[0] if mode.has(brainstate.mixin.Batching) else 1
     if _numel(relation.x) + _numel(relation.y) > batch_size * _numel(relation.weight.value):
         #
         # When the number of elements in the inputs and outputs are bigger than the weight number,
@@ -719,7 +1067,6 @@ def _is_weight_need_full_grad(
         # storing the batched weight gradients will be less expensive.
         #
         return True
-
     else:
         #
         # For most cases, we will use the O(n) algorithm to compute the eligibility trace.
@@ -786,7 +1133,7 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
 
     def __init__(
         self,
-        model: bst.nn.Module,
+        model: brainstate.nn.Module,
         name: Optional[str] = None,
         vjp_method: str = 'single-step'
     ):
@@ -1336,7 +1683,7 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
             This is the protocol method that should be implemented in the subclass.
 
         Returns:
-          ETraceVals, the eligibility trace data.
+            ETraceVals, the eligibility trace data.
         """
         raise NotImplementedError
 
@@ -1715,10 +2062,10 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
     __module__ = 'brainscale'
 
     # the spatial gradients of the weights
-    etrace_xs: Dict[ETraceX_Key, bst.State]
+    etrace_xs: Dict[ETraceX_Key, brainstate.State]
 
     # the spatial gradients of the hidden states
-    etrace_dfs: Dict[ETraceDF_Key, bst.State]
+    etrace_dfs: Dict[ETraceDF_Key, brainstate.State]
 
     # the mapping from the etrace x to the weight operations
     etrace_xs_to_weights = Dict[ETraceX_Key, List[Path]]
@@ -1728,16 +2075,16 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
 
     def __init__(
         self,
-        model: bst.nn.Module,
+        model: brainstate.nn.Module,
         decay_or_rank: float | int,
-        mode: Optional[bst.mixin.Mode] = None,
+        mode: Optional[brainstate.mixin.Mode] = None,
         name: Optional[str] = None,
         vjp_method: str = 'single-step'
     ):
         super().__init__(model, name=name, vjp_method=vjp_method)
 
         # computing mode
-        self.mode = bst.mixin.Mode() if mode is None else mode
+        self.mode = brainstate.mixin.Mode() if mode is None else mode
 
         # the learning parameters
         self.decay, num_rank = _format_decay_and_rank(decay_or_rank)
@@ -1772,7 +2119,7 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
         _reset_state_in_a_dict(self.etrace_xs, batch_size)
         _reset_state_in_a_dict(self.etrace_dfs, batch_size)
 
-    def get_etrace_of(self, weight: bst.ParamState | Path) -> Tuple[Dict, Dict]:
+    def get_etrace_of(self, weight: brainstate.ParamState | Path) -> Tuple[Dict, Dict]:
         """
         Get the eligibility trace of the given weight.
 
@@ -1784,7 +2131,7 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
         # the weight ID
         weight_id = (
             id(weight)
-            if isinstance(weight, bst.ParamState) else
+            if isinstance(weight, brainstate.ParamState) else
             id(self.graph_executor.path_to_states[weight])
         )
 
@@ -1998,17 +2345,17 @@ class ParamDimVjpAlgorithm(ETraceVjpAlgorithm):
     """
 
     # batch of weight gradients
-    etrace_bwg: Dict[ETraceWG_Key, bst.State]
+    etrace_bwg: Dict[ETraceWG_Key, brainstate.State]
 
     def __init__(
         self,
-        model: bst.nn.Module,
-        mode: Optional[bst.mixin.Mode] = None,
+        model: brainstate.nn.Module,
+        mode: Optional[brainstate.mixin.Mode] = None,
         name: Optional[str] = None,
         vjp_method: str = 'single-step'
     ):
         super().__init__(model, name=name, vjp_method=vjp_method)
-        self.mode = bst.mixin.Mode() if mode is None else mode
+        self.mode = brainstate.mixin.Mode() if mode is None else mode
 
     def init_etrace_state(self, *args, **kwargs):
         """
@@ -2033,7 +2380,7 @@ class ParamDimVjpAlgorithm(ETraceVjpAlgorithm):
         self.running_index.value = 0
         _reset_state_in_a_dict(self.etrace_bwg, batch_size)
 
-    def get_etrace_of(self, weight: bst.ParamState | Path) -> Dict:
+    def get_etrace_of(self, weight: brainstate.ParamState | Path) -> Dict:
         """
         Get the eligibility trace of the given weight.
 
@@ -2046,7 +2393,7 @@ class ParamDimVjpAlgorithm(ETraceVjpAlgorithm):
         # get the wight id
         weight_id = (
             id(weight)
-            if isinstance(weight, bst.ParamState) else
+            if isinstance(weight, brainstate.ParamState) else
             id(self.graph_executor.path_to_states[weight])
         )
 
@@ -2178,32 +2525,32 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
     """
 
     # the spatial gradients of the weights
-    etrace_xs: Dict[ETraceX_Key, bst.State]
+    etrace_xs: Dict[ETraceX_Key, brainstate.State]
 
     # the spatial gradients of the hidden states
-    etrace_dfs: Dict[ETraceDF_Key, bst.State]
+    etrace_dfs: Dict[ETraceDF_Key, brainstate.State]
 
     # the mapping from the etrace x to the weight operations
     etrace_xs_to_weights = Dict[ETraceX_Key, List[Path]]
 
     # batch of weight gradients
-    etrace_bwg: Dict[ETraceWG_Key, bst.State]
+    etrace_bwg: Dict[ETraceWG_Key, brainstate.State]
 
     # the exponential smoothing decay factor
     decay: float
 
     def __init__(
         self,
-        model: bst.nn.Module,
+        model: brainstate.nn.Module,
         decay_or_rank: float | int,
-        mode: Optional[bst.mixin.Mode] = None,
+        mode: Optional[brainstate.mixin.Mode] = None,
         name: Optional[str] = None,
         vjp_method: str = 'single-step'
     ):
         super().__init__(model, name=name, vjp_method=vjp_method)
 
         # computing mode
-        self.mode = bst.mixin.Mode() if mode is None else mode
+        self.mode = brainstate.mixin.Mode() if mode is None else mode
 
         # the learning parameters
         self.decay, num_rank = _format_decay_and_rank(decay_or_rank)
@@ -2245,18 +2592,59 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
     def reset_state(self, batch_size: int = None, **kwargs):
         """
         Reset the eligibility trace states.
+
+        This function resets the internal state of the eligibility traces, which are used
+        in the computation of gradients in the etrace algorithm. It is typically called
+        at the beginning of a new batch or sequence to ensure that the state is clean.
+
+        Parameters:
+        -----------
+        batch_size : int, optional
+            The size of the batch for which the state is being reset. If not provided,
+            the default behavior is to reset the state without considering batch size.
+        
+        **kwargs : dict
+            Additional keyword arguments that may be used for resetting the state.
+            These are not explicitly used in this function but can be passed for
+            compatibility with other functions or methods that require them.
+
+        Returns:
+        --------
+        None
+            This function does not return any value. It performs an in-place reset
+            of the internal state variables.
         """
         self.running_index.value = 0
         _reset_state_in_a_dict(self.etrace_xs, batch_size)
         _reset_state_in_a_dict(self.etrace_dfs, batch_size)
         _reset_state_in_a_dict(self.etrace_bwg, batch_size)
 
-    def get_etrace_of(self, weight: bst.ParamState | Path) -> Tuple[Dict, Dict, Dict]:
+    def get_etrace_of(self, weight: brainstate.ParamState | Path) -> Tuple[Dict, Dict, Dict]:
         """
-        Get the eligibility trace of the given weight.
+        Retrieve the eligibility trace for a specified weight.
 
-        The eligibility trace contains the following structures:
+        This function extracts the eligibility trace data associated with a given weight,
+        which includes the spatial gradients of the weight inputs, the spatial gradients
+        of the hidden states, and the batched weight gradients.
 
+        Parameters:
+        -----------
+        weight : bst.ParamState | Path
+            The weight for which the eligibility trace is to be retrieved. It can be
+            specified either as a `bst.ParamState` object or a `Path` object.
+
+        Returns:
+        --------
+        Tuple[Dict, Dict, Dict]
+            A tuple containing three dictionaries:
+            - etrace_xs: The spatial gradients of the weight inputs.
+            - etrace_dfs: The spatial gradients of the hidden states.
+            - etrace_bws: The batched weight gradients.
+
+        Raises:
+        -------
+        ValueError
+            If the eligibility trace for the specified weight cannot be found.
         """
 
         self._assert_compiled()
@@ -2264,7 +2652,7 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
         # the weight ID
         weight_id = (
             id(weight)
-            if isinstance(weight, bst.ParamState) else
+            if isinstance(weight, brainstate.ParamState) else
             id(self.graph_executor.path_to_states[weight])
         )
 

@@ -17,7 +17,7 @@
 
 from __future__ import annotations
 
-import brainstate as bst
+import brainstate
 
 __all__ = [
     'Flatten', 'Unflatten',
@@ -30,71 +30,71 @@ __all__ = [
 ]
 
 
-class Flatten(bst.nn.Flatten):
-    __doc__ = bst.nn.Flatten.__doc__
+class Flatten(brainstate.nn.Flatten):
+    __doc__ = brainstate.nn.Flatten.__doc__
     __module__ = 'brainscale.nn'
 
 
-class Unflatten(bst.nn.Unflatten):
-    __doc__ = bst.nn.Unflatten.__doc__
+class Unflatten(brainstate.nn.Unflatten):
+    __doc__ = brainstate.nn.Unflatten.__doc__
     __module__ = 'brainscale.nn'
 
 
-class AvgPool1d(bst.nn.AvgPool1d):
-    __doc__ = bst.nn.AvgPool1d.__doc__
+class AvgPool1d(brainstate.nn.AvgPool1d):
+    __doc__ = brainstate.nn.AvgPool1d.__doc__
     __module__ = 'brainscale.nn'
 
 
-class AvgPool2d(bst.nn.AvgPool2d):
-    __doc__ = bst.nn.AvgPool2d.__doc__
+class AvgPool2d(brainstate.nn.AvgPool2d):
+    __doc__ = brainstate.nn.AvgPool2d.__doc__
     __module__ = 'brainscale.nn'
 
 
-class AvgPool3d(bst.nn.AvgPool3d):
-    __doc__ = bst.nn.AvgPool3d.__doc__
+class AvgPool3d(brainstate.nn.AvgPool3d):
+    __doc__ = brainstate.nn.AvgPool3d.__doc__
     __module__ = 'brainscale.nn'
 
 
-class MaxPool1d(bst.nn.MaxPool1d):
-    __doc__ = bst.nn.MaxPool1d.__doc__
+class MaxPool1d(brainstate.nn.MaxPool1d):
+    __doc__ = brainstate.nn.MaxPool1d.__doc__
     __module__ = 'brainscale.nn'
 
 
-class MaxPool2d(bst.nn.MaxPool2d):
-    __doc__ = bst.nn.MaxPool2d.__doc__
+class MaxPool2d(brainstate.nn.MaxPool2d):
+    __doc__ = brainstate.nn.MaxPool2d.__doc__
     __module__ = 'brainscale.nn'
 
 
-class MaxPool3d(bst.nn.MaxPool3d):
-    __doc__ = bst.nn.MaxPool3d.__doc__
+class MaxPool3d(brainstate.nn.MaxPool3d):
+    __doc__ = brainstate.nn.MaxPool3d.__doc__
     __module__ = 'brainscale.nn'
 
 
-class AdaptiveAvgPool1d(bst.nn.AdaptiveAvgPool1d):
-    __doc__ = bst.nn.AdaptiveAvgPool1d.__doc__
+class AdaptiveAvgPool1d(brainstate.nn.AdaptiveAvgPool1d):
+    __doc__ = brainstate.nn.AdaptiveAvgPool1d.__doc__
     __module__ = 'brainscale.nn'
 
 
-class AdaptiveAvgPool2d(bst.nn.AdaptiveAvgPool2d):
-    __doc__ = bst.nn.AdaptiveAvgPool2d.__doc__
+class AdaptiveAvgPool2d(brainstate.nn.AdaptiveAvgPool2d):
+    __doc__ = brainstate.nn.AdaptiveAvgPool2d.__doc__
     __module__ = 'brainscale.nn'
 
 
-class AdaptiveAvgPool3d(bst.nn.AdaptiveAvgPool3d):
-    __doc__ = bst.nn.AdaptiveAvgPool3d.__doc__
+class AdaptiveAvgPool3d(brainstate.nn.AdaptiveAvgPool3d):
+    __doc__ = brainstate.nn.AdaptiveAvgPool3d.__doc__
     __module__ = 'brainscale.nn'
 
 
-class AdaptiveMaxPool1d(bst.nn.AdaptiveMaxPool1d):
-    __doc__ = bst.nn.AdaptiveMaxPool1d.__doc__
+class AdaptiveMaxPool1d(brainstate.nn.AdaptiveMaxPool1d):
+    __doc__ = brainstate.nn.AdaptiveMaxPool1d.__doc__
     __module__ = 'brainscale.nn'
 
 
-class AdaptiveMaxPool2d(bst.nn.AdaptiveMaxPool2d):
-    __doc__ = bst.nn.AdaptiveMaxPool2d.__doc__
+class AdaptiveMaxPool2d(brainstate.nn.AdaptiveMaxPool2d):
+    __doc__ = brainstate.nn.AdaptiveMaxPool2d.__doc__
     __module__ = 'brainscale.nn'
 
 
-class AdaptiveMaxPool3d(bst.nn.AdaptiveMaxPool3d):
-    __doc__ = bst.nn.AdaptiveMaxPool3d.__doc__
+class AdaptiveMaxPool3d(brainstate.nn.AdaptiveMaxPool3d):
+    __doc__ = brainstate.nn.AdaptiveMaxPool3d.__doc__
     __module__ = 'brainscale.nn'

@@ -15,9 +15,8 @@
 
 # -*- coding: utf-8 -*-
 
-from __future__ import annotations
 
-import brainstate as bst
+import brainstate
 
 __all__ = [
     # activation functions
@@ -34,166 +33,166 @@ __all__ = [
 ]
 
 
-class ReLU(bst.nn.ReLU):
-    __doc__ = bst.nn.ReLU.__doc__
+class ReLU(brainstate.nn.ReLU):
+    __doc__ = brainstate.nn.ReLU.__doc__
     __module__ = 'brainscale.nn'
 
 
-class RReLU(bst.nn.RReLU):
-    __doc__ = bst.nn.RReLU.__doc__
+class RReLU(brainstate.nn.RReLU):
+    __doc__ = brainstate.nn.RReLU.__doc__
     __module__ = 'brainscale.nn'
 
 
-class Hardtanh(bst.nn.Hardtanh):
-    __doc__ = bst.nn.Hardtanh.__doc__
+class Hardtanh(brainstate.nn.Hardtanh):
+    __doc__ = brainstate.nn.Hardtanh.__doc__
     __module__ = 'brainscale.nn'
 
 
-class ReLU6(bst.nn.ReLU6):
-    __doc__ = bst.nn.ReLU6.__doc__
+class ReLU6(brainstate.nn.ReLU6):
+    __doc__ = brainstate.nn.ReLU6.__doc__
     __module__ = 'brainscale.nn'
 
 
-class Sigmoid(bst.nn.Sigmoid):
-    __doc__ = bst.nn.Sigmoid.__doc__
+class Sigmoid(brainstate.nn.Sigmoid):
+    __doc__ = brainstate.nn.Sigmoid.__doc__
     __module__ = 'brainscale.nn'
 
 
-class Hardsigmoid(bst.nn.Hardsigmoid):
-    __doc__ = bst.nn.Hardsigmoid.__doc__
+class Hardsigmoid(brainstate.nn.Hardsigmoid):
+    __doc__ = brainstate.nn.Hardsigmoid.__doc__
     __module__ = 'brainscale.nn'
 
 
-class Tanh(bst.nn.Tanh):
-    __doc__ = bst.nn.Tanh.__doc__
+class Tanh(brainstate.nn.Tanh):
+    __doc__ = brainstate.nn.Tanh.__doc__
     __module__ = 'brainscale.nn'
 
 
-class SiLU(bst.nn.SiLU):
-    __doc__ = bst.nn.SiLU.__doc__
+class SiLU(brainstate.nn.SiLU):
+    __doc__ = brainstate.nn.SiLU.__doc__
     __module__ = 'brainscale.nn'
 
 
-class Mish(bst.nn.Mish):
-    __doc__ = bst.nn.Mish.__doc__
+class Mish(brainstate.nn.Mish):
+    __doc__ = brainstate.nn.Mish.__doc__
     __module__ = 'brainscale.nn'
 
 
-class Hardswish(bst.nn.Hardswish):
-    __doc__ = bst.nn.Hardswish.__doc__
+class Hardswish(brainstate.nn.Hardswish):
+    __doc__ = brainstate.nn.Hardswish.__doc__
     __module__ = 'brainscale.nn'
 
 
-class ELU(bst.nn.ELU):
-    __doc__ = bst.nn.ELU.__doc__
+class ELU(brainstate.nn.ELU):
+    __doc__ = brainstate.nn.ELU.__doc__
     __module__ = 'brainscale.nn'
 
 
-class CELU(bst.nn.CELU):
-    __doc__ = bst.nn.CELU.__doc__
+class CELU(brainstate.nn.CELU):
+    __doc__ = brainstate.nn.CELU.__doc__
     __module__ = 'brainscale.nn'
 
 
-class SELU(bst.nn.SELU):
-    __doc__ = bst.nn.SELU.__doc__
+class SELU(brainstate.nn.SELU):
+    __doc__ = brainstate.nn.SELU.__doc__
     __module__ = 'brainscale.nn'
 
 
-class GLU(bst.nn.GLU):
-    __doc__ = bst.nn.GLU.__doc__
+class GLU(brainstate.nn.GLU):
+    __doc__ = brainstate.nn.GLU.__doc__
     __module__ = 'brainscale.nn'
 
 
-class GELU(bst.nn.GELU):
-    __doc__ = bst.nn.GELU.__doc__
+class GELU(brainstate.nn.GELU):
+    __doc__ = brainstate.nn.GELU.__doc__
     __module__ = 'brainscale.nn'
 
 
-class Hardshrink(bst.nn.Hardshrink):
-    __doc__ = bst.nn.Hardshrink.__doc__
+class Hardshrink(brainstate.nn.Hardshrink):
+    __doc__ = brainstate.nn.Hardshrink.__doc__
     __module__ = 'brainscale.nn'
 
 
-class LeakyReLU(bst.nn.LeakyReLU):
-    __doc__ = bst.nn.LeakyReLU.__doc__
+class LeakyReLU(brainstate.nn.LeakyReLU):
+    __doc__ = brainstate.nn.LeakyReLU.__doc__
     __module__ = 'brainscale.nn'
 
 
-class LogSigmoid(bst.nn.LogSigmoid):
-    __doc__ = bst.nn.LogSigmoid.__doc__
+class LogSigmoid(brainstate.nn.LogSigmoid):
+    __doc__ = brainstate.nn.LogSigmoid.__doc__
     __module__ = 'brainscale.nn'
 
 
-class Softplus(bst.nn.Softplus):
-    __doc__ = bst.nn.Softplus.__doc__
+class Softplus(brainstate.nn.Softplus):
+    __doc__ = brainstate.nn.Softplus.__doc__
     __module__ = 'brainscale.nn'
 
 
-class Softshrink(bst.nn.Softshrink):
-    __doc__ = bst.nn.Softshrink.__doc__
+class Softshrink(brainstate.nn.Softshrink):
+    __doc__ = brainstate.nn.Softshrink.__doc__
     __module__ = 'brainscale.nn'
 
 
-class PReLU(bst.nn.PReLU):
-    __doc__ = bst.nn.PReLU.__doc__
+class PReLU(brainstate.nn.PReLU):
+    __doc__ = brainstate.nn.PReLU.__doc__
     __module__ = 'brainscale.nn'
 
 
-class Softsign(bst.nn.Softsign):
-    __doc__ = bst.nn.Softsign.__doc__
+class Softsign(brainstate.nn.Softsign):
+    __doc__ = brainstate.nn.Softsign.__doc__
     __module__ = 'brainscale.nn'
 
 
-class Tanhshrink(bst.nn.Tanhshrink):
-    __doc__ = bst.nn.Tanhshrink.__doc__
+class Tanhshrink(brainstate.nn.Tanhshrink):
+    __doc__ = brainstate.nn.Tanhshrink.__doc__
     __module__ = 'brainscale.nn'
 
 
-class Softmin(bst.nn.Softmin):
-    __doc__ = bst.nn.Softmin.__doc__
+class Softmin(brainstate.nn.Softmin):
+    __doc__ = brainstate.nn.Softmin.__doc__
     __module__ = 'brainscale.nn'
 
 
-class Softmax(bst.nn.Softmax):
-    __doc__ = bst.nn.Softmax.__doc__
+class Softmax(brainstate.nn.Softmax):
+    __doc__ = brainstate.nn.Softmax.__doc__
     __module__ = 'brainscale.nn'
 
 
-class Softmax2d(bst.nn.Softmax2d):
-    __doc__ = bst.nn.Softmax2d.__doc__
+class Softmax2d(brainstate.nn.Softmax2d):
+    __doc__ = brainstate.nn.Softmax2d.__doc__
     __module__ = 'brainscale.nn'
 
 
-class LogSoftmax(bst.nn.LogSoftmax):
-    __doc__ = bst.nn.LogSoftmax.__doc__
+class LogSoftmax(brainstate.nn.LogSoftmax):
+    __doc__ = brainstate.nn.LogSoftmax.__doc__
     __module__ = 'brainscale.nn'
 
 
-class Dropout(bst.nn.Dropout):
-    __doc__ = bst.nn.Dropout.__doc__
+class Dropout(brainstate.nn.Dropout):
+    __doc__ = brainstate.nn.Dropout.__doc__
     __module__ = 'brainscale.nn'
 
 
-class Dropout1d(bst.nn.Dropout1d):
-    __doc__ = bst.nn.Dropout1d.__doc__
+class Dropout1d(brainstate.nn.Dropout1d):
+    __doc__ = brainstate.nn.Dropout1d.__doc__
     __module__ = 'brainscale.nn'
 
 
-class Dropout2d(bst.nn.Dropout2d):
-    __doc__ = bst.nn.Dropout2d.__doc__
+class Dropout2d(brainstate.nn.Dropout2d):
+    __doc__ = brainstate.nn.Dropout2d.__doc__
     __module__ = 'brainscale.nn'
 
 
-class Dropout3d(bst.nn.Dropout3d):
-    __doc__ = bst.nn.Dropout3d.__doc__
+class Dropout3d(brainstate.nn.Dropout3d):
+    __doc__ = brainstate.nn.Dropout3d.__doc__
     __module__ = 'brainscale.nn'
 
 
-class Identity(bst.nn.Identity):
-    __doc__ = bst.nn.Identity.__doc__
+class Identity(brainstate.nn.Identity):
+    __doc__ = brainstate.nn.Identity.__doc__
     __module__ = 'brainscale.nn'
 
 
-class SpikeBitwise(bst.nn.SpikeBitwise):
-    __doc__ = bst.nn.SpikeBitwise.__doc__
+class SpikeBitwise(brainstate.nn.SpikeBitwise):
+    __doc__ = brainstate.nn.SpikeBitwise.__doc__
     __module__ = 'brainscale.nn'
