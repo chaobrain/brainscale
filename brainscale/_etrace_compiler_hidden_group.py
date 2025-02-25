@@ -735,17 +735,18 @@ def write_jaxpr_of_hidden_group_transition(
     all_invars = set()
     all_outvars = set()
     for invar in hidden_invars:
-        transition = hidden_invar_to_transition[invar]
-        for eq in transition.transition_jaxpr.eqns:
-            this_eq_exist = False
-            for outvar in eq.outvars:
-                if outvar in all_outvars:
-                    this_eq_exist = True
-                    break
-            if not this_eq_exist:
-                eqns.append(eq.replace())
-                all_invars.update([invar for invar in eq.invars if not isinstance(invar, Literal)])
-                all_outvars.update(eq.outvars)
+        if invar in hidden_invar_to_transition:
+            transition = hidden_invar_to_transition[invar]
+            for eq in transition.transition_jaxpr.eqns:
+                this_eq_exist = False
+                for outvar in eq.outvars:
+                    if outvar in all_outvars:
+                        this_eq_exist = True
+                        break
+                if not this_eq_exist:
+                    eqns.append(eq.replace())
+                    all_invars.update([invar for invar in eq.invars if not isinstance(invar, Literal)])
+                    all_outvars.update(eq.outvars)
     other_invars = all_invars.difference(all_outvars).difference(hidden_invars)
     other_invars = list(other_invars)
 
@@ -796,12 +797,20 @@ def group_merging(groups, version: int = 1) -> List[frozenset[HiddenOutVar]]:
          (h_4, h_5)]
 
 
+    This function takes a list of hidden groups and merges them if they share
+    any common hidden states. The merging process is controlled by the specified
+    version of the algorithm.
+
     Args:
-        groups: The hidden groups.
-        version: The version of the hidden group merging algorithm. Default is 1.
+        groups: A list of hidden groups, where each group is a collection of
+            hidden states represented as frozensets.
+        version: An integer specifying the version of the merging algorithm to use.
+            Default is 1. Version 0 and 1 are supported, with version 1 being
+            more efficient and readable.
 
     Returns:
-        The merged hidden groups.
+        A list of merged hidden groups, where each group is a frozenset of
+        HiddenOutVar objects. The groups are merged based on shared hidden states.
     """
 
     if version == 0:

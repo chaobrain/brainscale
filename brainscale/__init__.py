@@ -66,6 +66,8 @@ from brainscale._etrace_operators import (
     ElemWiseOp,
     MatMulOp,
     LoraOp,
+    ConvOp,
+    SpMVOp,
 )
 from brainscale._etrace_vjp_algorithms import (
     ETraceVjpAlgorithm,

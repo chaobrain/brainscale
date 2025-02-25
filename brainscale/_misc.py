@@ -20,12 +20,12 @@ import warnings
 from enum import Enum
 from typing import Sequence
 
-import brainstate as bst
+import brainstate
 import brainunit as u
 import jax.tree
 
 from ._compatible_imports import Var
-from ._typing import Path
+from ._typing import Path, ETraceDF_Key, ETraceWG_Key
 
 
 def _remove_quantity(tree):
@@ -71,6 +71,19 @@ def check_dict_keys(
 
 
 def hid_group_key(hidden_group_id: int) -> str:
+    """
+    Generate a key for a hidden group based on its ID.
+
+    Parameters
+    ----------
+    hidden_group_id : int
+        The ID of the hidden group.
+
+    Returns
+    -------
+    str
+        A string key representing the hidden group.
+    """
     assert isinstance(hidden_group_id, int), f'hidden_group_id must be an int, but got {hidden_group_id}.'
     return f'hidden_group_{hidden_group_id}'
 
@@ -78,7 +91,22 @@ def hid_group_key(hidden_group_id: int) -> str:
 def etrace_df_key(
     y_key: Var,
     hidden_group_id: int,
-):
+) -> ETraceDF_Key:
+    """
+    Generate a key for the eligibility trace dataframe.
+
+    Parameters
+    ----------
+    y_key : Var
+        The variable key associated with the trace.
+    hidden_group_id : int
+        The ID of the hidden group.
+
+    Returns
+    -------
+    tuple
+        A tuple containing the variable key and a string key representing the hidden group.
+    """
     assert isinstance(y_key, Var), f'y_key must be a Var, but got {y_key}.'
     return (y_key, hid_group_key(hidden_group_id))
 
@@ -87,15 +115,46 @@ def etrace_param_key(
     weight_path: Path,
     y_key: Var,
     hidden_group_id: int,
-):
+) -> ETraceWG_Key:
+    """
+    Generate a key for the eligibility trace parameter.
+
+    Parameters
+    ----------
+    weight_path : Path
+        The path to the weight, represented as a list or tuple of strings.
+    y_key : Var
+        The variable key associated with the trace.
+    hidden_group_id : int
+        The ID of the hidden group.
+
+    Returns
+    -------
+    tuple
+        A tuple containing the weight path, variable key, and a string key representing the hidden group.
+    """
     assert isinstance(weight_path, (list, tuple)), f'weight_path must be a list or tuple, but got {weight_path}.'
-    assert all(isinstance(x, str) for x in weight_path), f'weight_path must be a list of str, but got {weight_path}.'
+    assert all(
+        isinstance(x, (str, int)) for x in weight_path), f'weight_path must be a list of str, but got {weight_path}.'
     assert isinstance(y_key, Var), f'y_key must be a Var, but got {y_key}.'
     return (weight_path, y_key, hid_group_key(hidden_group_id))
 
 
-def unknown_state_path(i: int) -> str:
-    return f'_unknown_path_{i}'
+def unknown_state_path(i: int) -> Path:
+    """
+    Generate a path for an unknown state.
+
+    Parameters
+    ----------
+    i : int
+        An integer representing the index of the unknown state.
+
+    Returns
+    -------
+    Path
+        A tuple containing a string that represents the path of the unknown state.
+    """
+    return (f'_unknown_path_{i}',)
 
 
 def _dimensionless(x):
@@ -106,6 +165,23 @@ def _dimensionless(x):
 
 
 def remove_units(xs):
+    """
+    Remove units from a tree structure of quantities.
+
+    This function traverses a tree structure and removes the units from any
+    quantities found, leaving only the dimensionless values.
+
+    Parameters
+    ----------
+    xs : Any
+        The tree structure containing quantities with units.
+
+    Returns
+    -------
+    Any
+        A tree structure with the same shape as `xs`, but with units removed
+        from any quantities.
+    """
     return jax.tree.map(
         _dimensionless,
         xs,
@@ -117,6 +193,28 @@ git_issue_addr = 'https://github.com/chaobrain/brainscale/issues'
 
 
 def deprecation_getattr(module, deprecations):
+    """
+    Create a custom getattr function to handle deprecated attributes.
+
+    This function generates a custom getattr function for a module, which
+    checks if an attribute is deprecated and handles it accordingly by
+    raising an AttributeError or issuing a warning.
+
+    Parameters
+    ----------
+    module : str
+        The name of the module for which the custom getattr function is created.
+    deprecations : dict
+        A dictionary where keys are attribute names and values are tuples
+        containing a deprecation message and an optional function. If the
+        function is None, accessing the attribute will raise an AttributeError.
+
+    Returns
+    -------
+    function
+        A custom getattr function that handles deprecated attributes.
+    """
+
     def getattr(name):
         if name in deprecations:
             message, fn = deprecations[name]
@@ -130,26 +228,47 @@ def deprecation_getattr(module, deprecations):
 
 
 class NotSupportedError(Exception):
+    """
+    Exception raised for operations that are not supported.
+
+    This exception is used to indicate that a particular operation or
+    functionality is not supported within the context of the application.
+
+    """
     __module__ = 'brainscale'
 
 
 class CompilationError(Exception):
+    """
+    Exception raised for errors that occur during the compilation process.
+
+    This exception is used to indicate that a compilation error has occurred
+    within the context of the application.
+    """
     __module__ = 'brainscale'
 
 
-def state_traceback(states: Sequence[bst.State]):
+def state_traceback(states: Sequence[brainstate.State]):
     """
-    Traceback the states of the brain model.
+    Generate a traceback string for a sequence of brain model states.
+
+    This function iterates over a sequence of brain model states and constructs
+    a string that contains detailed traceback information for each state. The
+    traceback includes the index of the state, its representation, and the
+    source information where it was defined.
 
     Parameters
     ----------
     states : Sequence[bst.State]
-      The states of the brain model.
+        A sequence of states from the brain model. Each state should be an
+        instance of `bst.State` and contain source information for traceback.
 
     Returns
     -------
     str
-      The traceback information of the states.
+        A string containing the traceback information for each state in the
+        sequence. Each state's traceback includes its index, representation,
+        and source definition details.
     """
     state_info = []
     for i, state in enumerate(states):
@@ -162,6 +281,24 @@ def state_traceback(states: Sequence[bst.State]):
 
 
 def set_module_as(module: str = 'brainscale'):
+    """
+    Decorator to set the module attribute of a function.
+
+    This function returns a decorator that sets the `__module__` attribute
+    of a function to the specified module name.
+
+    Parameters
+    ----------
+    module : str, optional
+        The name of the module to set for the function, by default 'brainscale'.
+
+    Returns
+    -------
+    function
+        A decorator function that sets the `__module__` attribute of the
+        decorated function to the specified module name.
+    """
+
     def wrapper(fun: callable):
         fun.__module__ = module
         return fun
@@ -170,8 +307,37 @@ def set_module_as(module: str = 'brainscale'):
 
 
 class BaseEnum(Enum):
+    """
+    Base class for creating enumerations with additional utility methods.
+
+    This class extends the standard Enum class to provide additional
+    methods for retrieving enumeration members by name or directly
+    from an instance.
+    """
+
     @classmethod
     def get_by_name(cls, name: str):
+        """
+        Retrieve an enumeration member by its name.
+
+        This method searches for an enumeration member within the class
+        that matches the provided name and returns it.
+
+        Parameters
+        ----------
+        name : str
+            The name of the enumeration member to retrieve.
+
+        Returns
+        -------
+        Enum
+            The enumeration member corresponding to the provided name.
+
+        Raises
+        ------
+        ValueError
+            If no enumeration member with the specified name is found.
+        """
         all_names = []
         for item in cls:
             all_names.append(item.name)
@@ -181,6 +347,31 @@ class BaseEnum(Enum):
 
     @classmethod
     def get(cls, item: str | Enum):
+        """
+        Retrieve an enumeration member by its name or directly if it is an Enum.
+
+        This method returns the enumeration member if the provided item is
+        already an instance of the enumeration. If the item is a string, it
+        attempts to find the corresponding enumeration member by name.
+
+        Parameters
+        ----------
+        item : str | Enum
+            The name of the enumeration member to retrieve, or an instance
+            of the enumeration.
+
+        Returns
+        -------
+        Enum
+            The enumeration member corresponding to the provided item.
+
+        Raises
+        ------
+        ValueError
+            If the item is a string and no enumeration member with the
+            specified name is found, or if the item is neither a string
+            nor an instance of the enumeration.
+        """
         if isinstance(item, cls):
             return item
         elif isinstance(item, str):

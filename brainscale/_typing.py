@@ -19,20 +19,20 @@ from __future__ import annotations
 
 from typing import Dict, Sequence, Union, FrozenSet, List, Tuple
 
-import brainstate as bst
+import brainstate
 import jax
 
 from ._compatible_imports import Var
 
-ArrayLike = bst.typing.ArrayLike
-DType = bst.typing.DType
-DTypeLike = bst.typing.DTypeLike
+ArrayLike = brainstate.typing.ArrayLike
+DType = brainstate.typing.DType
+DTypeLike = brainstate.typing.DTypeLike
 
 # --- types --- #
-PyTree = bst.typing.PyTree
+PyTree = brainstate.typing.PyTree
 StateID = int
 WeightID = int
-Size = bst.typing.Size
+Size = brainstate.typing.Size
 Axis = int
 Axes = Union[int, Sequence[int]]
 Path = Tuple[str, ...]

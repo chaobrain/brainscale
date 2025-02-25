@@ -17,24 +17,36 @@ from __future__ import annotations
 
 from typing import Sequence, Tuple, List, Hashable, Dict
 
-import brainstate as bst
+import brainstate
 
 from ._etrace_concepts import ETraceState, ETraceParam
 from ._typing import Path, WeightVals, HiddenVals, StateVals
 
 
 def assign_state_values(
-    states: Sequence[bst.State],
-    state_values: Sequence[bst.typing.PyTree],
+    states: Sequence[brainstate.State],
+    state_values: Sequence[brainstate.typing.PyTree],
     write: bool = True
 ):
     """
-    Assign values to the states.
+    Assign or restore values to a sequence of states.
 
-    Args:
-      states: The states to be assigned.
-      state_values: The values to be assigned.
-      write: Whether to write the values to the states. If False, the values will be restored.
+    This function assigns new values to the given states or restores their previous values
+    based on the `write` flag.
+
+    Parameters:
+    -----------
+    states : Sequence[bst.State]
+        A sequence of state objects to which values will be assigned or restored.
+    state_values : Sequence[bst.typing.PyTree]
+        A sequence of values corresponding to each state in `states`.
+    write : bool, optional
+        A flag indicating whether to assign (`True`) or restore (`False`) the values.
+        Defaults to `True`.
+
+    Returns:
+    --------
+    None
     """
     if write:
         for st, val in zip(states, state_values):
@@ -45,17 +57,32 @@ def assign_state_values(
 
 
 def assign_dict_state_values(
-    states: Dict[Path, bst.State],
-    state_values: Dict[Path, bst.typing.PyTree],
+    states: Dict[Path, brainstate.State],
+    state_values: Dict[Path, brainstate.typing.PyTree],
     write: bool = True
 ):
     """
-    Assign values to the states.
+    Assign or restore values to a dictionary of states.
 
-    Args:
-      states: The states to be assigned.
-      state_values: The values to be assigned.
-      write: Whether to write the values to the states. If False, the values will be restored.
+    This function assigns new values to the given states or restores their previous values
+    based on the `write` flag. It ensures that the keys of the `states` and `state_values`
+    dictionaries match before proceeding with the assignment or restoration.
+
+    Parameters:
+    -----------
+    states : Dict[Path, bst.State]
+        A dictionary where keys are paths and values are state objects
+        to which values will be assigned or restored.
+    state_values : Dict[Path, bst.typing.PyTree]
+        A dictionary where keys are paths and values are the values
+        corresponding to each state in `states`.
+    write : bool, optional
+        A flag indicating whether to assign (`True`) or restore (`False`) the values.
+        Defaults to `True`.
+
+    Returns:
+    --------
+    None
     """
     if set(states.keys()) != set(state_values.keys()):
         raise ValueError('The keys of states and state_values must be the same.')
@@ -69,17 +96,32 @@ def assign_dict_state_values(
 
 
 def assign_state_values_v2(
-    states: Dict[Hashable, bst.State],
-    state_values: Dict[Hashable, bst.typing.PyTree],
+    states: Dict[Hashable, brainstate.State],
+    state_values: Dict[Hashable, brainstate.typing.PyTree],
     write: bool = True
 ):
     """
-    Assign values to the states.
+    Assign or restore values to a dictionary of states.
 
-    Args:
-      states: The states to be assigned.
-      state_values: The values to be assigned.
-      write: Whether to write the values to the states. If False, the values will be restored.
+    This function assigns new values to the given states or restores their previous values
+    based on the `write` flag. It ensures that the keys of the `states` and `state_values`
+    dictionaries match before proceeding with the assignment or restoration.
+
+    Parameters:
+    -----------
+    states : Dict[Hashable, bst.State]
+        A dictionary where keys are hashable identifiers and values are state objects
+        to which values will be assigned or restored.
+    state_values : Dict[Hashable, bst.typing.PyTree]
+        A dictionary where keys are hashable identifiers and values are the values
+        corresponding to each state in `states`.
+    write : bool, optional
+        A flag indicating whether to assign (`True`) or restore (`False`) the values.
+        Defaults to `True`.
+
+    Returns:
+    --------
+    None
     """
     assert set(states.keys()) == set(state_values.keys()), (
         f'The keys of states and state_values must be '
@@ -97,25 +139,33 @@ def assign_state_values_v2(
 
 
 def split_states(
-    states: Sequence[bst.State]
-) -> Tuple[List[bst.ParamState], List[ETraceState], List[bst.State]]:
+    states: Sequence[brainstate.State]
+) -> Tuple[List[brainstate.ParamState], List[ETraceState], List[brainstate.State]]:
     """
     Split the states into weight states, hidden states, and other states.
 
-    Args:
-      states: The states to be split.
+    This function categorizes a sequence of states into three distinct groups:
+    weight parameter states, hidden states, and other states. It helps in organizing
+    the states based on their types for further processing or analysis.
+
+    Parameters:
+    -----------
+    states : Sequence[bst.State]
+        A sequence of state objects to be split into different categories.
 
     Returns:
-      param_states: The weight parameter states.
-      hidden_states: The hidden states.
-      other_states: The other states.
-
+    --------
+    Tuple[List[bst.ParamState], List[ETraceState], List[bst.State]]
+        A tuple containing three lists:
+        - param_states: The list of weight parameter states.
+        - hidden_states: The list of hidden states.
+        - other_states: The list of other states that do not fall into the first two categories.
     """
     param_states, hidden_states, other_states = [], [], []
     for st in states:
         if isinstance(st, ETraceState):  # etrace hidden variables
             hidden_states.append(st)
-        elif isinstance(st, bst.ParamState):  # including all weight states, ParamState, ETraceParam
+        elif isinstance(st, brainstate.ParamState):  # including all weight states, ParamState, ETraceParam
             param_states.append(st)
         else:
             other_states.append(st)
@@ -123,29 +173,33 @@ def split_states(
 
 
 def split_states_v2(
-    states: Sequence[bst.State]
+    states: Sequence[brainstate.State]
 ) -> Tuple[
     List[ETraceParam],
     List[ETraceState],
-    List[bst.ParamState],
-    List[bst.State]
+    List[brainstate.ParamState],
+    List[brainstate.State]
 ]:
     """
-    Split the states into weight states, hidden states, and other states.
+    Categorize a sequence of states into etrace parameter states, hidden states, 
+    parameter states, and other states.
 
-    .. note::
+    This function is crucial for determining which ParamState should be trained 
+    with the eligibility trace and which should not.
 
-        This function is important since it determines what ParamState should be
-        trained with the eligibility trace and what should not.
-
-    Args:
-      states: The states to be split.
+    Parameters:
+    -----------
+    states : Sequence[bst.State]
+        A sequence of state objects to be categorized.
 
     Returns:
-      etrace_param_states: The etrace parameter states.
-      hidden_states: The hidden states.
-      param_states: The other kinds of parameter states.
-      other_states: The other states.
+    --------
+    Tuple[List[ETraceParam], List[ETraceState], List[bst.ParamState], List[bst.State]]
+        A tuple containing four lists:
+        - etrace_param_states: The list of etrace parameter states.
+        - hidden_states: The list of hidden states.
+        - param_states: The list of other kinds of parameter states.
+        - other_states: The list of other states that do not fall into the first three categories.
     """
     etrace_param_states, hidden_states, param_states, other_states = [], [], [], []
     for st in states:
@@ -162,7 +216,7 @@ def split_states_v2(
                 param_states.append(st)
 
         else:
-            if isinstance(st, bst.ParamState):
+            if isinstance(st, brainstate.ParamState):
                 # The ParamState which is not an ETraceParam,
                 # should be treated as a normal parameter state
                 # and be trained with spatial gradients only
@@ -173,13 +227,13 @@ def split_states_v2(
 
 
 def sequence_split_state_values(
-    states: Sequence[bst.State],
-    state_values: List[bst.typing.PyTree],
+    states: Sequence[brainstate.State],
+    state_values: List[brainstate.typing.PyTree],
     include_weight: bool = True
 ) -> (
-    Tuple[Sequence[bst.typing.PyTree], Sequence[bst.typing.PyTree], Sequence[bst.typing.PyTree]]
+    Tuple[Sequence[brainstate.typing.PyTree], Sequence[brainstate.typing.PyTree], Sequence[brainstate.typing.PyTree]]
     |
-    Tuple[Sequence[bst.typing.PyTree], Sequence[bst.typing.PyTree]]
+    Tuple[Sequence[brainstate.typing.PyTree], Sequence[brainstate.typing.PyTree]]
 ):
     """
     Split the state values into the weight values, the hidden values, and the other state values.
@@ -212,7 +266,7 @@ def sequence_split_state_values(
     if include_weight:
         weight_vals, hidden_vals, other_vals = [], [], []
         for st, val in zip(states, state_values):
-            if isinstance(st, bst.ParamState):
+            if isinstance(st, brainstate.ParamState):
                 weight_vals.append(val)
             elif isinstance(st, ETraceState):
                 hidden_vals.append(val)
@@ -222,7 +276,7 @@ def sequence_split_state_values(
     else:
         hidden_vals, other_vals = [], []
         for st, val in zip(states, state_values):
-            if isinstance(st, bst.ParamState):
+            if isinstance(st, brainstate.ParamState):
                 pass
             elif isinstance(st, ETraceState):
                 hidden_vals.append(val)
@@ -232,15 +286,36 @@ def sequence_split_state_values(
 
 
 def dict_split_state_values(
-    states: Dict[Path, bst.State],
-    state_values: Dict[Path, bst.typing.PyTree],
+    states: Dict[Path, brainstate.State],
+    state_values: Dict[Path, brainstate.typing.PyTree],
 ) -> Tuple[WeightVals, HiddenVals, StateVals]:
+    """
+    Split the state values into weight values, hidden values, and other state values.
+
+    This function categorizes the given state values into three distinct groups based on the type
+    of the corresponding state: weight values, hidden values, and other state values.
+
+    Parameters:
+    -----------
+    states : Dict[Path, bst.State]
+        A dictionary where keys are paths and values are state objects to be categorized.
+    state_values : Dict[Path, bst.typing.PyTree]
+        A dictionary where keys are paths and values are the values associated with each state.
+
+    Returns:
+    --------
+    Tuple[WeightVals, HiddenVals, StateVals]
+        A tuple containing three dictionaries:
+        - weight_vals: The values of the weight parameter states.
+        - hidden_vals: The values of the hidden states.
+        - other_vals: The values of the other states.
+    """
     weight_vals = dict()
     hidden_vals = dict()
     other_vals = dict()
     for path, state in states.items():
         val = state_values[path]
-        if isinstance(state, bst.ParamState):
+        if isinstance(state, brainstate.ParamState):
             weight_vals[path] = val
         elif isinstance(state, ETraceState):
             hidden_vals[path] = val
@@ -250,27 +325,34 @@ def dict_split_state_values(
 
 
 def split_dict_states_v1(
-    states: Dict[Path, bst.State]
+    states: Dict[Path, brainstate.State]
 ) -> Tuple[
     Dict[Path, ETraceState],
-    Dict[Path, bst.ParamState],
-    Dict[Path, bst.State]
+    Dict[Path, brainstate.ParamState],
+    Dict[Path, brainstate.State]
 ]:
     """
-    Split the states into weight states, hidden states, and other states.
+    Categorize the given states into hidden states, parameter states, and other states.
+
+    This function is crucial for determining which ParamState should be trained with the eligibility trace.
 
     .. note::
 
         This function is important since it determines what ParamState should be
         trained with the eligibility trace and what should not.
 
-    Args:
-      states: The states to be split.
+    Parameters:
+    -----------
+    states : Dict[Path, bst.State]
+        A dictionary where keys are paths and values are state objects to be split.
 
     Returns:
-      hidden_states: The hidden states.
-      param_states: The other kinds of parameter states.
-      other_states: The other states.
+    --------
+    Tuple[Dict[Path, ETraceState], Dict[Path, bst.ParamState], Dict[Path, bst.State]]
+        A tuple containing three dictionaries:
+        - hidden_states: The hidden states.
+        - param_states: The other kinds of parameter states.
+        - other_states: The other states.
     """
     hidden_states = dict()
     param_states = dict()
@@ -278,7 +360,7 @@ def split_dict_states_v1(
     for key, st in states.items():
         if isinstance(st, ETraceState):
             hidden_states[key] = st
-        elif isinstance(st, bst.ParamState):
+        elif isinstance(st, brainstate.ParamState):
             # The ParamState which is not an ETraceParam,
             # should be treated as a normal parameter state
             # and be trained with spatial gradients only
@@ -289,29 +371,38 @@ def split_dict_states_v1(
 
 
 def split_dict_states_v2(
-    states: Dict[Path, bst.State]
+    states: Dict[Path, brainstate.State]
 ) -> Tuple[
     Dict[Path, ETraceParam],
     Dict[Path, ETraceState],
-    Dict[Path, bst.ParamState],
-    Dict[Path, bst.State]
+    Dict[Path, brainstate.ParamState],
+    Dict[Path, brainstate.State]
 ]:
     """
-    Split the states into weight states, hidden states, and other states.
+    Split the states into etrace parameter states, hidden states, parameter states, and other states.
 
     .. note::
 
         This function is important since it determines what ParamState should be
         trained with the eligibility trace and what should not.
 
-    Args:
-      states: The states to be split.
+    This function categorizes the given states into four distinct groups based on their types:
+    etrace parameter states, hidden states, parameter states, and other states. It is crucial
+    for determining which ParamState should be trained with the eligibility trace.
+
+    Parameters:
+    -----------
+    states : Dict[Path, bst.State]
+        A dictionary where keys are paths and values are state objects to be split.
 
     Returns:
-      etrace_param_states: The etrace parameter states.
-      hidden_states: The hidden states.
-      param_states: The other kinds of parameter states.
-      other_states: The other states.
+    --------
+    Tuple[Dict[Path, ETraceParam], Dict[Path, ETraceState], Dict[Path, bst.ParamState], Dict[Path, bst.State]]
+        A tuple containing four dictionaries:
+        - etrace_param_states: The etrace parameter states.
+        - hidden_states: The hidden states.
+        - param_states: The other kinds of parameter states.
+        - other_states: The other states.
     """
     etrace_param_states = dict()
     hidden_states = dict()
@@ -330,7 +421,7 @@ def split_dict_states_v2(
                 # and be trained with spatial gradients only
                 param_states[key] = st
         else:
-            if isinstance(st, bst.ParamState):
+            if isinstance(st, brainstate.ParamState):
                 # The ParamState which is not an ETraceParam,
                 # should be treated as a normal parameter state
                 # and be trained with spatial gradients only
