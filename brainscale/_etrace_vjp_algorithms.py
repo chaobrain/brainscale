@@ -80,7 +80,9 @@ from ._typing import (
 __all__ = [
     'ETraceVjpAlgorithm',  # the base class for the eligibility trace algorithm with the VJP gradient computation
     'IODimVjpAlgorithm',  # the diagonally approximated algorithm with the input-output dimension complexity
+    'ES_D_RTRL',
     'ParamDimVjpAlgorithm',  # the diagonally approximated algorithm with the parameter dimension complexity
+    'D_RTRL',
     'HybridDimVjpAlgorithm',  # the diagonally approximated algorithm with hybrid complexity (either I/O or parameter)
 ]
 
@@ -2848,3 +2850,10 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
             for path, dg in dl_to_etws_at_t.items():
                 _update_dict(dG_weights, path, dg, error_when_no_key=True)
         return dG_weights
+
+
+
+ES_D_RTRL = IODimVjpAlgorithm
+D_RTRL = ParamDimVjpAlgorithm
+
+
