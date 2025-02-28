@@ -57,7 +57,7 @@ class GRUNet(bst.nn.Module):
             n_in = n_rec
         self.layer = bst.nn.Sequential(*layers)
         # 构建输出层
-        self.readout = brainscale.nn.Linear(n_rec, n_out, as_etrace_weight=False)
+        self.readout = brainscale.nn.Linear(n_rec, n_out)
 
     def update(self, x):
         return self.readout(self.layer(x))
@@ -120,10 +120,10 @@ class OnlineTrainer(Trainer):
 
         # 初始化在线学习模型
         # 此处，我们需要使用 mode 来指定使用数据集是具有 batch 维度的
-        model = brainscale.DiagParamDimAlgorithm(self.target, mode=bst.mixin.Batching())
+        model = brainscale.ParamDimVjpAlgorithm(self.target, mode=bst.mixin.Batching())
 
         # 使用一个样例数据编译在线学习eligibility trace
-        model.compile_etrace_graph(inputs[0])
+        model.compile_graph(inputs[0])
 
         def _etrace_loss(inp, tar):
             # call the model

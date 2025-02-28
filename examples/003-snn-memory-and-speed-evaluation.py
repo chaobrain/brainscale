@@ -131,12 +131,12 @@ class _LIF_Delta_Dense_Layer(bst.nn.Module):
         ff_scale: float = 1.,
     ):
         super().__init__()
-        self.neu = brainscale.LIF(n_rec, tau=tau_mem, spk_fun=spk_fun, spk_reset=spk_reset, V_th=V_th)
+        self.neu = brainscale.nn.LIF(n_rec, tau=tau_mem, spk_fun=spk_fun, spk_reset=spk_reset, V_th=V_th)
         rec_init: Callable = bst.init.KaimingNormal(rec_scale)
         ff_init: Callable = bst.init.KaimingNormal(ff_scale)
         w_init = jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0)
         self.syn = bst.nn.DeltaProj(
-            comm=brainscale.Linear(n_in + n_rec, n_rec, w_init=w_init),
+            comm=brainscale.nn.Linear(n_in + n_rec, n_rec, w_init=w_init),
             post=self.neu
         )
 
@@ -161,13 +161,13 @@ class _LIF_ExpCu_Dense_Layer(bst.nn.Module):
         ff_scale: float = 1.,
     ):
         super().__init__()
-        self.neu = brainscale.LIF(n_rec, tau=tau_mem, spk_fun=spk_fun, spk_reset=spk_reset, V_th=V_th)
+        self.neu = brainscale.nn.LIF(n_rec, tau=tau_mem, spk_fun=spk_fun, spk_reset=spk_reset, V_th=V_th)
         rec_init: Callable = bst.init.KaimingNormal(rec_scale)
         ff_init: Callable = bst.init.KaimingNormal(ff_scale)
         w_init = jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0)
         self.syn = bst.nn.AlignPostProj(
-            comm=brainscale.Linear(n_in + n_rec, n_rec, w_init),
-            syn=brainscale.Expon.delayed(size=n_rec, tau=tau_syn),
+            comm=brainscale.nn.Linear(n_in + n_rec, n_rec, w_init),
+            syn=brainscale.nn.Expon.delayed(size=n_rec, tau=tau_syn),
             out=bst.nn.CUBA.desc(),
             post=self.neu
         )
@@ -225,7 +225,7 @@ class ETraceNet(bst.nn.Module):
             self.rec_layers.append(rec)
 
         # output layer
-        self.out = brainscale.LeakyRateReadout(
+        self.out = brainscale.nn.LeakyRateReadout(
             in_size=n_rec,
             out_size=n_out,
             tau=args.tau_o,
