@@ -745,12 +745,13 @@ def write_jaxpr_of_hidden_group_transition(
         if invar in hidden_invar_to_transition:
             transition = hidden_invar_to_transition[invar]
             for eq in transition.transition_jaxpr.eqns:
-                this_eq_exist = False
-                for outvar in eq.outvars:
-                    if outvar in all_outvars:
-                        this_eq_exist = True
-                        break
-                if not this_eq_exist:
+                this_eq_exist = [outvar in all_outvars for outvar in eq.outvars]
+                # this_eq_exist = False
+                # for outvar in eq.outvars:
+                #     if outvar in all_outvars:
+                #         this_eq_exist = True
+                #         break
+                if not all(this_eq_exist):
                     eqns.append(eq.replace())
                     all_invars.update([invar for invar in eq.invars if not isinstance(invar, Literal)])
                     all_outvars.update(eq.outvars)
