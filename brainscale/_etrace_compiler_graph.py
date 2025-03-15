@@ -53,6 +53,19 @@ __all__ = [
 def order_hidden_group_index(
     hidden_groups: Sequence[HiddenGroup],
 ):
+    """
+    Verifies that hidden group indices match their positions in the sequence.
+
+    This function ensures that the index attribute of each HiddenGroup in the sequence
+    matches its position in the sequence. This validation is important for maintaining
+    the correct ordering of hidden groups in the eligibility trace compilation process.
+
+    Args:
+        hidden_groups (Sequence[HiddenGroup]): A sequence of HiddenGroup objects to validate.
+
+    Raises:
+        AssertionError: If any hidden group's index doesn't match its position in the sequence.
+    """
     for i, group in enumerate(hidden_groups):
         assert group.index == i, f"Hidden group index {group.index} should be equal to its position {i}."
 

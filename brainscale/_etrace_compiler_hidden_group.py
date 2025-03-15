@@ -307,6 +307,13 @@ def jacrev_last_dim(
 class HiddenToHiddenGroupTracer(NamedTuple):
     """
     The data structure for the tracing of the hidden-to-hidden states.
+
+    Attributes:
+        hidden_invar (Var): The input variable representing the hidden state.
+        connected_hidden_outvars (set[Var]): A set of output variables representing the connected hidden states.
+        other_invars (set[Var]): A set of other input variables involved in the tracing.
+        invar_needed_in_oth_eqns (set[Var]): A set of variables needed in other equations for trace analysis.
+        trace (List[JaxprEqn]): A list of JAX equations representing the trace of operations.
     """
     hidden_invar: Var
     connected_hidden_outvars: set[Var]
@@ -323,7 +330,20 @@ class HiddenToHiddenGroupTracer(NamedTuple):
 
 class Hidden2GroupTransition(NamedTuple):
     """
-    Hidden state transition.
+    Represents a hidden state transition in a computational graph.
+
+    This class captures the transition of hidden states from one time step to the next
+    within a neural network model. It includes information about the input hidden state,
+    the connected output hidden states, and the JAX program representation (jaxpr) that
+    defines the transition.
+
+    Attributes:
+        hidden_invar (Var): The input variable representing the hidden state at the previous time step.
+        hidden_path (Path): The path to the hidden state in the model hierarchy.
+        connected_hidden_outvars (List[Var]): A list of output variables representing the connected hidden states at the current time step.
+        connected_hidden_paths (List[Path]): A list of paths to the connected hidden states in the model hierarchy.
+        transition_jaxpr (Jaxpr): The JAX program representation for computing the hidden state transitions.
+        other_invars (List[Var]): A list of other input variables required for evaluating the transition_jaxpr.
     """
 
     # the hidden state h_i^{t-1}
