@@ -15,8 +15,8 @@
 
 # see brainscale documentations for more details.
 
-import brainstate as bst
-import braintools as bts
+import brainstate
+import braintools
 import brainunit as u
 import matplotlib.pyplot as plt
 import numpy as np
@@ -24,7 +24,7 @@ import numpy as np
 from snn_models import DMSDataset, GifNet, OnlineTrainer
 
 if __name__ == '__main__':
-    with bst.environ.context(dt=1. * u.ms):
+    with brainstate.environ.context(dt=1. * u.ms):
         data = DMSDataset(
             bg_fr=1. * u.Hz,
             t_fixation=10. * u.ms,
@@ -36,6 +36,7 @@ if __name__ == '__main__':
             batch_size=128,
             num_batch=100,
         )
+
         net = GifNet(
             n_in=data.num_inputs,
             n_rec=200,
@@ -45,20 +46,18 @@ if __name__ == '__main__':
             tau_I2=1500. * u.ms,
             A2=1. * u.mA,
         )
-
-        # net.verify(next(iter(data))[0], num_show=2)
+        net.verify(next(iter(data))[0], num_show=2)
 
         onliner = OnlineTrainer(
             target=net,
-            opt=bst.optim.Adam(lr=1e-3),
+            opt=brainstate.optim.Adam(lr=1e-3),
             dataset=data,
             n_sim=data.n_sim,
             x_fun=lambda x_local: np.transpose(x_local, (1, 0, 2))
         )
-
         losses, accs = onliner.f_train()
 
-    fig, gs = bts.visualize.get_figure(1, 2, 4., 5.)
+    fig, gs = braintools.visualize.get_figure(1, 2, 4., 5.)
     fig.add_subplot(gs[0, 0])
     plt.plot(losses)
     plt.xlabel('Epoch')

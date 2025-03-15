@@ -17,8 +17,8 @@
 from typing import Callable
 from typing import Iterable, Union
 
-import brainstate as bst
-import braintools as bts
+import brainstate
+import braintools
 import brainunit as u
 import jax
 import matplotlib.pyplot as plt
@@ -32,7 +32,7 @@ LOSS = float
 ACCURACY = float
 
 
-class GIF(bst.nn.Neuron):
+class GIF(brainstate.nn.Neuron):
     def __init__(
         self, size,
         V_rest=0. * u.mV,
@@ -41,30 +41,30 @@ class GIF(bst.nn.Neuron):
         tau=20. * u.ms,
         tau_I2=50. * u.ms,
         A2=0. * u.mA,
-        V_initializer: Callable = bst.init.ZeroInit(unit=u.mV),
-        I2_initializer: Callable = bst.init.ZeroInit(unit=u.mA),
-        spike_fun: Callable = bst.surrogate.ReluGrad(),
+        V_initializer: Callable = brainstate.init.ZeroInit(unit=u.mV),
+        I2_initializer: Callable = brainstate.init.ZeroInit(unit=u.mA),
+        spike_fun: Callable = brainstate.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
         name: str = None,
     ):
         super().__init__(size, name=name, spk_fun=spike_fun, spk_reset=spk_reset)
 
         # parameters
-        self.V_rest = bst.init.param(V_rest, self.varshape, allow_none=False)
-        self.V_th_inf = bst.init.param(V_th_inf, self.varshape, allow_none=False)
-        self.R = bst.init.param(R, self.varshape, allow_none=False)
-        self.tau = bst.init.param(tau, self.varshape, allow_none=False)
-        self.tau_I2 = bst.init.param(tau_I2, self.varshape, allow_none=False)
-        self.A2 = bst.init.param(A2, self.varshape, allow_none=False)
+        self.V_rest = brainstate.init.param(V_rest, self.varshape, allow_none=False)
+        self.V_th_inf = brainstate.init.param(V_th_inf, self.varshape, allow_none=False)
+        self.R = brainstate.init.param(R, self.varshape, allow_none=False)
+        self.tau = brainstate.init.param(tau, self.varshape, allow_none=False)
+        self.tau_I2 = brainstate.init.param(tau_I2, self.varshape, allow_none=False)
+        self.A2 = brainstate.init.param(A2, self.varshape, allow_none=False)
 
         # initializers
         self._V_initializer = V_initializer
         self._I2_initializer = I2_initializer
 
-    def init_state(self, batch_size=None):
+    def init_state(self):
         # 将模型用于在线学习，需要初始化状态变量
-        self.V = brainscale.ETraceState(bst.init.param(self._V_initializer, self.varshape, batch_size))
-        self.I2 = brainscale.ETraceState(bst.init.param(self._I2_initializer, self.varshape, batch_size))
+        self.V = brainscale.ETraceState(brainstate.init.param(self._V_initializer, self.varshape))
+        self.I2 = brainscale.ETraceState(brainstate.init.param(self._I2_initializer, self.varshape))
 
     def update(self, x=0.):
         # 如果前一时刻发放了脉冲，则将膜电位和适应性电流进行重置
@@ -73,9 +73,9 @@ class GIF(bst.nn.Neuron):
         last_V = self.V.value - self.V_th_inf * last_spk
         last_I2 = self.I2.value - self.A2 * last_spk
         # 更新状态
-        I2 = bst.nn.exp_euler_step(lambda i2: - i2 / self.tau_I2, last_I2)
-        V = bst.nn.exp_euler_step(lambda v, Iext: (- v + self.V_rest + self.R * Iext) / self.tau,
-                                  last_V, x + I2)
+        I2 = brainstate.nn.exp_euler_step(lambda i2: - i2 / self.tau_I2, last_I2)
+        V = brainstate.nn.exp_euler_step(lambda v, Iext: (- v + self.V_rest + self.R * Iext) / self.tau,
+                                         last_V, x + I2)
         self.I2.value = I2
         self.V.value = V
         # 输出
@@ -89,7 +89,7 @@ class GIF(bst.nn.Neuron):
         return spk
 
 
-class GifNet(bst.nn.Module):
+class GifNet(brainstate.nn.Module):
     def __init__(
         self,
         n_in: int,
@@ -106,8 +106,8 @@ class GifNet(bst.nn.Module):
         super().__init__()
 
         # 初始化权重
-        ff_init = bst.init.KaimingNormal(ff_scale, unit=u.mA)
-        rec_init = bst.init.KaimingNormal(rec_scale, unit=u.mA)
+        ff_init = brainstate.init.KaimingNormal(ff_scale, unit=u.mA)
+        rec_init = brainstate.init.KaimingNormal(rec_scale, unit=u.mA)
         w = u.math.concatenate([ff_init((n_in, n_rec)), rec_init((n_rec, n_rec))], axis=0)
 
         # 参数
@@ -116,17 +116,17 @@ class GifNet(bst.nn.Module):
         self.n_out = n_out
 
         # 模型层
-        self.ir2r = brainscale.nn.Linear(n_in + n_rec, n_rec, w_init=w, b_init=bst.init.ZeroInit(unit=u.mA))
-        self.exp = brainscale.nn.Expon(n_rec, tau=tau_syn, g_initializer=bst.init.ZeroInit(unit=u.mA))
+        self.ir2r = brainscale.nn.Linear(n_in + n_rec, n_rec, w_init=w, b_init=brainstate.init.ZeroInit(unit=u.mA))
+        self.exp = brainscale.nn.Expon(n_rec, tau=tau_syn, g_initializer=brainstate.init.ZeroInit(unit=u.mA))
         self.r = GIF(
             n_rec,
             V_rest=0. * u.mV,
             V_th_inf=1. * u.mV,
             A2=A2,
             tau=tau_neu,
-            tau_I2=bst.random.uniform(100. * u.ms, tau_I2 * 1.5, n_rec),
+            tau_I2=brainstate.random.uniform(100. * u.ms, tau_I2 * 1.5, n_rec),
         )
-        self.out = brainscale.nn.LeakyRateReadout(n_rec, n_out, tau=tau_o, w_init=bst.init.KaimingNormal())
+        self.out = brainscale.nn.LeakyRateReadout(n_rec, n_out, tau=tau_o, w_init=brainstate.init.KaimingNormal())
 
     def update(self, spikes):
         cond = self.ir2r(u.math.concatenate([spikes, self.r.get_spike()], axis=-1))
@@ -134,16 +134,22 @@ class GifNet(bst.nn.Module):
         return self.out(out)
 
     def verify(self, input_spikes, num_show=5, sps_inc=10.):
-        def _step(x):
-            out = self.update(x)
-            return out, self.r.get_spike(), self.r.V.value
-
         # 输入脉冲
         xs = np.transpose(input_spikes, (1, 0, 2))  # [n_steps, n_samples, n_in]
 
         # 运行仿真模型
-        bst.nn.init_all_states(self, xs.shape[1])
-        outs, sps, vs = bst.compile.for_loop(_step, xs)
+        @brainstate.augment.vmap_new_states(state_tag='new', axis_size=xs.shape[1])
+        def init():
+            brainstate.nn.init_all_states(self)
+
+        init()
+        model = brainstate.nn.Vmap(self, vmap_states='new')
+
+        outs, sps, vs = brainstate.compile.for_loop(
+            lambda x: (model(x), self.r.get_spike(), self.r.V.value),
+            xs
+        )
+
         outs = u.math.as_numpy(outs)
         sps = u.math.as_numpy(sps)
         vs = u.math.as_numpy(vs.to_decimal(u.mV))
@@ -151,7 +157,7 @@ class GifNet(bst.nn.Module):
         max_t = xs.shape[0]
 
         for i in range(num_show):
-            fig, gs = bts.visualize.get_figure(4, 1, 2., 10.)
+            fig, gs = braintools.visualize.get_figure(4, 1, 2., 10.)
 
             # 输入活动可视化
             ax_inp = fig.add_subplot(gs[0, 0])
@@ -260,7 +266,7 @@ class DMSDataset:
         self.num_inputs = n_input
         self.num_outputs = 2
         self.firing_rate = firing_rate
-        dt = bst.environ.get_dt()
+        dt = brainstate.environ.get_dt()
 
         # time
         self.t_fixation = int(t_fixation / dt)
@@ -306,8 +312,8 @@ class DMSDataset:
 
     def __iter__(self):
         # firing rate
-        fr = np.asarray(self.firing_rate * bst.environ.get_dt())
-        bg_fr = np.asarray(self.bg_fr * bst.environ.get_dt())
+        fr = np.asarray(self.firing_rate * brainstate.environ.get_dt())
+        bg_fr = np.asarray(self.bg_fr * brainstate.environ.get_dt())
 
         # generate data
         for _ in range(self.num_batch):
@@ -332,8 +338,8 @@ class DMSDataset:
 class Trainer(object):
     def __init__(
         self,
-        target: bst.nn.Module,
-        opt: bst.optim.Optimizer,
+        target: brainstate.nn.Module,
+        opt: brainstate.optim.Optimizer,
         dataset: Iterable,
         x_fun: Callable,
         n_sim: int = 0,
@@ -351,7 +357,7 @@ class Trainer(object):
 
         # optimizer
         self.opt = opt
-        weights = self.target.states(bst.ParamState)
+        weights = self.target.states(brainstate.ParamState)
         opt.register_trainable_weights(weights)
 
         # training parameters
@@ -391,29 +397,33 @@ class OnlineTrainer(Trainer):
         super().__init__(*args, **kwargs)
         self.decay_or_rank = decay_or_rank
 
-    @bst.compile.jit(static_argnums=(0,))
+    @brainstate.compile.jit(static_argnums=(0,))
     def batch_train(self, inputs, targets):
-        # initialize the states
-        bst.nn.init_all_states(self.target, inputs.shape[1])
-
         # weights
-        weights = self.target.states().subset(bst.ParamState)
+        weights = self.target.states().subset(brainstate.ParamState)
 
         # initialize the online learning model
-        # model = brainscale.ParamDimVjpAlgorithm(self.target, mode=bst.mixin.Batching())
-        model = brainscale.DiagIODimAlgorithm(self.target, self.decay_or_rank)
-        model.compile_etrace_graph(inputs[0])
+        model = brainscale.IODimVjpAlgorithm(self.target, self.decay_or_rank)
+
+        # initialize the states
+        @brainstate.augment.vmap_new_states(state_tag='new', axis_size=inputs.shape[1])
+        def init():
+            brainstate.nn.init_all_states(self.target)
+            model.compile_graph(inputs[0, 0])
+
+        init()
+        model = brainstate.nn.Vmap(model, vmap_states='new')
 
         def _etrace_grad(inp):
             # call the model
             out = model(inp)
             # calculate the loss
-            loss = bts.metric.softmax_cross_entropy_with_integer_labels(out, targets).mean()
+            loss = braintools.metric.softmax_cross_entropy_with_integer_labels(out, targets).mean()
             return loss, out
 
         def _etrace_step(prev_grads, x):
             # no need to return weights and states, since they are generated then no longer needed
-            f_grad = bst.augment.grad(_etrace_grad, weights, has_aux=True, return_value=True)
+            f_grad = brainstate.augment.grad(_etrace_grad, weights, has_aux=True, return_value=True)
             cur_grads, local_loss, out = f_grad(x)
             next_grads = jax.tree.map(lambda a, b: a + b, prev_grads, cur_grads)
             return next_grads, (out, local_loss)
@@ -421,15 +431,15 @@ class OnlineTrainer(Trainer):
         def _etrace_train(inputs_):
             # forward propagation
             grads = jax.tree.map(u.math.zeros_like, weights.to_dict_values())
-            grads, (outs, losses) = bst.compile.scan(_etrace_step, grads, inputs_)
+            grads, (outs, losses) = brainstate.compile.scan(_etrace_step, grads, inputs_)
             # gradient updates
-            grads = bst.functional.clip_grad_norm(grads, 1.)
+            grads = brainstate.functional.clip_grad_norm(grads, 1.)
             self.opt.update(grads)
             # accuracy
             return losses.mean(), outs
 
         if self.n_sim > 0:
-            bst.compile.for_loop(lambda inp: model(inp), inputs[:self.n_sim])
+            brainstate.compile.for_loop(lambda inp: model(inp), inputs[:self.n_sim])
         loss, outs = _etrace_train(inputs[self.n_sim:])
 
         # returns
@@ -437,35 +447,41 @@ class OnlineTrainer(Trainer):
 
 
 class BPTTTrainer(Trainer):
-    @bst.compile.jit(static_argnums=(0,))
+    @brainstate.compile.jit(static_argnums=(0,))
     def batch_train(self, inputs, targets):
+        weights = self.target.states().subset(brainstate.ParamState)
+
         # initialize the states
-        bst.nn.init_all_states(self.target, inputs.shape[1])
+        @brainstate.augment.vmap_new_states(state_tag='new', axis_size=inputs.shape[1])
+        def init():
+            brainstate.nn.init_all_states(self.target)
+
+        init()
+        model = brainstate.nn.Vmap(self.target, vmap_states='new')
 
         # the model for a single step
         def _run_step_train(inp):
-            out = self.target(inp)
-            loss = bts.metric.softmax_cross_entropy_with_integer_labels(out, targets).mean()
+            out = model(inp)
+            loss = braintools.metric.softmax_cross_entropy_with_integer_labels(out, targets).mean()
             return out, loss
 
         def _bptt_grad_step():
             if self.n_sim > 0:
-                _ = bst.compile.for_loop(self.target, inputs[:self.n_sim])
-            outs, losses = bst.compile.for_loop(_run_step_train, inputs[self.n_sim:])
+                _ = brainstate.compile.for_loop(model, inputs[:self.n_sim])
+            outs, losses = brainstate.compile.for_loop(_run_step_train, inputs[self.n_sim:])
             return losses.mean(), outs
 
         # gradients
-        weights = self.target.states().subset(bst.ParamState)
-        grads, loss, outs = bst.augment.grad(_bptt_grad_step, weights, has_aux=True, return_value=True)()
+        grads, loss, outs = brainstate.augment.grad(_bptt_grad_step, weights, has_aux=True, return_value=True)()
 
         # optimization
-        grads = bst.functional.clip_grad_norm(grads, 1.)
+        grads = brainstate.functional.clip_grad_norm(grads, 1.)
         self.opt.update(grads)
 
         return loss, self._acc(outs, targets)
 
 
-class LIF_Delta_Net(bst.nn.Module):
+class LIF_Delta_Net(brainstate.nn.Module):
     """
     LIF neurons and dense connected delta synapses.
     """
@@ -476,38 +492,46 @@ class LIF_Delta_Net(bst.nn.Module):
         tau_mem=5. * u.ms,
         tau_o=5. * u.ms,
         V_th=1. * u.mV,
-        spk_fun: Callable = bst.surrogate.ReluGrad(),
+        spk_fun: Callable = brainstate.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
         rec_scale: float = 1.,
         ff_scale: float = 1.,
     ):
         super().__init__()
         self.neu = brainscale.nn.LIF(n_rec, tau=tau_mem, spk_fun=spk_fun, spk_reset=spk_reset, V_th=V_th)
-        rec_init: Callable = bst.init.KaimingNormal(rec_scale, unit=u.mV)
-        ff_init: Callable = bst.init.KaimingNormal(ff_scale, unit=u.mV)
+        rec_init: Callable = brainstate.init.KaimingNormal(rec_scale, unit=u.mV)
+        ff_init: Callable = brainstate.init.KaimingNormal(ff_scale, unit=u.mV)
         w_init = u.math.concatenate([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0)
-        self.syn = bst.nn.DeltaProj(
-            comm=brainscale.nn.Linear(n_in + n_rec, n_rec, w_init=w_init, b_init=bst.init.ZeroInit(unit=u.mV)),
+        self.syn = brainstate.nn.DeltaProj(
+            comm=brainscale.nn.Linear(n_in + n_rec, n_rec,
+                                      w_init=w_init,
+                                      b_init=brainstate.init.ZeroInit(unit=u.mV)),
             post=self.neu
         )
-        self.out = brainscale.nn.LeakyRateReadout(in_size=n_rec, out_size=n_out, tau=tau_o,
-                                                  w_init=bst.init.KaimingNormal())
+        self.out = brainscale.nn.LeakyRateReadout(in_size=n_rec,
+                                                  out_size=n_out,
+                                                  tau=tau_o,
+                                                  w_init=brainstate.init.KaimingNormal())
 
     def update(self, spk):
         self.syn(u.math.concatenate([spk, self.neu.get_spike()], axis=-1))
         return self.out(self.neu())
 
     def verify(self, input_spikes, num_show=5, sps_inc=10.):
-        def _step(x):
-            out = self.update(x)
-            return out, self.neu.get_spike(), self.neu.V.value
-
         # 输入脉冲
         xs = np.transpose(input_spikes.reshape(*input_spikes.shape[:2], -1), (1, 0, 2))  # [n_steps, n_samples, n_in]
 
-        # 运行仿真模型
-        bst.nn.init_all_states(self, xs.shape[1])
-        outs, sps, vs = bst.compile.for_loop(_step, xs)
+        @brainstate.augment.vmap_new_states(state_tag='new', axis_size=xs.shape[1])
+        def init():
+            brainstate.nn.init_all_states(self)
+
+        init()
+        model = brainstate.nn.Vmap(self, vmap_states='new')
+
+        outs, sps, vs = brainstate.compile.for_loop(
+            lambda x: (model(x), self.neu.get_spike(), self.neu.V.value),
+            xs
+        )
         outs = u.math.as_numpy(outs)
         sps = u.math.as_numpy(sps)
         vs = u.math.as_numpy(vs.to_decimal(u.mV))
@@ -515,7 +539,7 @@ class LIF_Delta_Net(bst.nn.Module):
         max_t = xs.shape[0]
 
         for i in range(num_show):
-            fig, gs = bts.visualize.get_figure(4, 1, 2., 10.)
+            fig, gs = braintools.visualize.get_figure(4, 1, 2., 10.)
 
             # 输入活动可视化
             ax_inp = fig.add_subplot(gs[0, 0])

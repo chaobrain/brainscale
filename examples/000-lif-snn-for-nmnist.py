@@ -16,8 +16,8 @@
 
 # see brainscale documentations for more details.
 
-import brainstate as bst
-import braintools as bts
+import brainstate
+import braintools
 import brainunit as u
 import matplotlib.pyplot as plt
 import numpy as np
@@ -39,11 +39,16 @@ def numpy_collate(batch):
 
 
 if __name__ == '__main__':
-    with bst.environ.context(dt=1. * u.ms):
+    with brainstate.environ.context(dt=1. * u.ms):
         in_shape = NMNIST.sensor_size
         out_shape = 10
-        data = NMNIST(save_to='./data', train=True, first_saccade_only=True,
-                      transform=tonic.transforms.ToFrame(sensor_size=in_shape, n_time_bins=200))
+        data = NMNIST(
+            # save_to='D:/data/mnist',
+            save_to='/mnt/d/data/mnist',
+            train=True,
+            first_saccade_only=True,
+            transform=tonic.transforms.ToFrame(sensor_size=in_shape, n_time_bins=200)
+        )
         data = DataLoader(
             data,
             shuffle=True,
@@ -67,15 +72,14 @@ if __name__ == '__main__':
 
         onliner = OnlineTrainer(
             target=net,
-            opt=bst.optim.Adam(lr=1e-3),
+            opt=brainstate.optim.Adam(lr=1e-3),
             dataset=data,
             x_fun=lambda x: np.transpose(x.reshape(*x.shape[:2], -1), (1, 0, 2)),
             acc_th=0.90,
         )
-
         losses, accs = onliner.f_train()
 
-    fig, gs = bts.visualize.get_figure(1, 2, 4., 5.)
+    fig, gs = braintools.visualize.get_figure(1, 2, 4., 5.)
     fig.add_subplot(gs[0, 0])
     plt.plot(losses)
     plt.xlabel('Epoch')
