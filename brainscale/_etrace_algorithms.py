@@ -57,14 +57,14 @@ class ETraceAlgorithm(brainstate.nn.Module):
     r"""
     The base class for the eligibility trace algorithm.
 
-    Parameters:
+    Parameters
     -----------
     model: brainstate.nn.Module
         The model function, which receives the input arguments and returns the model output.
     name: str, optional
         The name of the etrace algorithm.
 
-    Attributes:
+    Attributes
     -----------
     graph: ETraceGraphExecutor
         The etrace graph.

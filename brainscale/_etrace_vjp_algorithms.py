@@ -155,7 +155,8 @@ def _low_pass_filter(old, new, alpha):
     out fluctuations in data by blending the old value with the new value based 
     on a specified filter factor.
 
-    Parameters:
+    Parameters
+    ----------
     old : Any
         The previous value that needs to be smoothed.
     new : Any
@@ -166,7 +167,8 @@ def _low_pass_filter(old, new, alpha):
         of the old value in the smoothing process. A higher alpha gives more 
         weight to the old value, resulting in slower changes.
 
-    Returns:
+    Returns
+    -------
     Any
         The filtered value, which is a combination of the old and new values 
         weighted by the filter factor.
@@ -1712,7 +1714,7 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
 #     complexity, where :math:`I` and :math:`O` are the number of input and output dimensions,
 #     :math:`B` the batch size, and :math:`n` the number of truncation length.
 #
-#     Parameters:
+#     Parameters
 #     -----------
 #     model: brainstate.nn.Module
 #         The model function, which receives the input arguments and returns the model output.
@@ -2040,7 +2042,7 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
     with the :math:`O(Bn)` memory complexity and :math:`O(Bn^2)` computational complexity, where
     :math:`n` is the number of hidden dimensions.
 
-    Parameters:
+    Parameters
     -----------
     model: brainstate.nn.Module
         The model function, which receives the input arguments and returns the model output.
@@ -2330,7 +2332,7 @@ class ParamDimVjpAlgorithm(ETraceVjpAlgorithm):
     For a Linear transformation layer, the algorithm computes the weight gradients with the :math:`O(BIO)``
     computational complexity, where :math:`I` and :math:`O` are the number of input and output dimensions.
 
-    Parameters:
+    Parameters
     -----------
     model: brainstate.nn.Module
         The model function, which receives the input arguments and returns the model output.
@@ -2506,7 +2508,7 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
     This means that the algorithm combine the memory efficiency of the :py:class:`ParamDimVjpAlgorithm` and the
     computational efficiency of the :py:class:`IODimVjpAlgorithm` together.
 
-    Parameters:
+    Parameters
     -----------
     model: Callable
         The model function, which receives the input arguments and returns the model output.
@@ -2599,7 +2601,7 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
         in the computation of gradients in the etrace algorithm. It is typically called
         at the beginning of a new batch or sequence to ensure that the state is clean.
 
-        Parameters:
+        Parameters
         -----------
         batch_size : int, optional
             The size of the batch for which the state is being reset. If not provided,
@@ -2629,7 +2631,7 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
         which includes the spatial gradients of the weight inputs, the spatial gradients
         of the hidden states, and the batched weight gradients.
 
-        Parameters:
+        Parameters
         -----------
         weight : bst.ParamState | Path
             The weight for which the eligibility trace is to be retrieved. It can be

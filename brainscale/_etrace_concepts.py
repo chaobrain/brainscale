@@ -240,17 +240,20 @@ class ETraceGroupState(ETraceState):
         the required dimensionality for hidden states. It also constructs a mapping
         from string representations of indices to their integer counterparts.
 
-        Parameters:
+        Parameters
+        ----------
         value (bst.typing.ArrayLike): The input value representing hidden states.
             It must be an instance of numpy.ndarray, jax.Array, or brainunit.Quantity
             with at least two dimensions.
 
-        Returns:
+        Returns
+        -------
         Tuple[bst.typing.ArrayLike, Dict[str, int]]: A tuple containing:
             - The validated and possibly modified input value.
             - A dictionary mapping string representations of indices to integer indices.
 
-        Raises:
+        Raises
+        ------
         TypeError: If the input value is not of a supported type.
         ValueError: If the input value does not have the required number of dimensions.
         """
@@ -306,13 +309,15 @@ class ETraceGroupState(ETraceState):
         This method updates the hidden state values based on the provided dictionary or sequence.
         The values are set according to the indices or names specified in the input.
 
-        Parameters:
+        Parameters
+        ----------
         val (Dict[int | str, bst.typing.ArrayLike] | Sequence[bst.typing.ArrayLike]): 
             A dictionary or sequence containing the new values for the hidden states.
             - If a dictionary, keys can be integers (indices) or strings (names) of the hidden states.
             - If a sequence, it is converted to a dictionary with indices as keys.
 
-        Returns:
+        Returns
+        -------
         None: This method does not return any value. It updates the hidden state values in place.
         """
         if isinstance(val, (tuple, list)):
@@ -558,13 +563,15 @@ class ETraceTreeState(ETraceGroupState):
         This method updates the hidden state values based on the provided dictionary or sequence.
         The values are set according to the indices or names specified in the input.
 
-        Parameters:
+        Parameters
+        ----------
         val (Dict[int | str, bst.typing.ArrayLike] | Sequence[bst.typing.ArrayLike]): 
             A dictionary or sequence containing the new values for the hidden states.
             - If a dictionary, keys can be integers (indices) or strings (names) of the hidden states.
             - If a sequence, it is converted to a dictionary with indices as keys.
 
-        Returns:
+        Returns
+        -------
         None: This method does not return any value. It updates the hidden state values in place.
         """
         if isinstance(val, (tuple, list)):
