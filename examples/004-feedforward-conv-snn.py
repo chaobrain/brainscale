@@ -28,7 +28,7 @@ from tonic.datasets import SHD, NMNIST
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-import brainscale
+import brainscalon
 
 
 class ConvSNN(brainstate.nn.Module):
@@ -67,26 +67,26 @@ class ConvSNN(brainstate.nn.Module):
         )
 
         self.layer1 = brainstate.nn.Sequential(
-            brainscale.nn.Conv2d(in_size, n_channel, kernel_size=3, padding=1, **conv_inits),
-            brainscale.nn.BatchNorm2d.desc(),
-            brainscale.nn.IF.desc(**if_param),
+            brainscalon.nn.Conv2d(in_size, n_channel, kernel_size=3, padding=1, **conv_inits),
+            brainscalon.nn.BatchNorm2d.desc(),
+            brainscalon.nn.IF.desc(**if_param),
             brainstate.nn.MaxPool2d.desc(kernel_size=2, stride=2)  # 14 * 14
         )
 
         self.layer2 = brainstate.nn.Sequential(
-            brainscale.nn.Conv2d(self.layer1.out_size, n_channel, kernel_size=3, padding=1, **conv_inits),
-            brainscale.nn.BatchNorm2d.desc(),
-            brainscale.nn.IF.desc(**if_param),
+            brainscalon.nn.Conv2d(self.layer1.out_size, n_channel, kernel_size=3, padding=1, **conv_inits),
+            brainscalon.nn.BatchNorm2d.desc(),
+            brainscalon.nn.IF.desc(**if_param),
         )
         self.layer3 = brainstate.nn.Sequential(
             brainstate.nn.MaxPool2d(kernel_size=2, stride=2, in_size=self.layer2.out_size),  # 7 * 7
             brainstate.nn.Flatten.desc()
         )
         self.layer4 = brainstate.nn.Sequential(
-            brainscale.nn.Linear(self.layer3.out_size, n_channel * 4 * 4, **linear_inits),
-            brainscale.nn.IF.desc(**if_param),
+            brainscalon.nn.Linear(self.layer3.out_size, n_channel * 4 * 4, **linear_inits),
+            brainscalon.nn.IF.desc(**if_param),
         )
-        self.layer5 = brainscale.nn.LeakyRateReadout(self.layer4.out_size, out_sze, tau=tau_o)
+        self.layer5 = brainscalon.nn.LeakyRateReadout(self.layer4.out_size, out_sze, tau=tau_o)
 
     def update(self, x):
         # x.shape = [B, H, W, C]
@@ -198,8 +198,8 @@ class OnlineTrainer(Trainer):
 
         # initialize the online learning model
         with brainstate.environ.context(fit=True):
-            # model = brainscale.ParamDimVjpAlgorithm(self.target, mode=bst.mixin.Batching())
-            model = brainscale.IODimVjpAlgorithm(self.target, self.decay_or_rank)
+            # model = brainscalon.ParamDimVjpAlgorithm(self.target, mode=bst.mixin.Batching())
+            model = brainscalon.IODimVjpAlgorithm(self.target, self.decay_or_rank)
             model.compile_graph(inputs[0])
 
         def _etrace_grad(inp):

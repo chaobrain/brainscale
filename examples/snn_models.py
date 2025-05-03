@@ -26,7 +26,7 @@ import numba
 import numpy as np
 from tqdm import tqdm
 
-import brainscale
+import brainscalon
 
 LOSS = float
 ACCURACY = float
@@ -63,8 +63,8 @@ class GIF(brainstate.nn.Neuron):
 
     def init_state(self):
         # 将模型用于在线学习，需要初始化状态变量
-        self.V = brainscale.ETraceState(brainstate.init.param(self._V_initializer, self.varshape))
-        self.I2 = brainscale.ETraceState(brainstate.init.param(self._I2_initializer, self.varshape))
+        self.V = brainscalon.ETraceState(brainstate.init.param(self._V_initializer, self.varshape))
+        self.I2 = brainscalon.ETraceState(brainstate.init.param(self._I2_initializer, self.varshape))
 
     def update(self, x=0.):
         # 如果前一时刻发放了脉冲，则将膜电位和适应性电流进行重置
@@ -116,8 +116,8 @@ class GifNet(brainstate.nn.Module):
         self.n_out = n_out
 
         # 模型层
-        self.ir2r = brainscale.nn.Linear(n_in + n_rec, n_rec, w_init=w, b_init=brainstate.init.ZeroInit(unit=u.mA))
-        self.exp = brainscale.nn.Expon(n_rec, tau=tau_syn, g_initializer=brainstate.init.ZeroInit(unit=u.mA))
+        self.ir2r = brainscalon.nn.Linear(n_in + n_rec, n_rec, w_init=w, b_init=brainstate.init.ZeroInit(unit=u.mA))
+        self.exp = brainscalon.nn.Expon(n_rec, tau=tau_syn, g_initializer=brainstate.init.ZeroInit(unit=u.mA))
         self.r = GIF(
             n_rec,
             V_rest=0. * u.mV,
@@ -126,7 +126,7 @@ class GifNet(brainstate.nn.Module):
             tau=tau_neu,
             tau_I2=brainstate.random.uniform(100. * u.ms, tau_I2 * 1.5, n_rec),
         )
-        self.out = brainscale.nn.LeakyRateReadout(n_rec, n_out, tau=tau_o, w_init=brainstate.init.KaimingNormal())
+        self.out = brainscalon.nn.LeakyRateReadout(n_rec, n_out, tau=tau_o, w_init=brainstate.init.KaimingNormal())
 
     def update(self, spikes):
         cond = self.ir2r(u.math.concatenate([spikes, self.r.get_spike()], axis=-1))
@@ -403,7 +403,7 @@ class OnlineTrainer(Trainer):
         weights = self.target.states().subset(brainstate.ParamState)
 
         # initialize the online learning model
-        model = brainscale.IODimVjpAlgorithm(self.target, self.decay_or_rank)
+        model = brainscalon.IODimVjpAlgorithm(self.target, self.decay_or_rank)
 
         # initialize the states
         @brainstate.augment.vmap_new_states(state_tag='new', axis_size=inputs.shape[1])
@@ -498,20 +498,20 @@ class LIF_Delta_Net(brainstate.nn.Module):
         ff_scale: float = 1.,
     ):
         super().__init__()
-        self.neu = brainscale.nn.LIF(n_rec, tau=tau_mem, spk_fun=spk_fun, spk_reset=spk_reset, V_th=V_th)
+        self.neu = brainscalon.nn.LIF(n_rec, tau=tau_mem, spk_fun=spk_fun, spk_reset=spk_reset, V_th=V_th)
         rec_init: Callable = brainstate.init.KaimingNormal(rec_scale, unit=u.mV)
         ff_init: Callable = brainstate.init.KaimingNormal(ff_scale, unit=u.mV)
         w_init = u.math.concatenate([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0)
         self.syn = brainstate.nn.DeltaProj(
-            comm=brainscale.nn.Linear(n_in + n_rec, n_rec,
-                                      w_init=w_init,
-                                      b_init=brainstate.init.ZeroInit(unit=u.mV)),
+            comm=brainscalon.nn.Linear(n_in + n_rec, n_rec,
+                                       w_init=w_init,
+                                       b_init=brainstate.init.ZeroInit(unit=u.mV)),
             post=self.neu
         )
-        self.out = brainscale.nn.LeakyRateReadout(in_size=n_rec,
-                                                  out_size=n_out,
-                                                  tau=tau_o,
-                                                  w_init=brainstate.init.KaimingNormal())
+        self.out = brainscalon.nn.LeakyRateReadout(in_size=n_rec,
+                                                   out_size=n_out,
+                                                   tau=tau_o,
+                                                   w_init=brainstate.init.KaimingNormal())
 
     def update(self, spk):
         self.syn(u.math.concatenate([spk, self.neu.get_spike()], axis=-1))

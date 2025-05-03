@@ -1,0 +1,368 @@
+# Copyright 2024 BDP Ecosystem Limited. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ==============================================================================
+
+import os
+
+os.environ['JAX_TRACEBACK_FILTERING'] = 'off'
+
+import brainstate as bst
+import brainunit as u
+import pytest
+import brainscalon
+from brainscalon._etrace_model_test import (
+    IF_Delta_Dense_Layer,
+    LIF_ExpCo_Dense_Layer,
+    ALIF_ExpCo_Dense_Layer,
+    LIF_ExpCu_Dense_Layer,
+    LIF_STDExpCu_Dense_Layer,
+    LIF_STPExpCu_Dense_Layer,
+    ALIF_ExpCu_Dense_Layer,
+    ALIF_Delta_Dense_Layer,
+    ALIF_STDExpCu_Dense_Layer,
+    ALIF_STPExpCu_Dense_Layer,
+)
+
+
+class TestDiagOn:
+
+    @pytest.mark.parametrize(
+        "cls",
+        [
+            brainscalon.nn.GRUCell,
+            brainscalon.nn.LSTMCell,
+            brainscalon.nn.LRUCell,
+            brainscalon.nn.MGUCell,
+            brainscalon.nn.MinimalRNNCell,
+        ]
+    )
+    def test_rnn_single_step_vjp(self, cls):
+        n_in = 4
+        n_rec = 5
+        n_seq = 10
+        model = cls(n_in, n_rec)
+        model = bst.nn.init_all_states(model)
+
+        inputs = bst.random.randn(n_seq, n_in)
+        algorithm = brainscalon.IODimVjpAlgorithm(model, decay_or_rank=0.9)
+        algorithm.compile_graph(inputs[0])
+
+        outs = bst.compile.for_loop(algorithm, inputs)
+        print(outs.shape)
+
+        @bst.compile.jit
+        def grad_single_step_vjp(inp):
+            return bst.augment.grad(
+                lambda inp: algorithm(inp).sum(),
+                model.states(bst.ParamState)
+            )(inp)
+
+        grads = grad_single_step_vjp(inputs[0])
+        grads = grad_single_step_vjp(inputs[1])
+        print(bst.util.PrettyDict(grads))
+
+    @pytest.mark.parametrize(
+        "cls",
+        [
+            brainscalon.nn.GRUCell,
+            brainscalon.nn.LSTMCell,
+            brainscalon.nn.LRUCell,
+            brainscalon.nn.MGUCell,
+            brainscalon.nn.MinimalRNNCell,
+        ]
+    )
+    def test_rnn_multi_step_vjp(self, cls):
+        n_in = 4
+        n_rec = 5
+        n_seq = 10
+        model = cls(n_in, n_rec)
+        model = bst.nn.init_all_states(model)
+
+        inputs = bst.random.randn(n_seq, n_in)
+        algorithm = brainscalon.IODimVjpAlgorithm(model, decay_or_rank=0.9, vjp_method='multi-step')
+        algorithm.compile_graph(inputs[0])
+
+        outs = algorithm(brainscalon.MultiStepData(inputs))
+        print(outs.shape)
+
+        @bst.compile.jit
+        def grad_single_step_vjp(inp):
+            return bst.augment.grad(
+                lambda inp: algorithm(brainscalon.MultiStepData(inp)).sum(),
+                model.states(bst.ParamState)
+            )(inp)
+
+        grads = grad_single_step_vjp(inputs[:1])
+        print(bst.util.PrettyDict(grads))
+        print()
+        grads = grad_single_step_vjp(inputs[1:2])
+        print(bst.util.PrettyDict(grads))
+
+    @pytest.mark.parametrize(
+        "cls",
+        [
+            IF_Delta_Dense_Layer,
+            LIF_ExpCo_Dense_Layer,
+            ALIF_ExpCo_Dense_Layer,
+            LIF_ExpCu_Dense_Layer,
+            LIF_STDExpCu_Dense_Layer,
+            LIF_STPExpCu_Dense_Layer,
+            ALIF_ExpCu_Dense_Layer,
+            ALIF_Delta_Dense_Layer,
+            ALIF_STDExpCu_Dense_Layer,
+            ALIF_STPExpCu_Dense_Layer,
+        ]
+    )
+    def test_snn_single_step_vjp(self, cls):
+        with bst.environ.context(dt=0.1 * u.ms):
+            n_in = 4
+            n_rec = 5
+            n_seq = 10
+            model = cls(n_in, n_rec)
+            model = bst.nn.init_all_states(model)
+
+            inputs = bst.random.randn(n_seq, n_in)
+            algorithm = brainscalon.IODimVjpAlgorithm(model, decay_or_rank=0.9)
+            algorithm.compile_graph(inputs[0])
+
+            outs = bst.compile.for_loop(algorithm, inputs)
+            print(outs.shape)
+
+            @bst.compile.jit
+            def grad_single_step_vjp(inp):
+                return bst.augment.grad(
+                    lambda inp: algorithm(inp).sum(),
+                    model.states(bst.ParamState)
+                )(inp)
+
+            grads = grad_single_step_vjp(inputs[0])
+            grads = grad_single_step_vjp(inputs[1])
+            print(bst.util.PrettyDict(grads))
+
+    @pytest.mark.parametrize(
+        "cls",
+        [
+            IF_Delta_Dense_Layer,
+            LIF_ExpCo_Dense_Layer,
+            ALIF_ExpCo_Dense_Layer,
+            LIF_ExpCu_Dense_Layer,
+            LIF_STDExpCu_Dense_Layer,
+            LIF_STPExpCu_Dense_Layer,
+            ALIF_ExpCu_Dense_Layer,
+            ALIF_Delta_Dense_Layer,
+            ALIF_STDExpCu_Dense_Layer,
+            ALIF_STPExpCu_Dense_Layer,
+        ]
+    )
+    def test_snn_multi_step_vjp(self, cls):
+        with bst.environ.context(dt=0.1 * u.ms):
+            print(cls)
+
+            n_in = 4
+            n_rec = 5
+            n_seq = 10
+            model = cls(n_in, n_rec)
+            model = bst.nn.init_all_states(model)
+
+            inputs = bst.random.randn(n_seq, n_in)
+            algorithm = brainscalon.IODimVjpAlgorithm(model, decay_or_rank=0.9, vjp_method='multi-step')
+            algorithm.compile_graph(inputs[0])
+
+            outs = algorithm(brainscalon.MultiStepData(inputs))
+            print(outs.shape)
+
+            @bst.compile.jit
+            def grad_single_step_vjp(inp):
+                return bst.augment.grad(
+                    lambda inp: algorithm(brainscalon.MultiStepData(inp)).sum(),
+                    model.states(bst.ParamState)
+                )(inp)
+
+            grads = grad_single_step_vjp(inputs[:1])
+            print(bst.util.PrettyDict(grads))
+            print()
+            grads = grad_single_step_vjp(inputs[1:2])
+            print(bst.util.PrettyDict(grads))
+
+
+class TestDiagOn2:
+    @pytest.mark.parametrize(
+        "cls",
+        [
+            # brainscalon.nn.GRUCell,
+            # brainscalon.nn.LSTMCell,
+            brainscalon.nn.LRUCell,
+            # brainscalon.nn.MGUCell,
+            # brainscalon.nn.MinimalRNNCell,
+        ]
+    )
+    def test_rnn_single_step_vjp(self, cls):
+        n_in = 4
+        n_rec = 5
+        n_seq = 10
+        model = cls(n_in, n_rec)
+        model = bst.nn.init_all_states(model)
+
+        inputs = bst.random.randn(n_seq, n_in)
+        algorithm = brainscalon.ParamDimVjpAlgorithm(model)
+        algorithm.compile_graph(inputs[0])
+
+        outs = bst.compile.for_loop(algorithm, inputs)
+        print(outs.shape)
+
+        @bst.compile.jit
+        def grad_single_step_vjp(inp):
+            return bst.augment.grad(
+                lambda inp: algorithm(inp).sum(),
+                model.states(bst.ParamState)
+            )(inp)
+
+        grads = grad_single_step_vjp(inputs[0])
+        grads = grad_single_step_vjp(inputs[1])
+        print(bst.util.PrettyDict(grads))
+
+    @pytest.mark.parametrize(
+        "cls",
+        [
+            brainscalon.nn.GRUCell,
+            brainscalon.nn.LSTMCell,
+            brainscalon.nn.LRUCell,
+            brainscalon.nn.MGUCell,
+            brainscalon.nn.MinimalRNNCell,
+        ]
+    )
+    def test_rnn_multi_step_vjp(self, cls):
+        n_in = 4
+        n_rec = 5
+        n_seq = 10
+        model = cls(n_in, n_rec)
+        model = bst.nn.init_all_states(model)
+
+        inputs = bst.random.randn(n_seq, n_in)
+        algorithm = brainscalon.ParamDimVjpAlgorithm(model, vjp_method='multi-step')
+        algorithm.compile_graph(inputs[0])
+
+        outs = algorithm(brainscalon.MultiStepData(inputs))
+        print(outs.shape)
+
+        @bst.compile.jit
+        def grad_single_step_vjp(inp):
+            return bst.augment.grad(
+                lambda inp: algorithm(brainscalon.MultiStepData(inp)).sum(),
+                model.states(bst.ParamState)
+            )(inp)
+
+        grads = grad_single_step_vjp(inputs[:1])
+        print(bst.util.PrettyDict(grads))
+        print()
+        grads = grad_single_step_vjp(inputs[1:2])
+        print(bst.util.PrettyDict(grads))
+
+    @pytest.mark.parametrize(
+        "cls",
+        [
+            IF_Delta_Dense_Layer,
+            LIF_ExpCo_Dense_Layer,
+            ALIF_ExpCo_Dense_Layer,
+            LIF_ExpCu_Dense_Layer,
+            LIF_STDExpCu_Dense_Layer,
+            LIF_STPExpCu_Dense_Layer,
+            ALIF_ExpCu_Dense_Layer,
+            ALIF_Delta_Dense_Layer,
+            ALIF_STDExpCu_Dense_Layer,
+            ALIF_STPExpCu_Dense_Layer,
+        ]
+    )
+    def test_snn_single_step_vjp(self, cls):
+        with bst.environ.context(dt=0.1 * u.ms):
+            print(cls)
+
+            n_in = 4
+            n_rec = 5
+            n_seq = 10
+            model = cls(n_in, n_rec)
+            model = bst.nn.init_all_states(model)
+
+            param_states = model.states(bst.ParamState).to_dict_values()
+
+            inputs = bst.random.randn(n_seq, n_in)
+            algorithm = brainscalon.ParamDimVjpAlgorithm(model)
+            algorithm.compile_graph(inputs[0])
+
+            outs = bst.compile.for_loop(algorithm, inputs)
+            print(outs.shape)
+
+            @bst.compile.jit
+            def grad_single_step_vjp(inp):
+                return bst.augment.grad(
+                    lambda inp: algorithm(inp).sum(),
+                    model.states(bst.ParamState)
+                )(inp)
+
+            grads = grad_single_step_vjp(inputs[0])
+            grads = grad_single_step_vjp(inputs[1])
+            print(bst.util.PrettyDict(grads))
+
+            for k in grads:
+                assert u.get_unit(param_states[k]) == u.get_unit(grads[k])
+
+    @pytest.mark.parametrize(
+        "cls",
+        [
+            IF_Delta_Dense_Layer,
+            LIF_ExpCo_Dense_Layer,
+            ALIF_ExpCo_Dense_Layer,
+            LIF_ExpCu_Dense_Layer,
+            LIF_STDExpCu_Dense_Layer,
+            LIF_STPExpCu_Dense_Layer,
+            ALIF_ExpCu_Dense_Layer,
+            ALIF_Delta_Dense_Layer,
+            ALIF_STDExpCu_Dense_Layer,
+            ALIF_STPExpCu_Dense_Layer,
+        ]
+    )
+    def test_snn_multi_step_vjp(self, cls):
+        with bst.environ.context(dt=0.1 * u.ms):
+            print(cls)
+
+            n_in = 4
+            n_rec = 5
+            n_seq = 10
+            model = cls(n_in, n_rec)
+            model = bst.nn.init_all_states(model)
+
+            param_states = model.states(bst.ParamState).to_dict_values()
+
+            inputs = bst.random.randn(n_seq, n_in)
+            algorithm = brainscalon.ParamDimVjpAlgorithm(model, vjp_method='multi-step')
+            algorithm.compile_graph(inputs[0])
+
+            outs = algorithm(brainscalon.MultiStepData(inputs))
+            print(outs.shape)
+
+            @bst.compile.jit
+            def grad_single_step_vjp(inp):
+                return bst.augment.grad(
+                    lambda inp: algorithm(brainscalon.MultiStepData(inp)).sum(),
+                    model.states(bst.ParamState)
+                )(inp)
+
+            grads = grad_single_step_vjp(inputs[:1])
+            print(bst.util.PrettyDict(grads))
+            print()
+            grads = grad_single_step_vjp(inputs[1:2])
+            print(bst.util.PrettyDict(grads))
+
+            for k in grads:
+                assert u.get_unit(param_states[k]) == u.get_unit(grads[k])

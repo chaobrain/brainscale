@@ -1,7 +1,7 @@
-``brainscale`` documentation
+``brainscalon`` documentation
 ============================
 
-`brainscale <https://github.com/chaobrain/brainscale>`_ is designed for the scalable online learning of biological neural networks.
+`brainscalon <https://github.com/chaobrain/brainscalon>`_ is designed for the scalable online learning of biological neural networks.
 
 ----
 
@@ -11,13 +11,13 @@ Basic Usage
 ^^^^^^^^^^^
 
 
-Here we show how easy it is to use `brainscale` to build and train a simple SNN/RNN model.
+Here we show how easy it is to use `brainscalon` to build and train a simple SNN/RNN model.
 
 
 
 .. code-block::
 
-   import brainscale
+   import brainscalon
    import brainstate as bst
 
    # define models as usual
@@ -30,7 +30,7 @@ Here we show how easy it is to use `brainscale` to build and train a simple SNN/
    bst.nn.init_all_states(model)
 
    # the only thing you need to do just two lines of code
-   model = brainscale.DiagParamDimAlgorithm(model)
+   model = brainscalon.DiagParamDimAlgorithm(model)
    model.compile_graph(your_inputs)
 
    # train your model as usual
@@ -48,29 +48,29 @@ Installation
 
        .. code-block:: bash
 
-          pip install -U brainscale[cpu]
+          pip install -U brainscalon[cpu]
 
     .. tab-item:: GPU (CUDA 12.0)
 
        .. code-block:: bash
 
-          pip install -U brainscale[cuda12]
+          pip install -U brainscalon[cuda12]
 
     .. tab-item:: TPU
 
        .. code-block:: bash
 
-          pip install -U brainscale[tpu] -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
+          pip install -U brainscalon[tpu]
 
 
 ----
 
 
-See also the BDP ecosystem
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+See also the brain modeling ecosystem
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 
-We are building the `Brain Dynamics Programming ecosystem <https://ecosystem-for-brain-dynamics.readthedocs.io/>`_.
+We are building the `brain modeling ecosystem <https://brainmodeling.readthedocs.io/>`_.
 
 ----
 

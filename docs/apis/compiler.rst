@@ -1,7 +1,7 @@
 Online Learning Compiler
 ========================
 
-.. currentmodule:: brainscale
+.. currentmodule:: brainscalon
 
 .. contents::
    :local:

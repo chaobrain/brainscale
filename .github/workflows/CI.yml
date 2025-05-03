@@ -50,7 +50,7 @@
 #          pip install .
 #      - name: Test with pytest
 #        run: |
-#          pytest brainscale/
+#          pytest brainscalon/
 #
 #
 #  test_macos:
@@ -80,7 +80,7 @@
 #          pip install .
 #      - name: Test with pytest
 #        run: |
-#          pytest brainscale/
+#          pytest brainscalon/
 #
 #
 #  test_windows:
@@ -110,7 +110,7 @@
 #          pip install .
 #      - name: Test with pytest
 #        run: |
-#          pytest brainscale/ -p no:faulthandler
+#          pytest brainscalon/
 
 
 
@@ -160,6 +160,6 @@ jobs:
           pip install .
       - name: Test with pytest
         run: |
-          pytest brainscale/
+          pytest brainscalon/
 
 

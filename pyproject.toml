@@ -5,9 +5,15 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 exclude = [
-    "docs*", "tests*", "examples*", "build*", "dist*", "dev*",
-    "brainscale.egg-info*", "brainscale/__pycache__*",
-    "brainscale/__init__.py",
+    "docs*",
+    "tests*",
+    "examples*",
+    "build*",
+    "dist*",
+    "dev*",
+    "brainscalon.egg-info*",
+    "brainscalon/__pycache__*",
+    "brainscalon/__init__.py",
 ]
 
 
@@ -16,8 +22,8 @@ universal = true
 
 
 [project]
-name = "brainscale"
-description = "Scalable Online Learning in Biological Neural Networks."
+name = "brainscalon"
+description = "Enabling Scalable Online Learning for Brain Dynamics."
 readme = 'README.md'
 license = { text = 'Apache-2.0 license' }
 requires-python = '>=3.9'
@@ -53,11 +59,11 @@ dependencies = [
 dynamic = ['version']
 
 [tool.flit.module]
-name = "brainscale"
+name = "brainscalon"
 
 [project.urls]
-homepage = 'http://github.com/chaobrain/brainscale'
-repository = 'http://github.com/chaobrain/brainscale'
+homepage = 'http://github.com/chaobrain/brainscalon'
+repository = 'http://github.com/chaobrain/brainscalon'
 
 [project.optional-dependencies]
 testing = [

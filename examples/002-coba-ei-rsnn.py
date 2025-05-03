@@ -24,7 +24,7 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 
-import brainscale
+import brainscalon
 
 
 class EvidenceAccumulation:
@@ -181,8 +181,8 @@ class GIF(brainstate.nn.Neuron):
 
     def init_state(self):
         # 将模型用于在线学习，需要初始化状态变量
-        self.V = brainscale.ETraceState(brainstate.init.param(self._V_initializer, self.varshape))
-        self.I2 = brainscale.ETraceState(brainstate.init.param(self._I2_initializer, self.varshape))
+        self.V = brainscalon.ETraceState(brainstate.init.param(self._V_initializer, self.varshape))
+        self.I2 = brainscalon.ETraceState(brainstate.init.param(self._I2_initializer, self.varshape))
 
     def update(self, x=0. * u.mA):
         # 如果前一时刻发放了脉冲，则将膜电位和适应性电流进行重置
@@ -234,12 +234,12 @@ class _SNNEINet(brainstate.nn.Module):
         self.pop = GIF(n_rec, tau=tau_neu, tau_I2=tau_a, A2=beta)
         # feedforward
         self.ff2r = brainstate.nn.AlignPostProj(
-            comm=brainscale.nn.SignedWLinear(
+            comm=brainscalon.nn.SignedWLinear(
                 n_in,
                 n_rec,
                 w_init=brainstate.init.KaimingNormal(ff_scale, unit=u.siemens)
             ),
-            syn=brainscale.nn.Expon.desc(
+            syn=brainscalon.nn.Expon.desc(
                 n_rec,
                 tau=tau_syn,
                 g_initializer=brainstate.init.ZeroInit(unit=u.siemens)
@@ -249,7 +249,7 @@ class _SNNEINet(brainstate.nn.Module):
         )
         # recurrent
         inh_init = brainstate.init.KaimingNormal(scale=rec_scale * w_ei_ratio, unit=u.siemens)
-        inh2r_conn = brainscale.nn.SignedWLinear(
+        inh2r_conn = brainscalon.nn.SignedWLinear(
             self.n_inh,
             n_rec,
             w_init=inh_init,
@@ -257,7 +257,7 @@ class _SNNEINet(brainstate.nn.Module):
         )
         self.inh2r = brainstate.nn.AlignPostProj(
             comm=inh2r_conn,
-            syn=brainscale.nn.Expon.desc(
+            syn=brainscalon.nn.Expon.desc(
                 n_rec,
                 tau=tau_syn,
                 g_initializer=brainstate.init.ZeroInit(unit=u.siemens)
@@ -266,10 +266,10 @@ class _SNNEINet(brainstate.nn.Module):
             post=self.pop
         )
         exc_init = brainstate.init.KaimingNormal(scale=rec_scale, unit=u.siemens)
-        exc2r_conn = brainscale.nn.SignedWLinear(self.n_exc, n_rec, w_init=exc_init)
+        exc2r_conn = brainscalon.nn.SignedWLinear(self.n_exc, n_rec, w_init=exc_init)
         self.exc2r = brainstate.nn.AlignPostProj(
             comm=exc2r_conn,
-            syn=brainscale.nn.Expon.desc(
+            syn=brainscalon.nn.Expon.desc(
                 n_rec,
                 tau=tau_syn,
                 g_initializer=brainstate.init.ZeroInit(unit=u.siemens)
@@ -278,7 +278,7 @@ class _SNNEINet(brainstate.nn.Module):
             post=self.pop
         )
         # output
-        self.out = brainscale.nn.LeakyRateReadout(n_rec, n_out, tau=tau_out)
+        self.out = brainscalon.nn.LeakyRateReadout(n_rec, n_out, tau=tau_out)
 
     def update(self, spk):
         e_sps, i_sps = jnp.split(self.pop.get_spike(), [self.n_exc], axis=-1)
@@ -430,11 +430,11 @@ class Trainer:
 
         # initialize the online learning model
         if self.method == 'expsm_diag':
-            model = brainscale.IODimVjpAlgorithm(self.target, decay_or_rank=0.99)
+            model = brainscalon.IODimVjpAlgorithm(self.target, decay_or_rank=0.99)
         elif self.method == 'diag':
-            model = brainscale.ParamDimVjpAlgorithm(self.target)
+            model = brainscalon.ParamDimVjpAlgorithm(self.target)
         elif self.method == 'hybrid':
-            model = brainscale.HybridDimVjpAlgorithm(self.target, decay_or_rank=0.99)
+            model = brainscalon.HybridDimVjpAlgorithm(self.target, decay_or_rank=0.99)
         else:
             raise ValueError(f'Unknown online learning methods: {self.method}.')
 

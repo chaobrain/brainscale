@@ -14,7 +14,7 @@
 # ==============================================================================
 
 
-# see brainscale documentations for more details.
+# see brainscalon documentations for more details.
 
 import brainstate
 import braintools

@@ -35,7 +35,7 @@ import sys
 
 sys.path.insert(0, os.path.abspath('../'))
 
-import brainscale
+import brainscalon
 
 # -- Project information -----------------------------------------------------
 
@@ -44,7 +44,7 @@ copyright = '2024, BrainScale'
 author = 'BrainScale Developer'
 
 # The full version, including alpha/beta/rc tags
-release = brainscale.__version__
+release = brainscalon.__version__
 
 # -- General configuration ---------------------------------------------------
 
@@ -110,11 +110,11 @@ myst_enable_extensions = [
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 html_theme = "sphinx_book_theme"
-html_logo = "_static/brainscale.jpg"
+html_logo = "_static/brainscalon.jpg"
 html_title = "BrainScale"
 html_copy_source = True
 html_sourcelink_suffix = ""
-html_favicon = "_static/brainscale.jpg"
+html_favicon = "_static/brainscalon.jpg"
 html_last_updated_fmt = ""
 
 # Add any paths that contain custom static files (such as style sheets) here,

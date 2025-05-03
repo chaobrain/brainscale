@@ -1,7 +1,7 @@
 Online Learning Algorithms
 ==========================
 
-.. currentmodule:: brainscale
+.. currentmodule:: brainscalon
 
 .. contents::
    :local:

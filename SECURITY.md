@@ -1,8 +1,8 @@
 # Security Policy
 
-## Reporting a bug in BrainCore
+## Reporting a bug in BrainScalon
 
-Report security bugs in BrainPy via [Github Issue](https://github.com/brainpy/braincore/issues).
+Report security bugs in BrainPy via [Github Issue](https://github.com/brainpy/brainscalon/issues).
 
 Normally your report will be acknowledged within 5 days, and you'll receive a more detailed response 
 to your report within 10 days indicating the next steps in handling your submission. These timelines 

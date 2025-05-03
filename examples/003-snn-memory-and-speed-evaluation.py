@@ -73,7 +73,7 @@ parser.add_argument("--spk_reset", type=str, default='soft')
 
 global_args = parser.parse_args()
 
-import brainscale
+import brainscalon
 import brainstate as bst
 import braintools
 import brainunit as u
@@ -130,12 +130,12 @@ class _LIF_Delta_Dense_Layer(bst.nn.Module):
         ff_scale: float = 1.,
     ):
         super().__init__()
-        self.neu = brainscale.nn.LIF(n_rec, tau=tau_mem, spk_fun=spk_fun, spk_reset=spk_reset, V_th=V_th)
+        self.neu = brainscalon.nn.LIF(n_rec, tau=tau_mem, spk_fun=spk_fun, spk_reset=spk_reset, V_th=V_th)
         rec_init: Callable = bst.init.KaimingNormal(rec_scale)
         ff_init: Callable = bst.init.KaimingNormal(ff_scale)
         w_init = jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0)
         self.syn = bst.nn.DeltaProj(
-            comm=brainscale.nn.Linear(n_in + n_rec, n_rec, w_init=w_init),
+            comm=brainscalon.nn.Linear(n_in + n_rec, n_rec, w_init=w_init),
             post=self.neu
         )
 
@@ -160,13 +160,13 @@ class _LIF_ExpCu_Dense_Layer(bst.nn.Module):
         ff_scale: float = 1.,
     ):
         super().__init__()
-        self.neu = brainscale.nn.LIF(n_rec, tau=tau_mem, spk_fun=spk_fun, spk_reset=spk_reset, V_th=V_th)
+        self.neu = brainscalon.nn.LIF(n_rec, tau=tau_mem, spk_fun=spk_fun, spk_reset=spk_reset, V_th=V_th)
         rec_init: Callable = bst.init.KaimingNormal(rec_scale)
         ff_init: Callable = bst.init.KaimingNormal(ff_scale)
         w_init = jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0)
         self.syn = bst.nn.AlignPostProj(
-            comm=brainscale.nn.Linear(n_in + n_rec, n_rec, w_init),
-            syn=brainscale.nn.Expon.delayed(size=n_rec, tau=tau_syn),
+            comm=brainscalon.nn.Linear(n_in + n_rec, n_rec, w_init),
+            syn=brainscalon.nn.Expon.delayed(size=n_rec, tau=tau_syn),
             out=bst.nn.CUBA.desc(),
             post=self.neu
         )
@@ -224,7 +224,7 @@ class ETraceNet(bst.nn.Module):
             self.rec_layers.append(rec)
 
         # output layer
-        self.out = brainscale.nn.LeakyRateReadout(
+        self.out = brainscalon.nn.LeakyRateReadout(
             in_size=n_rec,
             out_size=n_out,
             tau=args.tau_o,
@@ -409,20 +409,20 @@ class Trainer(object):
 
         # initialize the online learning model
         if self.args.method == 'expsm_diag':
-            model = brainscale.IODimVjpAlgorithm(
+            model = brainscalon.IODimVjpAlgorithm(
                 _single_step,
                 self.args.etrace_decay,
                 vjp_method=self.args.vjp_method,
             )
             model.compile_graph(0, jax.ShapeDtypeStruct(inputs.shape[1:], inputs.dtype))
         elif self.args.method == 'diag':
-            model = brainscale.ParamDimVjpAlgorithm(
+            model = brainscalon.ParamDimVjpAlgorithm(
                 _single_step,
                 vjp_method=self.args.vjp_method,
             )
             model.compile_graph(0, jax.ShapeDtypeStruct(inputs.shape[1:], inputs.dtype))
         elif self.args.method == 'hybrid':
-            model = brainscale.HybridDimVjpAlgorithm(
+            model = brainscalon.HybridDimVjpAlgorithm(
                 _single_step,
                 self.args.etrace_decay,
                 vjp_method=self.args.vjp_method,
@@ -491,13 +491,13 @@ class Trainer(object):
 
         # initialize the online learning model
         if self.args.method == 'expsm_diag':
-            model = brainscale.DiagIODimAlgorithm(_single_step, self.args.etrace_decay, )
+            model = brainscalon.DiagIODimAlgorithm(_single_step, self.args.etrace_decay, )
             model.compile_etrace_graph(input_info)
         elif self.args.method == 'diag':
-            model = brainscale.DiagParamDimAlgorithm(_single_step, )
+            model = brainscalon.DiagParamDimAlgorithm(_single_step, )
             model.compile_etrace_graph(input_info)
         elif self.args.method == 'hybrid':
-            model = brainscale.DiagHybridDimAlgorithm(_single_step, self.args.etrace_decay, )
+            model = brainscalon.DiagHybridDimAlgorithm(_single_step, self.args.etrace_decay, )
             model.compile_etrace_graph(input_info)
         else:
             raise ValueError(f'Unknown online learning methods: {self.args.method}.')

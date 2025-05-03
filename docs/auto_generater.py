@@ -458,9 +458,9 @@ def main():
         ('_rate_rnns', 'Rate RNNs'),
         ('_readout', 'Readout Layers'),
     ]
-    _write_submodules(module_name='brainscale.nn',
+    _write_submodules(module_name='brainscalon.nn',
                       filename='apis/nn.rst',
-                      header='``brainscale.nn`` for neural network building',
+                      header='``brainscalon.nn`` for neural network building',
                       submodule_names=[k[0] for k in module_and_name],
                       section_names=[k[1] for k in module_and_name])
 
