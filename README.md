@@ -30,6 +30,12 @@ It has been integrated into our establishing [Brain Dynamics Programming ecosyst
 pip install brainscale --upgrade
 ```
 
+Alternatively, you can install `BrainX`, which bundles `brainscale` with other compatible packages for a comprehensive brain modeling ecosystem:
+
+```bash
+pip install BrainX -U
+```
+
 
 ## Documentation
 
