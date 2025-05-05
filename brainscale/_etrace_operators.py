@@ -25,6 +25,8 @@ import jax
 import numpy as np
 from jax.api_util import shaped_abstractify
 
+from ._compatible_imports import stop_gradient
+
 __all__ = [
     'ETraceOp',  # base class
     'MatMulOp',  # x @ f(w * m) + b
@@ -245,7 +247,7 @@ class ETraceOp(brainstate.util.PrettyObject):
     ) -> Y:
         y = self._jitted_call(inputs, weights)
         if context.stop_param_gradient[-1] and not self.is_diagonal:
-            y = jax.lax.stop_gradient(y)
+            y = stop_gradient(y)
         return y
 
     def __repr__(self) -> str:

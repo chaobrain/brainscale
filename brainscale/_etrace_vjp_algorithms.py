@@ -35,6 +35,7 @@ import brainunit as u
 import jax
 import jax.numpy as jnp
 
+from ._compatible_imports import stop_gradient
 from ._etrace_algorithms import (
     ETraceAlgorithm,
     EligibilityTrace,
@@ -491,7 +492,7 @@ def _solve_IO_dim_weight_gradients(
     # This is the correction factor for the exponential smoothing.
     correction_factor = 1. - u.math.power(1. - decay, running_index + 1)
     correction_factor = u.math.where(running_index < 1000, correction_factor, 1.)
-    correction_factor = jax.lax.stop_gradient(correction_factor)
+    correction_factor = stop_gradient(correction_factor)
 
     xs, dfs = hist_etrace_data
 
@@ -1308,7 +1309,7 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
 
         # update the running index
         running_index = self.running_index.value + 1
-        self.running_index.value = jax.lax.stop_gradient(jnp.where(running_index >= 0, running_index, 0))
+        self.running_index.value = stop_gradient(jnp.where(running_index >= 0, running_index, 0))
 
         # return the model output
         return (
@@ -2854,8 +2855,5 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
         return dG_weights
 
 
-
 ES_D_RTRL = IODimVjpAlgorithm
 D_RTRL = ParamDimVjpAlgorithm
-
-

@@ -22,9 +22,16 @@ __all__ = [
     'Jaxpr',
     'ClosedJaxpr',
     'Literal',
+    'stop_gradient',
 ]
 
 if jax.__version_info__ < (0, 4, 38):
     from jax.core import Primitive, Var, JaxprEqn, Jaxpr, ClosedJaxpr, Literal
+
+    from jax.lax import stop_gradient
 else:
     from jax.extend.core import Primitive, Var, JaxprEqn, Jaxpr, ClosedJaxpr, Literal
+
+
+    def stop_gradient(x):
+        return jax.tree.map(jax.lax.stop_gradient, x)

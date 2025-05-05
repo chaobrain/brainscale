@@ -25,7 +25,7 @@ import brainunit as u
 import jax
 from brainstate.nn._interaction._normalizations import _BatchNorm
 
-from brainscale._etrace_concepts import ETraceParam, ETraceState
+from brainscale._etrace_concepts import ETraceParam
 from brainscale._etrace_operators import ETraceOp, Y, W, general_y2w
 from brainscale._typing import ArrayLike, Size, Axes
 

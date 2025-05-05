@@ -62,6 +62,7 @@ def find_element_exist_in_the_set(
             return invar
     return None
 
+
 def check_unsupported_op(
     self,
     eqn: JaxprEqn,
