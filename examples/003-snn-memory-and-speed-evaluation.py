@@ -491,14 +491,14 @@ class Trainer(object):
 
         # initialize the online learning model
         if self.args.method == 'expsm_diag':
-            model = brainscale.DiagIODimAlgorithm(_single_step, self.args.etrace_decay, )
-            model.compile_etrace_graph(input_info)
+            model = brainscale.IODimVjpAlgorithm(_single_step, self.args.etrace_decay, )
+            model.compile_graph(input_info)
         elif self.args.method == 'diag':
-            model = brainscale.DiagParamDimAlgorithm(_single_step, )
-            model.compile_etrace_graph(input_info)
+            model = brainscale.ParamDimVjpAlgorithm(_single_step, )
+            model.compile_graph(input_info)
         elif self.args.method == 'hybrid':
-            model = brainscale.DiagHybridDimAlgorithm(_single_step, self.args.etrace_decay, )
-            model.compile_etrace_graph(input_info)
+            model = brainscale.HybridDimVjpAlgorithm(_single_step, self.args.etrace_decay, )
+            model.compile_graph(input_info)
         else:
             raise ValueError(f'Unknown online learning methods: {self.args.method}.')
 
