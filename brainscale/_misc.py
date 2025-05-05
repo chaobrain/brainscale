@@ -88,6 +88,25 @@ def hid_group_key(hidden_group_id: int) -> str:
     return f'hidden_group_{hidden_group_id}'
 
 
+def etrace_x_key(
+    x_key: Var,
+) -> int:
+    """
+    Generate a key for the eligibility trace based on a variable key.
+
+    Parameters
+    ----------
+    x_key : Var
+        The variable key associated with the trace.
+
+    Returns
+    -------
+    int
+        An integer identifier derived from the variable key.
+    """
+    return id(x_key)
+
+
 def etrace_df_key(
     y_key: Var,
     hidden_group_id: int,
@@ -108,7 +127,7 @@ def etrace_df_key(
         A tuple containing the variable key and a string key representing the hidden group.
     """
     assert isinstance(y_key, Var), f'y_key must be a Var, but got {y_key}.'
-    return (y_key, hid_group_key(hidden_group_id))
+    return (id(y_key), hid_group_key(hidden_group_id))
 
 
 def etrace_param_key(
@@ -134,10 +153,10 @@ def etrace_param_key(
         A tuple containing the weight path, variable key, and a string key representing the hidden group.
     """
     assert isinstance(weight_path, (list, tuple)), f'weight_path must be a list or tuple, but got {weight_path}.'
-    assert all(
-        isinstance(x, (str, int)) for x in weight_path), f'weight_path must be a list of str, but got {weight_path}.'
+    assert all(isinstance(x, (str, int)) for x in weight_path), \
+        f'weight_path must be a list of str, but got {weight_path}.'
     assert isinstance(y_key, Var), f'y_key must be a Var, but got {y_key}.'
-    return (weight_path, y_key, hid_group_key(hidden_group_id))
+    return (weight_path, id(y_key), hid_group_key(hidden_group_id))
 
 
 def unknown_state_path(i: int) -> Path:

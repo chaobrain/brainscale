@@ -231,9 +231,16 @@ def sequence_split_state_values(
     state_values: List[brainstate.typing.PyTree],
     include_weight: bool = True
 ) -> (
-    Tuple[Sequence[brainstate.typing.PyTree], Sequence[brainstate.typing.PyTree], Sequence[brainstate.typing.PyTree]]
+    Tuple[
+        Sequence[brainstate.typing.PyTree],
+        Sequence[brainstate.typing.PyTree],
+        Sequence[brainstate.typing.PyTree]
+    ]
     |
-    Tuple[Sequence[brainstate.typing.PyTree], Sequence[brainstate.typing.PyTree]]
+    Tuple[
+        Sequence[brainstate.typing.PyTree],
+        Sequence[brainstate.typing.PyTree]
+    ]
 ):
     """
     Split the state values into the weight values, the hidden values, and the other state values.

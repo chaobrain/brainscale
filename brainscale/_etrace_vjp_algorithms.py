@@ -35,7 +35,6 @@ import brainunit as u
 import jax
 import jax.numpy as jnp
 
-from ._compatible_imports import stop_gradient
 from ._etrace_algorithms import (
     ETraceAlgorithm,
     EligibilityTrace,
@@ -52,7 +51,7 @@ from ._etrace_operators import ETraceOp
 from ._etrace_vjp_graph_executor import ETraceVjpGraphExecutor
 from ._misc import (
     check_dict_keys,
-    hid_group_key,
+    etrace_x_key,
     etrace_param_key,
     etrace_df_key,
 )
@@ -203,7 +202,12 @@ def _update_dict(
             raise ValueError(f'The key {key} does not exist in the dictionary. ')
         the_dict[key] = value
     else:
-        the_dict[key] = jax.tree.map(u.math.add, old_value, value, is_leaf=lambda x: isinstance(x, u.Quantity))
+        the_dict[key] = jax.tree.map(
+            u.math.add,
+            old_value,
+            value,
+            is_leaf=lambda x: isinstance(x, u.Quantity)
+        )
 
 
 def _batched_zeros_like(
@@ -285,13 +289,13 @@ def _init_IO_dim_state(
         if relation.x not in etrace_xs:
             shape = relation.x.aval.shape
             dtype = relation.x.aval.dtype
-            etrace_xs[relation.x] = EligibilityTrace(u.math.zeros(shape, dtype))
+            etrace_xs[id(relation.x)] = EligibilityTrace(u.math.zeros(shape, dtype))
 
         # relation.x maybe repeatedly used to feed into the
         # weight operation for transforming the hidden states
         # therefore we record the target paths of the weight x
         #
-        etrace_xs_to_weights[relation.x].append(state_id_to_path[id(relation.weight)])
+        etrace_xs_to_weights[id(relation.x)].append(state_id_to_path[id(relation.weight)])
 
     y_shape = relation.y.aval.shape
     y_dtype = relation.y.aval.dtype
@@ -492,7 +496,7 @@ def _solve_IO_dim_weight_gradients(
     # This is the correction factor for the exponential smoothing.
     correction_factor = 1. - u.math.power(1. - decay, running_index + 1)
     correction_factor = u.math.where(running_index < 1000, correction_factor, 1.)
-    correction_factor = stop_gradient(correction_factor)
+    correction_factor = jax.lax.stop_gradient(correction_factor)
 
     xs, dfs = hist_etrace_data
 
@@ -500,7 +504,7 @@ def _solve_IO_dim_weight_gradients(
         relation: HiddenParamOpRelation
 
         if not isinstance(relation.weight, ElemWiseParam):
-            x = xs[relation.x]
+            x = xs[id(relation.x)]
         else:
             x = None
         weight_path = relation.path
@@ -709,7 +713,7 @@ def _update_param_dim_etrace_scan_fn(
         if isinstance(relation.weight, ElemWiseParam):
             x = None
         else:
-            x = etrace_xs_at_t[relation.x]
+            x = etrace_xs_at_t[id(relation.x)]
         fn_dw = lambda df_: jax.vjp(lambda w: u.get_mantissa(etrace_op.xw_to_y(x, w)), weight_val)[1](df_)[0]
         if mode.has(brainstate.mixin.Batching):
             fn_dw = jax.vmap(fn_dw)
@@ -724,7 +728,7 @@ def _update_param_dim_etrace_scan_fn(
             #
             #       \partial h^t / \partial W^t = vjp(f(x, w))(df)
             #
-            df = etrace_ys_at_t[(relation.y, hid_group_key(group.index))]
+            df = etrace_ys_at_t[etrace_df_key(relation.y, group.index)]
             # jax.debug.print('df = {g}', g=jax.tree.map(lambda x: jnp.abs(x).max(), df))
 
             #
@@ -876,7 +880,7 @@ def _solve_param_dim_weight_gradients(
     # sum up the batched weight gradients
     if mode.has(brainstate.mixin.Batching):
         for key, val in temp_data.items():
-            temp_data[key] = jax.tree_map(lambda x: u.math.sum(x, axis=0), val)
+            temp_data[key] = jax.tree.map(lambda x: u.math.sum(x, axis=0), val)
 
     # update the weight gradients
     for key, val in temp_data.items():
@@ -934,7 +938,7 @@ def _sum_last_dim(xs: jax.Array):
         jax.Array: A PyTree with the same structure as the input, where each array
                    has been reduced by summing over its last dimension.
     """
-    return jax.tree_map(lambda x: u.math.sum(x, axis=-1), xs)
+    return jax.tree.map(lambda x: u.math.sum(x, axis=-1), xs)
 
 
 def _zeros_like_batch_or_not(
@@ -1309,7 +1313,7 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
 
         # update the running index
         running_index = self.running_index.value + 1
-        self.running_index.value = stop_gradient(jnp.where(running_index >= 0, running_index, 0))
+        self.running_index.value = jax.lax.stop_gradient(jnp.where(running_index >= 0, running_index, 0))
 
         # return the model output
         return (
@@ -2150,7 +2154,7 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
             find_this_weight = True
 
             # get the weight_op input
-            wx_var = relation.x
+            wx_var = etrace_x_key(relation.x)
             if wx_var is not None:
                 etrace_xs[wx_var] = self.etrace_xs[wx_var].value
 
@@ -2671,7 +2675,7 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
                 continue
             find_this_weight = True
 
-            wx_var = relation.x
+            wx_var = etrace_x_key(relation.x)
             if wx_var in self.etrace_xs:
                 # get the weight_op input
                 etrace_xs[wx_var] = self.etrace_xs[wx_var].value

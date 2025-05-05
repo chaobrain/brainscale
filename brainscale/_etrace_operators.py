@@ -25,7 +25,6 @@ import jax
 import numpy as np
 from jax.api_util import shaped_abstractify
 
-from ._compatible_imports import stop_gradient
 
 __all__ = [
     'ETraceOp',  # base class
@@ -79,7 +78,7 @@ def stop_param_gradients(stop_or_not: bool = True):
     Example::
 
       >>> import brainscale
-      >>> with brainscale.stop_weight_gradients():
+      >>> with brainscale.stop_param_gradients():
       >>>    # do something
 
     Args:
@@ -247,7 +246,7 @@ class ETraceOp(brainstate.util.PrettyObject):
     ) -> Y:
         y = self._jitted_call(inputs, weights)
         if context.stop_param_gradient[-1] and not self.is_diagonal:
-            y = stop_gradient(y)
+            y = jax.lax.stop_gradient(y)
         return y
 
     def __repr__(self) -> str:
