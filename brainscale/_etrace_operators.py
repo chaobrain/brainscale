@@ -25,6 +25,7 @@ import jax
 import numpy as np
 from jax.api_util import shaped_abstractify
 
+
 __all__ = [
     'ETraceOp',  # base class
     'MatMulOp',  # x @ f(w * m) + b
@@ -77,7 +78,7 @@ def stop_param_gradients(stop_or_not: bool = True):
     Example::
 
       >>> import brainscale
-      >>> with brainscale.stop_weight_gradients():
+      >>> with brainscale.stop_param_gradients():
       >>>    # do something
 
     Args:

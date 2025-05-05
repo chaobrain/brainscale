@@ -16,7 +16,7 @@
 import time
 from typing import Callable, Iterable
 
-import brainstate as bst
+import brainstate
 import braintools
 import brainunit as u
 import jax
@@ -80,7 +80,7 @@ class EvidenceAccumulation:
         self.num_cue = num_cue
 
         # input / output information
-        dt = bst.environ.get_dt()
+        dt = brainstate.environ.get_dt()
         t_interval = int(self.t_interval / dt)
         t_cue = int(self.t_cue / dt)
         t_delay = int(self.t_delay / dt)
@@ -97,7 +97,7 @@ class EvidenceAccumulation:
         self.n_sim = t_total - t_recall
 
         def sample_a_trial(key):
-            rng = bst.random.RandomState(key)
+            rng = brainstate.random.RandomState(key)
 
             # assign input spike probability
             ground_truth = rng.rand() < 0.5
@@ -146,10 +146,10 @@ class EvidenceAccumulation:
 
     def __iter__(self):
         while True:
-            yield self.sampling(bst.random.split_key(self.batch_size))
+            yield self.sampling(brainstate.random.split_key(self.batch_size))
 
 
-class GIF(bst.nn.Neuron):
+class GIF(brainstate.nn.Neuron):
     def __init__(
         self,
         size,
@@ -159,30 +159,30 @@ class GIF(bst.nn.Neuron):
         tau=20. * u.ms,
         tau_I2=50. * u.ms,
         A2=0. * u.mA,
-        V_initializer: Callable = bst.init.ZeroInit(unit=u.mV),
-        I2_initializer: Callable = bst.init.ZeroInit(unit=u.mA),
-        spike_fun: Callable = bst.surrogate.ReluGrad(),
+        V_initializer: Callable = brainstate.init.ZeroInit(unit=u.mV),
+        I2_initializer: Callable = brainstate.init.ZeroInit(unit=u.mA),
+        spike_fun: Callable = brainstate.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
         name: str = None,
     ):
         super().__init__(size, name=name, spk_fun=spike_fun, spk_reset=spk_reset)
 
         # parameters
-        self.V_rest = bst.init.param(V_rest, self.varshape, allow_none=False)
-        self.V_th_inf = bst.init.param(V_th_inf, self.varshape, allow_none=False)
-        self.R = bst.init.param(R, self.varshape, allow_none=False)
-        self.tau = bst.init.param(tau, self.varshape, allow_none=False)
-        self.tau_I2 = bst.init.param(tau_I2, self.varshape, allow_none=False)
-        self.A2 = bst.init.param(A2, self.varshape, allow_none=False)
+        self.V_rest = brainstate.init.param(V_rest, self.varshape, allow_none=False)
+        self.V_th_inf = brainstate.init.param(V_th_inf, self.varshape, allow_none=False)
+        self.R = brainstate.init.param(R, self.varshape, allow_none=False)
+        self.tau = brainstate.init.param(tau, self.varshape, allow_none=False)
+        self.tau_I2 = brainstate.init.param(tau_I2, self.varshape, allow_none=False)
+        self.A2 = brainstate.init.param(A2, self.varshape, allow_none=False)
 
         # initializers
         self._V_initializer = V_initializer
         self._I2_initializer = I2_initializer
 
-    def init_state(self, batch_size=None):
+    def init_state(self):
         # 将模型用于在线学习，需要初始化状态变量
-        self.V = brainscale.ETraceState(bst.init.param(self._V_initializer, self.varshape, batch_size))
-        self.I2 = brainscale.ETraceState(bst.init.param(self._I2_initializer, self.varshape, batch_size))
+        self.V = brainscale.ETraceState(brainstate.init.param(self._V_initializer, self.varshape))
+        self.I2 = brainscale.ETraceState(brainstate.init.param(self._I2_initializer, self.varshape))
 
     def update(self, x=0. * u.mA):
         # 如果前一时刻发放了脉冲，则将膜电位和适应性电流进行重置
@@ -191,8 +191,8 @@ class GIF(bst.nn.Neuron):
         last_V = self.V.value - self.V_th_inf * last_spk
         last_I2 = self.I2.value - self.A2 * last_spk
         # 更新状态
-        I2 = bst.nn.exp_euler_step(lambda i2: - i2 / self.tau_I2, last_I2)
-        V = bst.nn.exp_euler_step(
+        I2 = brainstate.nn.exp_euler_step(lambda i2: - i2 / self.tau_I2, last_I2)
+        V = brainstate.nn.exp_euler_step(
             lambda v, Iext: (- v + self.V_rest + self.R * self.sum_current_inputs(Iext, v)) / self.tau,
             last_V, x + I2
         )
@@ -209,7 +209,7 @@ class GIF(bst.nn.Neuron):
         return spk
 
 
-class _SNNEINet(bst.nn.Module):
+class _SNNEINet(brainstate.nn.Module):
     def __init__(
         self,
         n_in, n_rec, n_out,
@@ -230,31 +230,51 @@ class _SNNEINet(bst.nn.Module):
         self.n_inh = n_rec - self.n_exc
 
         # neurons
-        tau_a = bst.random.uniform(100. * u.ms, tau_a * 2., n_rec)
+        tau_a = brainstate.random.uniform(100. * u.ms, tau_a * 2., n_rec)
         self.pop = GIF(n_rec, tau=tau_neu, tau_I2=tau_a, A2=beta)
         # feedforward
-        self.ff2r = bst.nn.AlignPostProj(
-            comm=brainscale.nn.SignedWLinear(n_in, n_rec, w_init=bst.init.KaimingNormal(ff_scale, unit=u.siemens)),
-            syn=brainscale.nn.Expon.desc(n_rec, tau=tau_syn, g_initializer=bst.init.ZeroInit(unit=u.siemens)),
-            out=(bst.nn.CUBA.desc() if E_exc is None else bst.nn.COBA.desc(E=E_exc)),
+        self.ff2r = brainstate.nn.AlignPostProj(
+            comm=brainscale.nn.SignedWLinear(
+                n_in,
+                n_rec,
+                w_init=brainstate.init.KaimingNormal(ff_scale, unit=u.siemens)
+            ),
+            syn=brainscale.nn.Expon.desc(
+                n_rec,
+                tau=tau_syn,
+                g_initializer=brainstate.init.ZeroInit(unit=u.siemens)
+            ),
+            out=(brainstate.nn.CUBA.desc() if E_exc is None else brainstate.nn.COBA.desc(E=E_exc)),
             post=self.pop
         )
         # recurrent
-        inh_init = bst.init.KaimingNormal(scale=rec_scale * w_ei_ratio, unit=u.siemens)
-        inh2r_conn = brainscale.nn.SignedWLinear(self.n_inh, n_rec, w_init=inh_init,
-                                                 w_sign=-1. if E_inh is None else None)
-        self.inh2r = bst.nn.AlignPostProj(
+        inh_init = brainstate.init.KaimingNormal(scale=rec_scale * w_ei_ratio, unit=u.siemens)
+        inh2r_conn = brainscale.nn.SignedWLinear(
+            self.n_inh,
+            n_rec,
+            w_init=inh_init,
+            w_sign=-1. if E_inh is None else None
+        )
+        self.inh2r = brainstate.nn.AlignPostProj(
             comm=inh2r_conn,
-            syn=brainscale.nn.Expon.desc(n_rec, tau=tau_syn, g_initializer=bst.init.ZeroInit(unit=u.siemens)),
-            out=(bst.nn.CUBA.desc() if E_inh is None else bst.nn.COBA.desc(E=E_inh)),
+            syn=brainscale.nn.Expon.desc(
+                n_rec,
+                tau=tau_syn,
+                g_initializer=brainstate.init.ZeroInit(unit=u.siemens)
+            ),
+            out=(brainstate.nn.CUBA.desc() if E_inh is None else brainstate.nn.COBA.desc(E=E_inh)),
             post=self.pop
         )
-        exc_init = bst.init.KaimingNormal(scale=rec_scale, unit=u.siemens)
+        exc_init = brainstate.init.KaimingNormal(scale=rec_scale, unit=u.siemens)
         exc2r_conn = brainscale.nn.SignedWLinear(self.n_exc, n_rec, w_init=exc_init)
-        self.exc2r = bst.nn.AlignPostProj(
+        self.exc2r = brainstate.nn.AlignPostProj(
             comm=exc2r_conn,
-            syn=brainscale.nn.Expon.desc(n_rec, tau=tau_syn, g_initializer=bst.init.ZeroInit(unit=u.siemens)),
-            out=(bst.nn.CUBA.desc() if E_exc is None else bst.nn.COBA.desc(E=E_exc)),
+            syn=brainscale.nn.Expon.desc(
+                n_rec,
+                tau=tau_syn,
+                g_initializer=brainstate.init.ZeroInit(unit=u.siemens)
+            ),
+            out=(brainstate.nn.CUBA.desc() if E_exc is None else brainstate.nn.COBA.desc(E=E_exc)),
             post=self.pop
         )
         # output
@@ -272,16 +292,22 @@ class _SNNEINet(bst.nn.Module):
 
         n_seq = inputs.shape[0]
         batch_size = inputs.shape[1]
-        bst.nn.init_all_states(self, batch_size)
+
+        @brainstate.augment.vmap_new_states(state_tag='new', axis_size=batch_size)
+        def init():
+            brainstate.nn.init_all_states(self)
+
+        init()
+        model = brainstate.nn.Vmap(self, vmap_states='new')
 
         def step(inp):
-            out = self.update(inp)
+            out = model(inp)
             n_rec = self.pop.varshape[0]
             rec_spk = self.pop.get_spike()
             rec_mem = self.pop.V.value[:, np.arange(0, n_rec, n_rec // 50)]
             return rec_spk, rec_mem.to_decimal(u.mV), out
 
-        rec_spks, rec_mems, outs = bst.compile.for_loop(step, inputs, pbar=bst.compile.ProgressBar(10))
+        rec_spks, rec_mems, outs = brainstate.compile.for_loop(step, inputs, pbar=brainstate.compile.ProgressBar(10))
 
         fig, gs = braintools.visualize.get_figure(4, n2show, 3., 4.5)
         for i in range(n2show):
@@ -363,7 +389,7 @@ class Trainer:
     def __init__(
         self,
         target_net: _SNNEINet,
-        optimizer: bst.optim.Optimizer,
+        optimizer: brainstate.optim.Optimizer,
         loader: Iterable,
         n_sim: int,
         n_epochs: int = 1000,
@@ -381,7 +407,7 @@ class Trainer:
         self.n_epochs = n_epochs
 
         # optimizer
-        weights = self.target.states().subset(bst.ParamState)
+        weights = self.target.states().subset(brainstate.ParamState)
         self.optimizer = optimizer
         self.optimizer.register_trainable_weights(weights)
 
@@ -393,28 +419,32 @@ class Trainer:
     def _acc(self, outs, target):
         pred = jnp.argmax(jnp.sum(outs, 0), 1)  # [T, B, N] -> [B, N] -> [B]
         # pred = jnp.argmax(jnp.max(outs, 0), 1)  # [T, B, N] -> [B, N] -> [B]
-        acc = jnp.asarray(pred == target, dtype=bst.environ.dftype()).mean()
+        acc = jnp.asarray(pred == target, dtype=brainstate.environ.dftype()).mean()
         return acc
 
-    @bst.compile.jit(static_argnums=(0,))
+    @brainstate.compile.jit(static_argnums=(0,))
     def etrace_train(self, inputs, targets):
-        inputs = jnp.asarray(inputs, dtype=bst.environ.dftype())  # [T, B, N]
+        inputs = jnp.asarray(inputs, dtype=brainstate.environ.dftype())  # [T, B, N]
         indices = np.arange(inputs.shape[0])
-
-        bst.nn.init_all_states(self.target, inputs.shape[1])
-        weights = self.target.states().subset(bst.ParamState)
+        weights = self.target.states().subset(brainstate.ParamState)
 
         # initialize the online learning model
         if self.method == 'expsm_diag':
             model = brainscale.IODimVjpAlgorithm(self.target, decay_or_rank=0.99)
         elif self.method == 'diag':
-            model = brainscale.ParamDimVjpAlgorithm(self.target, mode=bst.mixin.Batching())
+            model = brainscale.ParamDimVjpAlgorithm(self.target)
         elif self.method == 'hybrid':
-            model = brainscale.HybridDimVjpAlgorithm(self.target, decay_or_rank=0.99, mode=bst.mixin.Batching())
+            model = brainscale.HybridDimVjpAlgorithm(self.target, decay_or_rank=0.99)
         else:
             raise ValueError(f'Unknown online learning methods: {self.method}.')
-        model.compile_graph(inputs[0])
-        model.show_graph()
+
+        @brainstate.augment.vmap_new_states(state_tag='new', axis_size=inputs.shape[1])
+        def init():
+            brainstate.nn.init_all_states(self.target)
+            model.compile_graph(inputs[0, 0])
+
+        init()
+        model = brainstate.nn.Vmap(model, vmap_states='new')
 
         def _etrace_grad(inp):
             # call the model
@@ -425,7 +455,7 @@ class Trainer:
 
         def _etrace_step(prev_grads, x):
             # no need to return weights and states, since they are generated then no longer needed
-            f_grad = bst.augment.grad(_etrace_grad, weights, has_aux=True, return_value=True)
+            f_grad = brainstate.augment.grad(_etrace_grad, weights, has_aux=True, return_value=True)
             cur_grads, local_loss, out = f_grad(x)
             next_grads = jax.tree.map(lambda a, b: a + b, prev_grads, cur_grads)
             return next_grads, (out, local_loss)
@@ -433,17 +463,17 @@ class Trainer:
         def _etrace_train(inputs_):
             # forward propagation
             grads = jax.tree.map(jnp.zeros_like, weights.to_dict_values())
-            grads, (outs, mse_ls) = bst.compile.scan(_etrace_step, grads, inputs_)
+            grads, (outs, mse_ls) = brainstate.compile.scan(_etrace_step, grads, inputs_)
             acc = self._acc(outs, targets)
 
-            grads = bst.functional.clip_grad_norm(grads, 1.)
+            grads = brainstate.functional.clip_grad_norm(grads, 1.)
             self.optimizer.update(grads)
             # accuracy
             return mse_ls.mean(), acc
 
         # running indices
         if self.n_sim > 0:
-            bst.compile.for_loop(model, inputs[:self.n_sim])
+            brainstate.compile.for_loop(model, inputs[:self.n_sim])
             r = _etrace_train(inputs[self.n_sim:])
         else:
             r = _etrace_train(inputs)
@@ -458,8 +488,8 @@ class Trainer:
 
             # self.target.visualize(inputs)
 
-            inputs = jnp.asarray(inputs, dtype=bst.environ.dftype()).transpose(1, 0, 2)
-            outputs = jnp.asarray(outputs, dtype=bst.environ.ditype())
+            inputs = jnp.asarray(inputs, dtype=brainstate.environ.dftype()).transpose(1, 0, 2)
+            outputs = jnp.asarray(outputs, dtype=brainstate.environ.ditype())
             mse_ls, acc = self.etrace_train(inputs, outputs)
             if (bar_idx + 1) % 100 == 0:
                 self.optimizer.lr.step_epoch()
@@ -511,12 +541,12 @@ def training(
         rec_scale=rec_scale,
         w_ei_ratio=w_ei_ratio,
     )
-    net.visualize(loader.sampling(bst.random.split_key(5))[0], n2show=5)
+    net.visualize(loader.sampling(brainstate.random.split_key(5))[0], n2show=5)
 
     # trainer
     trainer = Trainer(
         net,
-        bst.optim.Adam(lr=lr),
+        brainstate.optim.Adam(lr=lr),
         loader,
         loader.n_sim,
         n_epochs=1000,
@@ -527,7 +557,15 @@ def training(
 
 
 if __name__ == '__main__':
-    with bst.environ.context(dt=1.0 * u.ms):
-        training(rec_scale=0.5, ff_scale=1.0, n_rec=400, w_ei_ratio=4., lr=1e-3, net='coba',
-                 tau_a=1500.0 * u.ms, tau_syn=5. * u.ms, tau_neu=400. * u.ms)
-
+    with brainstate.environ.context(dt=1.0 * u.ms):
+        training(
+            rec_scale=0.5,
+            ff_scale=1.0,
+            n_rec=400,
+            w_ei_ratio=4.,
+            lr=1e-3,
+            net='coba',
+            tau_a=1500.0 * u.ms,
+            tau_syn=5. * u.ms,
+            tau_neu=400. * u.ms
+        )

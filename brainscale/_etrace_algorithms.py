@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from typing import Dict, Any, Optional
 
-import brainstate as bst
+import brainstate
 
 from ._etrace_compiler_graph import ETraceGraph
 from ._etrace_concepts import ETraceState
@@ -36,7 +36,7 @@ __all__ = [
 ]
 
 
-class EligibilityTrace(bst.ShortTermState):
+class EligibilityTrace(brainstate.ShortTermState):
     """
     The state for storing the eligibility trace during the computation of
     online learning algorithms.
@@ -53,18 +53,18 @@ class EligibilityTrace(bst.ShortTermState):
     __module__ = 'brainscale'
 
 
-class ETraceAlgorithm(bst.nn.Module):
+class ETraceAlgorithm(brainstate.nn.Module):
     r"""
     The base class for the eligibility trace algorithm.
 
-    Parameters:
+    Parameters
     -----------
     model: brainstate.nn.Module
         The model function, which receives the input arguments and returns the model output.
     name: str, optional
         The name of the etrace algorithm.
 
-    Attributes:
+    Attributes
     -----------
     graph: ETraceGraphExecutor
         The etrace graph.
@@ -83,14 +83,14 @@ class ETraceAlgorithm(bst.nn.Module):
 
     def __init__(
         self,
-        model: bst.nn.Module,
+        model: brainstate.nn.Module,
         graph_executor: ETraceGraphExecutor,
         name: Optional[str] = None,
     ):
         super().__init__(name=name)
 
         # the model
-        if not isinstance(model, bst.nn.Module):
+        if not isinstance(model, brainstate.nn.Module):
             raise ValueError(
                 f'The model should be a brainstate.nn.Module, this can help us to '
                 f'better obtain the program structure. But we got {type(model)}.'
@@ -109,7 +109,7 @@ class ETraceAlgorithm(bst.nn.Module):
         self.is_compiled = False
 
         # the running index
-        self.running_index = bst.LongTermState(0)
+        self.running_index = brainstate.LongTermState(0)
 
         # other states
         self._param_states = None
@@ -131,7 +131,7 @@ class ETraceAlgorithm(bst.nn.Module):
         return self.graph_executor
 
     @property
-    def param_states(self) -> bst.util.FlattedDict[Path, bst.ParamState]:
+    def param_states(self) -> brainstate.util.FlattedDict[Path, brainstate.ParamState]:
         """
         Get the parameter weight states.
         """
@@ -140,7 +140,7 @@ class ETraceAlgorithm(bst.nn.Module):
         return self._param_states
 
     @property
-    def hidden_states(self) -> bst.util.FlattedDict[Path, ETraceState]:
+    def hidden_states(self) -> brainstate.util.FlattedDict[Path, ETraceState]:
         """
         Get the hidden states.
         """
@@ -149,7 +149,7 @@ class ETraceAlgorithm(bst.nn.Module):
         return self._hidden_states
 
     @property
-    def other_states(self) -> bst.util.FlattedDict[Path, bst.State]:
+    def other_states(self) -> brainstate.util.FlattedDict[Path, brainstate.State]:
         """
         Get the other states.
         """
@@ -173,7 +173,7 @@ class ETraceAlgorithm(bst.nn.Module):
             self._param_states,
             self._hidden_states,
             self._other_states
-        ) = self.graph.module_info.retrieved_model_states.split(bst.ParamState, ETraceState, ...)
+        ) = self.graph.module_info.retrieved_model_states.split(brainstate.ParamState, ETraceState, ...)
 
     def compile_graph(self, *args) -> None:
         r"""
@@ -199,7 +199,7 @@ class ETraceAlgorithm(bst.nn.Module):
             self.is_compiled = True
 
     @property
-    def path_to_states(self) -> bst.util.FlattedDict[Path, bst.State]:
+    def path_to_states(self) -> brainstate.util.FlattedDict[Path, brainstate.State]:
         """
         Get the path to the states.
         """
@@ -241,7 +241,7 @@ class ETraceAlgorithm(bst.nn.Module):
         """
         raise NotImplementedError
 
-    def get_etrace_of(self, weight: bst.ParamState | Path) -> Any:
+    def get_etrace_of(self, weight: brainstate.ParamState | Path) -> Any:
         """
         Get the eligibility trace of the given weight.
 

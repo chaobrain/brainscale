@@ -51,7 +51,7 @@ from ._etrace_operators import ETraceOp
 from ._etrace_vjp_graph_executor import ETraceVjpGraphExecutor
 from ._misc import (
     check_dict_keys,
-    hid_group_key,
+    etrace_x_key,
     etrace_param_key,
     etrace_df_key,
 )
@@ -80,7 +80,9 @@ from ._typing import (
 __all__ = [
     'ETraceVjpAlgorithm',  # the base class for the eligibility trace algorithm with the VJP gradient computation
     'IODimVjpAlgorithm',  # the diagonally approximated algorithm with the input-output dimension complexity
+    'ES_D_RTRL',
     'ParamDimVjpAlgorithm',  # the diagonally approximated algorithm with the parameter dimension complexity
+    'D_RTRL',
     'HybridDimVjpAlgorithm',  # the diagonally approximated algorithm with hybrid complexity (either I/O or parameter)
 ]
 
@@ -153,7 +155,8 @@ def _low_pass_filter(old, new, alpha):
     out fluctuations in data by blending the old value with the new value based 
     on a specified filter factor.
 
-    Parameters:
+    Parameters
+    ----------
     old : Any
         The previous value that needs to be smoothed.
     new : Any
@@ -164,7 +167,8 @@ def _low_pass_filter(old, new, alpha):
         of the old value in the smoothing process. A higher alpha gives more 
         weight to the old value, resulting in slower changes.
 
-    Returns:
+    Returns
+    -------
     Any
         The filtered value, which is a combination of the old and new values 
         weighted by the filter factor.
@@ -198,7 +202,12 @@ def _update_dict(
             raise ValueError(f'The key {key} does not exist in the dictionary. ')
         the_dict[key] = value
     else:
-        the_dict[key] = jax.tree.map(u.math.add, old_value, value, is_leaf=lambda x: isinstance(x, u.Quantity))
+        the_dict[key] = jax.tree.map(
+            u.math.add,
+            old_value,
+            value,
+            is_leaf=lambda x: isinstance(x, u.Quantity)
+        )
 
 
 def _batched_zeros_like(
@@ -280,13 +289,13 @@ def _init_IO_dim_state(
         if relation.x not in etrace_xs:
             shape = relation.x.aval.shape
             dtype = relation.x.aval.dtype
-            etrace_xs[relation.x] = EligibilityTrace(u.math.zeros(shape, dtype))
+            etrace_xs[id(relation.x)] = EligibilityTrace(u.math.zeros(shape, dtype))
 
         # relation.x maybe repeatedly used to feed into the
         # weight operation for transforming the hidden states
         # therefore we record the target paths of the weight x
         #
-        etrace_xs_to_weights[relation.x].append(state_id_to_path[id(relation.weight)])
+        etrace_xs_to_weights[id(relation.x)].append(state_id_to_path[id(relation.weight)])
 
     y_shape = relation.y.aval.shape
     y_dtype = relation.y.aval.dtype
@@ -495,7 +504,7 @@ def _solve_IO_dim_weight_gradients(
         relation: HiddenParamOpRelation
 
         if not isinstance(relation.weight, ElemWiseParam):
-            x = xs[relation.x]
+            x = xs[id(relation.x)]
         else:
             x = None
         weight_path = relation.path
@@ -704,7 +713,7 @@ def _update_param_dim_etrace_scan_fn(
         if isinstance(relation.weight, ElemWiseParam):
             x = None
         else:
-            x = etrace_xs_at_t[relation.x]
+            x = etrace_xs_at_t[id(relation.x)]
         fn_dw = lambda df_: jax.vjp(lambda w: u.get_mantissa(etrace_op.xw_to_y(x, w)), weight_val)[1](df_)[0]
         if mode.has(brainstate.mixin.Batching):
             fn_dw = jax.vmap(fn_dw)
@@ -719,7 +728,7 @@ def _update_param_dim_etrace_scan_fn(
             #
             #       \partial h^t / \partial W^t = vjp(f(x, w))(df)
             #
-            df = etrace_ys_at_t[(relation.y, hid_group_key(group.index))]
+            df = etrace_ys_at_t[etrace_df_key(relation.y, group.index)]
             # jax.debug.print('df = {g}', g=jax.tree.map(lambda x: jnp.abs(x).max(), df))
 
             #
@@ -871,7 +880,7 @@ def _solve_param_dim_weight_gradients(
     # sum up the batched weight gradients
     if mode.has(brainstate.mixin.Batching):
         for key, val in temp_data.items():
-            temp_data[key] = jax.tree_map(lambda x: u.math.sum(x, axis=0), val)
+            temp_data[key] = jax.tree.map(lambda x: u.math.sum(x, axis=0), val)
 
     # update the weight gradients
     for key, val in temp_data.items():
@@ -929,7 +938,7 @@ def _sum_last_dim(xs: jax.Array):
         jax.Array: A PyTree with the same structure as the input, where each array
                    has been reduced by summing over its last dimension.
     """
-    return jax.tree_map(lambda x: u.math.sum(x, axis=-1), xs)
+    return jax.tree.map(lambda x: u.math.sum(x, axis=-1), xs)
 
 
 def _zeros_like_batch_or_not(
@@ -1710,7 +1719,7 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
 #     complexity, where :math:`I` and :math:`O` are the number of input and output dimensions,
 #     :math:`B` the batch size, and :math:`n` the number of truncation length.
 #
-#     Parameters:
+#     Parameters
 #     -----------
 #     model: brainstate.nn.Module
 #         The model function, which receives the input arguments and returns the model output.
@@ -2038,7 +2047,7 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
     with the :math:`O(Bn)` memory complexity and :math:`O(Bn^2)` computational complexity, where
     :math:`n` is the number of hidden dimensions.
 
-    Parameters:
+    Parameters
     -----------
     model: brainstate.nn.Module
         The model function, which receives the input arguments and returns the model output.
@@ -2145,7 +2154,7 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
             find_this_weight = True
 
             # get the weight_op input
-            wx_var = relation.x
+            wx_var = etrace_x_key(relation.x)
             if wx_var is not None:
                 etrace_xs[wx_var] = self.etrace_xs[wx_var].value
 
@@ -2328,7 +2337,7 @@ class ParamDimVjpAlgorithm(ETraceVjpAlgorithm):
     For a Linear transformation layer, the algorithm computes the weight gradients with the :math:`O(BIO)``
     computational complexity, where :math:`I` and :math:`O` are the number of input and output dimensions.
 
-    Parameters:
+    Parameters
     -----------
     model: brainstate.nn.Module
         The model function, which receives the input arguments and returns the model output.
@@ -2504,7 +2513,7 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
     This means that the algorithm combine the memory efficiency of the :py:class:`ParamDimVjpAlgorithm` and the
     computational efficiency of the :py:class:`IODimVjpAlgorithm` together.
 
-    Parameters:
+    Parameters
     -----------
     model: Callable
         The model function, which receives the input arguments and returns the model output.
@@ -2597,7 +2606,7 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
         in the computation of gradients in the etrace algorithm. It is typically called
         at the beginning of a new batch or sequence to ensure that the state is clean.
 
-        Parameters:
+        Parameters
         -----------
         batch_size : int, optional
             The size of the batch for which the state is being reset. If not provided,
@@ -2627,7 +2636,7 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
         which includes the spatial gradients of the weight inputs, the spatial gradients
         of the hidden states, and the batched weight gradients.
 
-        Parameters:
+        Parameters
         -----------
         weight : bst.ParamState | Path
             The weight for which the eligibility trace is to be retrieved. It can be
@@ -2666,7 +2675,7 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
                 continue
             find_this_weight = True
 
-            wx_var = relation.x
+            wx_var = etrace_x_key(relation.x)
             if wx_var in self.etrace_xs:
                 # get the weight_op input
                 etrace_xs[wx_var] = self.etrace_xs[wx_var].value
@@ -2848,3 +2857,7 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
             for path, dg in dl_to_etws_at_t.items():
                 _update_dict(dG_weights, path, dg, error_when_no_key=True)
         return dG_weights
+
+
+ES_D_RTRL = IODimVjpAlgorithm
+D_RTRL = ParamDimVjpAlgorithm

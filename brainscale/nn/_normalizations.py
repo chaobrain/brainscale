@@ -25,7 +25,7 @@ import brainunit as u
 import jax
 from brainstate.nn._interaction._normalizations import _BatchNorm
 
-from brainscale._etrace_concepts import ETraceParam, ETraceState
+from brainscale._etrace_concepts import ETraceParam
 from brainscale._etrace_operators import ETraceOp, Y, W, general_y2w
 from brainscale._typing import ArrayLike, Size, Axes
 
@@ -74,14 +74,13 @@ class _BatchNormETrace(_BatchNorm):
         axis_index_groups: Optional[Sequence[Sequence[int]]] = None,
         name: Optional[str] = None,
         dtype: Any = None,
-        mean_type: type = ETraceState,
+        mean_type: type = brainstate.LongTermState,
         param_type: type = ETraceParam,
     ):
         weight_type = partial(
             param_type,
-            op=ScaleOp(),
+            op=ScaleOp(is_diagonal=True),
             grad='full',
-            is_diagonal=True
         )
 
         super().__init__(
@@ -138,9 +137,8 @@ class LayerNorm(brainstate.nn.LayerNorm):
     ):
         weight_type = partial(
             param_type,
-            op=ScaleOp(),
+            op=ScaleOp(is_diagonal=True),
             grad='full',
-            is_diagonal=True
         )
         super().__init__(*args, param_type=weight_type, **kwargs)
 
@@ -157,9 +155,8 @@ class RMSNorm(brainstate.nn.RMSNorm):
     ):
         weight_type = partial(
             param_type,
-            op=ScaleOp(),
+            op=ScaleOp(is_diagonal=True),
             grad='full',
-            is_diagonal=True
         )
         super().__init__(*args, param_type=weight_type, **kwargs)
 
@@ -176,8 +173,7 @@ class GroupNorm(brainstate.nn.GroupNorm):
     ):
         weight_type = partial(
             param_type,
-            op=ScaleOp(),
+            op=ScaleOp(is_diagonal=True),
             grad='full',
-            is_diagonal=True
         )
         super().__init__(*args, param_type=weight_type, **kwargs)

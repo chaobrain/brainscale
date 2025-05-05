@@ -180,12 +180,19 @@ class _Conv(brainstate.nn.Module):
     def _check_input_dim(self, x):
         if x.ndim == self.num_spatial_dims + 1:
             x_shape = x.shape
+        elif x.ndim == self.num_spatial_dims + 2:
+            x_shape = x.shape[1:]
         else:
-            raise ValueError(f"expected {self.num_spatial_dims + 2}D (with batch) or "
-                             f"{self.num_spatial_dims + 1}D (without batch) "
-                             f"input (got {x.ndim}D input, {x.shape})")
+            raise ValueError(
+                f"expected {self.num_spatial_dims + 2}D (with batch) or "
+                f"{self.num_spatial_dims + 1}D (without batch) "
+                f"input (got {x.ndim}D input, {x.shape})"
+            )
         if self.in_size != x_shape:
-            raise ValueError(f"The expected input shape is {self.in_size}, while we got {x_shape}.")
+            raise ValueError(
+                f"The expected input shape is {self.in_size}, "
+                f"while we got {x_shape}."
+            )
 
     def update(self, x):
         self._check_input_dim(x)

@@ -36,8 +36,8 @@ def find_matched_vars(
     Checking whether the invars are matched with the invar_needed_in_oth_eqns.
 
     Args:
-      invars: The input variables of the equation.
-      invar_needed_in_oth_eqns: The variables needed in the other equations.
+        invars: The input variables of the equation.
+        invar_needed_in_oth_eqns: The variables needed in the other equations.
     """
     matched = []
     for invar in invars:
@@ -54,8 +54,8 @@ def find_element_exist_in_the_set(
     Checking whether the jaxpr vars contain the weight variables.
 
     Args:
-      elements: The input variables of the equation.
-      the_set: The set of the weight variables.
+        elements: The input variables of the equation.
+        the_set: The set of the weight variables.
     """
     for invar in elements:
         if isinstance(invar, Var) and invar in the_set:
@@ -68,6 +68,22 @@ def check_unsupported_op(
     eqn: JaxprEqn,
     op_name: str
 ):
+    """
+    Checks for unsupported operations involving weight or hidden state variables in the given equation.
+
+    This function verifies whether the specified JAX equation (`eqn`) uses weight or hidden state variables
+    in a manner that is currently unsupported. If such usage is detected, a `NotImplementedError` is raised
+    with a detailed message.
+
+    Args:
+        self: The instance of the class containing this method.
+        eqn (JaxprEqn): The JAX equation to be checked.
+        op_name (str): The name of the operation being checked (e.g., 'pjit', 'scan', 'while', 'cond').
+
+    Raises:
+        NotImplementedError: If the equation uses weight variables or computes hidden state variables
+                             in an unsupported manner.
+    """
     # checking whether the weight variables are used in the equation
     invar = find_element_exist_in_the_set(eqn.invars, self.weight_invars)
     if invar is not None:
@@ -93,14 +109,28 @@ def check_unsupported_op(
 
 class JaxprEvaluation(object):
     """
-    The base class for evaluating the jaxpr for extracting the etrace relationships.
+    A base class for evaluating JAX program representations (jaxpr) to extract eligibility trace relationships.
+
+    This class analyzes the computational graph represented as JAX primitives to identify and track
+    relationships between weight parameters and hidden states for eligibility trace computation.
+    Subclasses must implement the `_eval_eqn` method to define specific evaluation behavior.
+
+    The class handles special JAX primitives such as pjit, scan, while, and cond operations,
+    providing appropriate handling or restrictions for eligibility trace compilation.
 
     Args:
-        weight_invars: The input variables of the weight.
-        hidden_invars: The input variables of the hidden states.
-        hidden_outvars: The output variables of the hidden states.
-        invar_to_hidden_path: The mapping from the input variables to the hidden states.
-        outvar_to_hidden_path: The mapping from the output variables to the hidden states.
+        weight_invars (Set[Var]): Input variables representing weight parameters in the computational graph.
+        hidden_invars (Set[Var]): Input variables representing hidden states in the computational graph.
+        hidden_outvars (Set[Var]): Output variables representing hidden states in the computational graph.
+        invar_to_hidden_path (Dict[Var, Path]): Mapping from input variables to their paths in the hidden state hierarchy.
+        outvar_to_hidden_path (Dict[Var, Path]): Mapping from output variables to their paths in the hidden state hierarchy.
+
+    Attributes:
+        weight_invars: Stored input weight variables.
+        hidden_invars: Stored input hidden state variables.
+        hidden_outvars: Stored output hidden state variables.
+        invar_to_hidden_path: Stored mapping from input variables to hidden paths.
+        outvar_to_hidden_path: Stored mapping from output variables to hidden paths.
     """
     __module__ = 'brainscale'
 

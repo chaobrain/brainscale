@@ -16,7 +16,7 @@
 # See brainscale documentation for more details:
 
 
-import brainstate as bst
+import brainstate
 import braintools
 import jax
 import matplotlib.pyplot as plt
@@ -46,7 +46,7 @@ class CopyDataset:
             yield x, ids[..., :10]
 
 
-class GRUNet(bst.nn.Module):
+class GRUNet(brainstate.nn.Module):
     def __init__(self, n_in, n_rec, n_out, n_layer):
         super().__init__()
 
@@ -55,9 +55,9 @@ class GRUNet(bst.nn.Module):
         for _ in range(n_layer):
             layers.append(brainscale.nn.GRUCell(n_in, n_rec))
             n_in = n_rec
-        self.layer = bst.nn.Sequential(*layers)
+        self.layer = brainstate.nn.Sequential(*layers)
         # 构建输出层
-        self.readout = brainscale.nn.Linear(n_rec, n_out, as_etrace_weight=False)
+        self.readout = brainscale.nn.Linear(n_rec, n_out)
 
     def update(self, x):
         return self.readout(self.layer(x))
@@ -66,8 +66,8 @@ class GRUNet(bst.nn.Module):
 class Trainer(object):
     def __init__(
         self,
-        target: bst.nn.Module,
-        opt: bst.optim.Optimizer,
+        target: brainstate.nn.Module,
+        opt: brainstate.optim.Optimizer,
         n_epochs: int,
         n_seq: int,
         batch_size: int = 128,
@@ -79,7 +79,7 @@ class Trainer(object):
 
         # optimizer
         self.opt = opt
-        weights = self.target.states().subset(bst.ParamState)
+        weights = self.target.states().subset(brainstate.ParamState)
         opt.register_trainable_weights(weights)
 
         # training parameters
@@ -111,20 +111,23 @@ class OnlineTrainer(Trainer):
 
         self.vjp_time = vjp_time
 
-    @bst.compile.jit(static_argnums=(0,))
+    @brainstate.compile.jit(static_argnums=(0,))
     def batch_train(self, inputs, target):
-        weights = self.target.states(bst.ParamState)
-
-        # 对于每一个batch的数据，重新初始化模型状态
-        bst.nn.init_all_states(self.target, inputs.shape[1])
+        weights = self.target.states(brainstate.ParamState)
 
         # 初始化在线学习模型
         # 此处，我们需要使用 mode 来指定使用数据集是具有 batch 维度的
-        model = brainscale.ParamDimVjpAlgorithm(self.target, mode=bst.mixin.Batching())
+        model = brainscale.ParamDimVjpAlgorithm(self.target)
 
-        # 使用一个样例数据编译在线学习eligibility trace
-        model.compile_graph(inputs[0])
-        model.show_graph()
+        @brainstate.augment.vmap_new_states(state_tag='new', axis_size=inputs.shape[1])
+        def init():
+            # 对于每一个batch的数据，重新初始化模型状态
+            brainstate.nn.init_all_states(self.target, )
+            # 使用一个样例数据编译在线学习eligibility trace
+            model.compile_graph(inputs[0, 0])
+
+        init()
+        model = brainstate.nn.Vmap(model, vmap_states='new')
 
         def _etrace_loss(inp, tar):
             # call the model
@@ -137,7 +140,7 @@ class OnlineTrainer(Trainer):
         def _etrace_grad(prev_grads, x):
             inp, tar = x
             # 计算当前时刻的梯度
-            f_grad = bst.augment.grad(_etrace_loss, weights, has_aux=True, return_value=True)
+            f_grad = brainstate.augment.grad(_etrace_loss, weights, has_aux=True, return_value=True)
             cur_grads, local_loss, out = f_grad(inp, tar)
             # 累计梯度
             next_grads = jax.tree.map(lambda a, b: a + b, prev_grads, cur_grads)
@@ -148,14 +151,14 @@ class OnlineTrainer(Trainer):
             # 初始化梯度
             grads = jax.tree.map(lambda a: jax.numpy.zeros_like(a), {k: v.value for k, v in weights.items()})
             # 沿着时间轴计算和累积梯度
-            grads, (outs, losses) = bst.compile.scan(_etrace_grad, grads, (inputs_, target))
+            grads, (outs, losses) = brainstate.compile.scan(_etrace_grad, grads, (inputs_, target))
             # 更新梯度
             self.opt.update(grads)
             return losses.mean()
 
         # 在T时刻之前，模型更新其状态和eligibility trace
         n_sim = self.n_seq + 10
-        bst.compile.for_loop(lambda inp: model(inp), inputs[:n_sim])
+        brainstate.compile.for_loop(lambda inp: model(inp), inputs[:n_sim])
 
         # 在T时刻之后，模型开始在线学习
         r = _etrace_train(inputs[n_sim:])
@@ -163,29 +166,34 @@ class OnlineTrainer(Trainer):
 
 
 class BPTTTrainer(Trainer):
-    @bst.compile.jit(static_argnums=(0,))
+    @brainstate.compile.jit(static_argnums=(0,))
     def batch_train(self, inputs, targets):
-        # initialize the states
-        bst.nn.init_all_states(self.target, inputs.shape[1])
-
         # 需要求解梯度的参数
-        weights = self.target.states(bst.ParamState)
+        weights = self.target.states(brainstate.ParamState)
+
+        # initialize the states
+        @brainstate.augment.vmap_new_states(state_tag='new', axis_size=inputs.shape[1])
+        def init():
+            brainstate.nn.init_all_states(self.target)
+
+        init()
+        model = brainstate.nn.Vmap(self.target, vmap_states='new')
 
         def _run_step_train(inp, tar):
-            out = self.target(inp)
+            out = model(inp)
             loss = braintools.metric.softmax_cross_entropy_with_integer_labels(out, tar).mean()
             return out, loss
 
         def _bptt_grad_step():
             # 在T时刻之前，模型更新其状态及其eligibility trace
             n_sim = self.n_seq + 10
-            _ = bst.compile.for_loop(self.target, inputs[:n_sim])
+            _ = brainstate.compile.for_loop(model, inputs[:n_sim])
             # 在T时刻之后，模型开始在线学习
-            outs, losses = bst.compile.for_loop(_run_step_train, inputs[n_sim:], targets)
+            outs, losses = brainstate.compile.for_loop(_run_step_train, inputs[n_sim:], targets)
             return losses.mean(), outs
 
         # gradients
-        grads, loss, outs = bst.augment.grad(_bptt_grad_step, weights, has_aux=True, return_value=True)()
+        grads, loss, outs = brainstate.augment.grad(_bptt_grad_step, weights, has_aux=True, return_value=True)()
 
         # optimization
         self.opt.update(grads)
@@ -195,7 +203,7 @@ class BPTTTrainer(Trainer):
 
 online = OnlineTrainer(
     target=GRUNet(10, 200, 10, 1),
-    opt=bst.optim.Adam(0.001),
+    opt=brainstate.optim.Adam(0.001),
     n_epochs=1000,
     n_seq=200,
     batch_size=128,
@@ -204,7 +212,7 @@ online_losses = online.f_train()
 
 bptt = BPTTTrainer(
     target=GRUNet(10, 200, 10, 1),
-    opt=bst.optim.Adam(0.001),
+    opt=brainstate.optim.Adam(0.001),
     n_epochs=1000,
     n_seq=200,
     batch_size=128,

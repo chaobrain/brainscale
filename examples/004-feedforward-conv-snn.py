@@ -17,8 +17,8 @@
 import os
 from typing import Callable, Iterable
 
-import brainstate as bst
-import braintools as bts
+import brainstate
+import braintools
 import brainunit as u
 import jax
 import numpy as np
@@ -31,7 +31,7 @@ from tqdm import tqdm
 import brainscale
 
 
-class ConvSNN(bst.nn.Module):
+class ConvSNN(brainstate.nn.Module):
     """
     Convolutional SNN example.
 
@@ -46,8 +46,8 @@ class ConvSNN(bst.nn.Module):
 
     def __init__(
         self,
-        in_size: bst.typing.Size,
-        out_sze: bst.typing.Size,
+        in_size: brainstate.typing.Size,
+        out_sze: brainstate.typing.Size,
         tau_v: float = 2.0,
         tau_o: float = 10.,
         v_th: float = 1.0,
@@ -56,27 +56,33 @@ class ConvSNN(bst.nn.Module):
     ):
         super().__init__()
 
-        conv_inits = dict(w_init=bst.init.XavierNormal(scale=ff_wscale), b_init=None)
-        linear_inits = dict(w_init=bst.init.KaimingNormal(scale=ff_wscale), b_init=None)
-        if_param = dict(V_th=v_th, tau=tau_v, spk_fun=bst.surrogate.Arctan(), V_initializer=bst.init.ZeroInit(), R=1.)
+        conv_inits = dict(w_init=brainstate.init.XavierNormal(scale=ff_wscale), b_init=None)
+        linear_inits = dict(w_init=brainstate.init.KaimingNormal(scale=ff_wscale), b_init=None)
+        if_param = dict(
+            V_th=v_th,
+            tau=tau_v,
+            spk_fun=brainstate.surrogate.Arctan(),
+            V_initializer=brainstate.init.ZeroInit(),
+            R=1.
+        )
 
-        self.layer1 = bst.nn.Sequential(
+        self.layer1 = brainstate.nn.Sequential(
             brainscale.nn.Conv2d(in_size, n_channel, kernel_size=3, padding=1, **conv_inits),
             brainscale.nn.BatchNorm2d.desc(),
             brainscale.nn.IF.desc(**if_param),
-            bst.nn.MaxPool2d.desc(kernel_size=2, stride=2)  # 14 * 14
+            brainstate.nn.MaxPool2d.desc(kernel_size=2, stride=2)  # 14 * 14
         )
 
-        self.layer2 = bst.nn.Sequential(
+        self.layer2 = brainstate.nn.Sequential(
             brainscale.nn.Conv2d(self.layer1.out_size, n_channel, kernel_size=3, padding=1, **conv_inits),
             brainscale.nn.BatchNorm2d.desc(),
             brainscale.nn.IF.desc(**if_param),
         )
-        self.layer3 = bst.nn.Sequential(
-            bst.nn.MaxPool2d(kernel_size=2, stride=2, in_size=self.layer2.out_size),  # 7 * 7
-            bst.nn.Flatten.desc()
+        self.layer3 = brainstate.nn.Sequential(
+            brainstate.nn.MaxPool2d(kernel_size=2, stride=2, in_size=self.layer2.out_size),  # 7 * 7
+            brainstate.nn.Flatten.desc()
         )
-        self.layer4 = bst.nn.Sequential(
+        self.layer4 = brainstate.nn.Sequential(
             brainscale.nn.Linear(self.layer3.out_size, n_channel * 4 * 4, **linear_inits),
             brainscale.nn.IF.desc(**if_param),
         )
@@ -90,8 +96,8 @@ class ConvSNN(bst.nn.Module):
 class Trainer(object):
     def __init__(
         self,
-        target: bst.nn.Module,
-        opt: bst.optim.Optimizer,
+        target: brainstate.nn.Module,
+        opt: brainstate.optim.Optimizer,
         train_loader: Iterable,
         test_loader: Iterable,
         x_fun: Callable,
@@ -109,7 +115,7 @@ class Trainer(object):
 
         # optimizer
         self.opt = opt
-        weights = self.target.states().subset(bst.ParamState)
+        weights = self.target.states().subset(brainstate.ParamState)
         opt.register_trainable_weights(weights)
 
         # training parameters
@@ -118,17 +124,17 @@ class Trainer(object):
     def _acc(self, out, target):
         return jax.numpy.mean(jax.numpy.equal(target, jax.numpy.argmax(jax.numpy.mean(out, axis=0), axis=1)))
 
-    @bst.compile.jit(static_argnums=0)
+    @brainstate.compile.jit(static_argnums=0)
     def batch_eval(self, xs, ys):
         def _step(inp):
-            with bst.environ.context(fit=False):
+            with brainstate.environ.context(fit=False):
                 # call the model
                 out = self.target(inp)
                 # calculate the loss
-                loss = bts.metric.softmax_cross_entropy_with_integer_labels(out, ys).mean()
+                loss = braintools.metric.softmax_cross_entropy_with_integer_labels(out, ys).mean()
                 return loss, out
 
-        losses, outs = bst.compile.for_loop(_step, xs)
+        losses, outs = brainstate.compile.for_loop(_step, xs)
         return losses.mean(), self._acc(outs, ys)
 
     def batch_train(self, xs, ys):
@@ -182,32 +188,31 @@ class OnlineTrainer(Trainer):
         super().__init__(*args, **kwargs)
         self.decay_or_rank = decay_or_rank
 
-    @bst.compile.jit(static_argnums=(0,))
+    @brainstate.compile.jit(static_argnums=(0,))
     def batch_train(self, inputs, targets):
         # initialize the states
-        bst.nn.init_all_states(self.target, inputs.shape[1])
+        brainstate.nn.init_all_states(self.target, inputs.shape[1])
 
         # weights
-        weights = self.target.states().subset(bst.ParamState)
+        weights = self.target.states().subset(brainstate.ParamState)
 
         # initialize the online learning model
-        with bst.environ.context(fit=True):
+        with brainstate.environ.context(fit=True):
             # model = brainscale.ParamDimVjpAlgorithm(self.target, mode=bst.mixin.Batching())
             model = brainscale.IODimVjpAlgorithm(self.target, self.decay_or_rank)
             model.compile_graph(inputs[0])
-            model.show_graph()
 
         def _etrace_grad(inp):
-            with bst.environ.context(fit=True):
+            with brainstate.environ.context(fit=True):
                 # call the model
                 out = model(inp)
                 # calculate the loss
-                loss = bts.metric.softmax_cross_entropy_with_integer_labels(out, targets).mean()
+                loss = braintools.metric.softmax_cross_entropy_with_integer_labels(out, targets).mean()
                 return loss, out
 
         def _etrace_step(prev_grads, x):
             # no need to return weights and states, since they are generated then no longer needed
-            f_grad = bst.augment.grad(_etrace_grad, weights, has_aux=True, return_value=True)
+            f_grad = brainstate.augment.grad(_etrace_grad, weights, has_aux=True, return_value=True)
             cur_grads, local_loss, out = f_grad(x)
             next_grads = jax.tree.map(lambda a, b: a + b, prev_grads, cur_grads)
             return next_grads, (out, local_loss)
@@ -215,7 +220,7 @@ class OnlineTrainer(Trainer):
         def _etrace_train(inputs_):
             # forward propagation
             grads = jax.tree.map(u.math.zeros_like, weights.to_dict_values())
-            grads, (outs, losses) = bst.compile.scan(_etrace_step, grads, inputs_)
+            grads, (outs, losses) = brainstate.compile.scan(_etrace_step, grads, inputs_)
             # gradient updates
             # grads = bst.functional.clip_grad_norm(grads, 1.)
             self.opt.update(grads)
@@ -230,25 +235,25 @@ class OnlineTrainer(Trainer):
 
 
 class BPTTTrainer(Trainer):
-    @bst.compile.jit(static_argnums=(0,))
+    @brainstate.compile.jit(static_argnums=(0,))
     def batch_train(self, inputs, targets):
         # initialize the states
-        bst.nn.init_all_states(self.target, inputs.shape[1])
+        brainstate.nn.vmap_init_all_states(self.target, axis_size=inputs.shape[1])
 
         # the model for a single step
         def _run_step_train(inp):
-            with bst.environ.context(fit=True):
+            with brainstate.environ.context(fit=True):
                 out = self.target(inp)
-                loss = bts.metric.softmax_cross_entropy_with_integer_labels(out, targets).mean()
+                loss = braintools.metric.softmax_cross_entropy_with_integer_labels(out, targets).mean()
                 return out, loss
 
         def _bptt_grad_step():
-            outs, losses = bst.compile.for_loop(_run_step_train, inputs)
+            outs, losses = brainstate.compile.for_loop(_run_step_train, inputs)
             return losses.mean(), outs
 
         # gradients
-        weights = self.target.states().subset(bst.ParamState)
-        grads, loss, outs = bst.augment.grad(_bptt_grad_step, weights, has_aux=True, return_value=True)()
+        weights = self.target.states().subset(brainstate.ParamState)
+        grads, loss, outs = brainstate.augment.grad(_bptt_grad_step, weights, has_aux=True, return_value=True)()
 
         # optimization
         # grads = bst.functional.clip_grad_norm(grads, 1.)
@@ -257,7 +262,11 @@ class BPTTTrainer(Trainer):
         return loss, self._acc(outs, targets)
 
 
-def get_shd_data(batch_size: int, n_data_worker: int = 8, cache_dir=os.path.expanduser("./data")):
+def get_shd_data(
+    batch_size: int,
+    n_data_worker: int = 8,
+    cache_dir='/mnt/d/data/shd/'
+):
     # The Spiking Heidelberg Digits (SHD) dataset consists of 20 classes of spoken digits (0-9) spoken by 50 speakers.
     # The SHD dataset is an audio-based classification dataset of 1k spoken digits ranging from zero to nine in
     # the English and German languages. The audio waveforms have been converted into spike trains using an
@@ -286,13 +295,18 @@ def get_shd_data(batch_size: int, n_data_worker: int = 8, cache_dir=os.path.expa
         num_workers=n_data_worker
     )
 
-    return bst.util.DotDict({'train_loader': train_loader,
-                             'test_loader': test_loader,
-                             'in_shape': in_shape,
-                             'out_shape': out_shape})
+    return brainstate.util.DotDict({'train_loader': train_loader,
+                                    'test_loader': test_loader,
+                                    'in_shape': in_shape,
+                                    'out_shape': out_shape})
 
 
-def get_nmnist_data(batch_size: int, n_data_worker: int = 8, cache_dir=os.path.expanduser("./data")):
+def get_nmnist_data(
+    batch_size: int,
+    n_data_worker: int = 8,
+    cache_dir='/mnt/d/data/mnist/'
+    # cache_dir='D:/data/mnist/'
+):
     # The Neuromorphic-MNIST (N-MNIST) dataset consists of 10 classes of handwritten digits (0-9) recorded by a
     # Dynamic Vision Sensor (DVS) sensor. The N-MNIST dataset is a spiking version of the MNIST dataset. The
     # dataset consists of 60k training and 10k test samples.
@@ -318,20 +332,20 @@ def get_nmnist_data(batch_size: int, n_data_worker: int = 8, cache_dir=os.path.e
         num_workers=n_data_worker
     )
 
-    return bst.util.DotDict({'train_loader': train_loader,
-                             'test_loader': test_loader,
-                             'in_shape': in_shape,
-                             'out_shape': out_shape})
+    return brainstate.util.DotDict({'train_loader': train_loader,
+                                    'test_loader': test_loader,
+                                    'in_shape': in_shape,
+                                    'out_shape': out_shape})
 
 
 def data_processing(x_local):
     assert x_local.ndim == 5  # (sequence, batch, channel, height, width)
     x_local = x_local.permute(0, 1, 3, 4, 2)  # (sequence, batch, height, width, channel)
-    return u.math.asarray(x_local, dtype=bst.environ.dftype())
+    return u.math.asarray(x_local, dtype=brainstate.environ.dftype())
 
 
 if __name__ == '__main__':
-    with bst.environ.context(dt=1.0):
+    with brainstate.environ.context(dt=1.0):
         # n-mnist data
         data = get_nmnist_data(batch_size=256)
 
@@ -341,14 +355,22 @@ if __name__ == '__main__':
         # model
         net = ConvSNN(data.in_shape, data.out_shape)
 
-        # trainer
-        r = OnlineTrainer(
+        # # Online Trainer
+        # r = OnlineTrainer(
+        #     target=net,
+        #     opt=brainstate.optim.Adam(lr=1e-3),
+        #     train_loader=data.train_loader,
+        #     test_loader=data.test_loader,
+        #     x_fun=data_processing,
+        #     n_epoch=30
+        # ).f_train()
+
+        # Offline Trainer
+        r = BPTTTrainer(
             target=net,
-            opt=bst.optim.Adam(lr=1e-3),
+            opt=brainstate.optim.Adam(lr=1e-3),
             train_loader=data.train_loader,
             test_loader=data.test_loader,
             x_fun=data_processing,
             n_epoch=30
         ).f_train()
-
-

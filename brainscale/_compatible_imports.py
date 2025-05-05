@@ -26,5 +26,7 @@ __all__ = [
 
 if jax.__version_info__ < (0, 4, 38):
     from jax.core import Primitive, Var, JaxprEqn, Jaxpr, ClosedJaxpr, Literal
+
 else:
     from jax.extend.core import Primitive, Var, JaxprEqn, Jaxpr, ClosedJaxpr, Literal
+

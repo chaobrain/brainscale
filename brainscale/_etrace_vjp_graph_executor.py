@@ -59,7 +59,10 @@ from ._etrace_input_data import (
     merge_data,
     has_multistep_data,
 )
-from ._misc import etrace_df_key
+from ._misc import (
+    etrace_df_key,
+    etrace_x_key,
+)
 from ._state_managment import (
     assign_dict_state_values,
     split_dict_states_v2
@@ -222,7 +225,8 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
         xs = {}
         for relation in self.graph.hidden_param_op_relations:
             if relation.x is not None:
-                xs[relation.x] = intermediate_values[relation.x]
+                x = etrace_x_key(relation.x)
+                xs[x] = intermediate_values[relation.x]
 
         # the weight df
         dfs = {}

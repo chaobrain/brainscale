@@ -368,7 +368,26 @@ def _post_check(trace: HiddenWeightOpTracer) -> HiddenWeightOpTracer:
 
 class HiddenWeightOpTracer(NamedTuple):
     """
-    The data structure for the tracing of the ETraceParam operation.
+    The data structure for tracing ETraceParam operations through the computational graph.
+
+    This class keeps track of connections between weights, operations, and hidden states
+    during the compilation process of eligibility trace. It maintains information about
+    how weights are transformed by operations and how they connect to hidden states.
+
+    Attributes:
+        op (JaxprEqn): The JAX equation representing the operation that transforms x and weight into y.
+        weight (ETraceParam): The weight parameter being traced.
+        weight_path (Path): The path to the weight in the module hierarchy.
+        x (Var): The input variable to the operation (None for elementwise parameters).
+        y (Var): The output variable from the operation.
+        trace (List[JaxprEqn]): The sequence of JAX equations connecting the weight output to hidden states.
+        hidden_vars (set[Var]): The set of hidden state variables connected to this weight.
+        invar_needed_in_oth_eqns (set[Var]): Temporary set of variables needed in subsequent equations
+                                             for trace analysis.
+
+    This class is used during the compilation process to track how weights are connected to
+    hidden states through a series of operations, which is essential for computing
+    eligibility traces and implementing online learning.
     """
     op: JaxprEqn  # f: how x is transformed into y, i.e., y = f(x, w)
     weight: ETraceParam  # w

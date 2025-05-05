@@ -56,15 +56,16 @@ dG_Weight = Sequence[PyTree]  # gradients of weights
 dG_Hidden = Sequence[PyTree]  # gradients of hidden states
 dG_State = Sequence[PyTree]  # gradients of other states
 
+VarID = int
+
 HiddenGroupName = str
-ETraceX_Key = Var
-ETraceY_Key = Var
-ETraceDF_Key = Tuple[Var, HiddenGroupName]
+ETraceX_Key = VarID
+ETraceY_Key = VarID
+ETraceDF_Key = Tuple[VarID, HiddenGroupName]
 
 _WeightPath = Path
 _HiddenPath = Path
 ETraceWG_Key = Tuple[_WeightPath, ETraceY_Key, HiddenGroupName]
-
 HidHidJac_Key = Tuple[Path, Path]
 
 # --- data --- #
@@ -77,10 +78,16 @@ Current = ArrayLike  # the synaptic current
 Conductance = ArrayLike  # the synaptic conductance
 Spike = ArrayLike  # the spike signal
 # the diagonal Jacobian of the hidden-to-hidden function
-Hid2HidDiagJacobian = Dict[FrozenSet[HiddenOutVar], Dict[HiddenOutVar, List[jax.Array]]]
+Hid2HidDiagJacobian = Dict[
+    FrozenSet[HiddenOutVar],
+    Dict[HiddenOutVar, List[jax.Array]]
+]
 Hid2WeightJacobian = Tuple[
     Dict[ETraceX_Key, jax.Array],
     Dict[ETraceDF_Key, jax.Array]
 ]
-Hid2HidJacobian = Dict[HidHidJac_Key, jax.Array]
+Hid2HidJacobian = Dict[
+    HidHidJac_Key,
+    jax.Array
+]
 HiddenGroupJacobian = Sequence[jax.Array]

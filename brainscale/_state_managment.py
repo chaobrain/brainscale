@@ -34,7 +34,7 @@ def assign_state_values(
     This function assigns new values to the given states or restores their previous values
     based on the `write` flag.
 
-    Parameters:
+    Parameters
     -----------
     states : Sequence[bst.State]
         A sequence of state objects to which values will be assigned or restored.
@@ -44,7 +44,7 @@ def assign_state_values(
         A flag indicating whether to assign (`True`) or restore (`False`) the values.
         Defaults to `True`.
 
-    Returns:
+    Returns
     --------
     None
     """
@@ -68,7 +68,7 @@ def assign_dict_state_values(
     based on the `write` flag. It ensures that the keys of the `states` and `state_values`
     dictionaries match before proceeding with the assignment or restoration.
 
-    Parameters:
+    Parameters
     -----------
     states : Dict[Path, bst.State]
         A dictionary where keys are paths and values are state objects
@@ -80,7 +80,7 @@ def assign_dict_state_values(
         A flag indicating whether to assign (`True`) or restore (`False`) the values.
         Defaults to `True`.
 
-    Returns:
+    Returns
     --------
     None
     """
@@ -107,7 +107,7 @@ def assign_state_values_v2(
     based on the `write` flag. It ensures that the keys of the `states` and `state_values`
     dictionaries match before proceeding with the assignment or restoration.
 
-    Parameters:
+    Parameters
     -----------
     states : Dict[Hashable, bst.State]
         A dictionary where keys are hashable identifiers and values are state objects
@@ -119,7 +119,7 @@ def assign_state_values_v2(
         A flag indicating whether to assign (`True`) or restore (`False`) the values.
         Defaults to `True`.
 
-    Returns:
+    Returns
     --------
     None
     """
@@ -148,12 +148,12 @@ def split_states(
     weight parameter states, hidden states, and other states. It helps in organizing
     the states based on their types for further processing or analysis.
 
-    Parameters:
+    Parameters
     -----------
     states : Sequence[bst.State]
         A sequence of state objects to be split into different categories.
 
-    Returns:
+    Returns
     --------
     Tuple[List[bst.ParamState], List[ETraceState], List[bst.State]]
         A tuple containing three lists:
@@ -187,12 +187,12 @@ def split_states_v2(
     This function is crucial for determining which ParamState should be trained 
     with the eligibility trace and which should not.
 
-    Parameters:
+    Parameters
     -----------
     states : Sequence[bst.State]
         A sequence of state objects to be categorized.
 
-    Returns:
+    Returns
     --------
     Tuple[List[ETraceParam], List[ETraceState], List[bst.ParamState], List[bst.State]]
         A tuple containing four lists:
@@ -231,9 +231,16 @@ def sequence_split_state_values(
     state_values: List[brainstate.typing.PyTree],
     include_weight: bool = True
 ) -> (
-    Tuple[Sequence[brainstate.typing.PyTree], Sequence[brainstate.typing.PyTree], Sequence[brainstate.typing.PyTree]]
+    Tuple[
+        Sequence[brainstate.typing.PyTree],
+        Sequence[brainstate.typing.PyTree],
+        Sequence[brainstate.typing.PyTree]
+    ]
     |
-    Tuple[Sequence[brainstate.typing.PyTree], Sequence[brainstate.typing.PyTree]]
+    Tuple[
+        Sequence[brainstate.typing.PyTree],
+        Sequence[brainstate.typing.PyTree]
+    ]
 ):
     """
     Split the state values into the weight values, the hidden values, and the other state values.
@@ -242,7 +249,7 @@ def sequence_split_state_values(
     The hidden values are the values of the ``ETraceState`` states.
     The other state values are the values of the other states.
 
-    Parameters:
+    Parameters
     -----------
     states: Sequence[bst.State]
       The states of the model.
@@ -251,11 +258,11 @@ def sequence_split_state_values(
     include_weight: bool
       Whether to include the weight values.
 
-    Returns:
+    Returns
     --------
     The weight values, the hidden values, and the other state values.
 
-    Examples:
+    Examples
     ---------
     >>> sequence_split_state_values(states, state_values)
     (weight_path_to_vals, hidden_vals, other_vals)
@@ -295,14 +302,14 @@ def dict_split_state_values(
     This function categorizes the given state values into three distinct groups based on the type
     of the corresponding state: weight values, hidden values, and other state values.
 
-    Parameters:
+    Parameters
     -----------
     states : Dict[Path, bst.State]
         A dictionary where keys are paths and values are state objects to be categorized.
     state_values : Dict[Path, bst.typing.PyTree]
         A dictionary where keys are paths and values are the values associated with each state.
 
-    Returns:
+    Returns
     --------
     Tuple[WeightVals, HiddenVals, StateVals]
         A tuple containing three dictionaries:
@@ -341,12 +348,12 @@ def split_dict_states_v1(
         This function is important since it determines what ParamState should be
         trained with the eligibility trace and what should not.
 
-    Parameters:
+    Parameters
     -----------
     states : Dict[Path, bst.State]
         A dictionary where keys are paths and values are state objects to be split.
 
-    Returns:
+    Returns
     --------
     Tuple[Dict[Path, ETraceState], Dict[Path, bst.ParamState], Dict[Path, bst.State]]
         A tuple containing three dictionaries:
@@ -390,12 +397,12 @@ def split_dict_states_v2(
     etrace parameter states, hidden states, parameter states, and other states. It is crucial
     for determining which ParamState should be trained with the eligibility trace.
 
-    Parameters:
+    Parameters
     -----------
     states : Dict[Path, bst.State]
         A dictionary where keys are paths and values are state objects to be split.
 
-    Returns:
+    Returns
     --------
     Tuple[Dict[Path, ETraceParam], Dict[Path, ETraceState], Dict[Path, bst.ParamState], Dict[Path, bst.State]]
         A tuple containing four dictionaries:

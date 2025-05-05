@@ -49,7 +49,7 @@ from __future__ import annotations
 from itertools import combinations
 from typing import List, Dict, Sequence, Tuple, Set, Optional, Callable, NamedTuple, Any
 
-import brainstate as bst
+import brainstate
 import brainunit as u
 import jax.core
 import numpy as np
@@ -262,7 +262,7 @@ class HiddenGroup(NamedTuple):
         return self._asdict()
 
     def __repr__(self) -> str:
-        return repr(bst.util.PrettyMapping(self._asdict(), type_name=self.__class__.__name__))
+        return repr(brainstate.util.PrettyMapping(self._asdict(), type_name=self.__class__.__name__))
 
 
 HiddenGroup.__module__ = 'brainscale'
@@ -307,6 +307,13 @@ def jacrev_last_dim(
 class HiddenToHiddenGroupTracer(NamedTuple):
     """
     The data structure for the tracing of the hidden-to-hidden states.
+
+    Attributes:
+        hidden_invar (Var): The input variable representing the hidden state.
+        connected_hidden_outvars (set[Var]): A set of output variables representing the connected hidden states.
+        other_invars (set[Var]): A set of other input variables involved in the tracing.
+        invar_needed_in_oth_eqns (set[Var]): A set of variables needed in other equations for trace analysis.
+        trace (List[JaxprEqn]): A list of JAX equations representing the trace of operations.
     """
     hidden_invar: Var
     connected_hidden_outvars: set[Var]
@@ -318,12 +325,25 @@ class HiddenToHiddenGroupTracer(NamedTuple):
         return self._asdict()
 
     def __repr__(self) -> str:
-        return repr(bst.util.PrettyMapping(self._asdict(), type_name=self.__class__.__name__))
+        return repr(brainstate.util.PrettyMapping(self._asdict(), type_name=self.__class__.__name__))
 
 
 class Hidden2GroupTransition(NamedTuple):
     """
-    Hidden state transition.
+    Represents a hidden state transition in a computational graph.
+
+    This class captures the transition of hidden states from one time step to the next
+    within a neural network model. It includes information about the input hidden state,
+    the connected output hidden states, and the JAX program representation (jaxpr) that
+    defines the transition.
+
+    Attributes:
+        hidden_invar (Var): The input variable representing the hidden state at the previous time step.
+        hidden_path (Path): The path to the hidden state in the model hierarchy.
+        connected_hidden_outvars (List[Var]): A list of output variables representing the connected hidden states at the current time step.
+        connected_hidden_paths (List[Path]): A list of paths to the connected hidden states in the model hierarchy.
+        transition_jaxpr (Jaxpr): The JAX program representation for computing the hidden state transitions.
+        other_invars (List[Var]): A list of other input variables required for evaluating the transition_jaxpr.
     """
 
     # the hidden state h_i^{t-1}
@@ -369,7 +389,7 @@ class Hidden2GroupTransition(NamedTuple):
         return self._asdict()
 
     def __repr__(self) -> str:
-        return repr(bst.util.PrettyMapping(self._asdict(), type_name=self.__class__.__name__))
+        return repr(brainstate.util.PrettyMapping(self._asdict(), type_name=self.__class__.__name__))
 
 
 def _simplify_hid2hid_tracer(
@@ -567,7 +587,14 @@ class JaxprEvalForHiddenGroup(JaxprEvaluation):
         if len(hidden_invars) > 0:
             # A hidden invar may be used in multiple places.
             # All places share a common tracer.
-            assert len(hidden_invars) == 1, 'Currently, we only support one hidden state in a single equation.'
+            if len(hidden_invars) != 1:
+                paths = [str(self.invar_to_hidden_path[var]) for var in hidden_invars]
+                hidden_paths = "\n".join(paths)
+                raise ValueError(
+                    f'Currently, we only support one hidden state in a single equation. \n'
+                    f'{eqn}\n'
+                    f'{hidden_paths}'
+                )
             hidden_var = hidden_invars[0]
             hidden_outvars = set([outvar for outvar in eqn.outvars if outvar in self.hidden_outvars])
             needed_invars = set([outvar for outvar in eqn.outvars if outvar not in self.hidden_outvars])
@@ -738,12 +765,13 @@ def write_jaxpr_of_hidden_group_transition(
         if invar in hidden_invar_to_transition:
             transition = hidden_invar_to_transition[invar]
             for eq in transition.transition_jaxpr.eqns:
-                this_eq_exist = False
-                for outvar in eq.outvars:
-                    if outvar in all_outvars:
-                        this_eq_exist = True
-                        break
-                if not this_eq_exist:
+                this_eq_exist = [outvar in all_outvars for outvar in eq.outvars]
+                # this_eq_exist = False
+                # for outvar in eq.outvars:
+                #     if outvar in all_outvars:
+                #         this_eq_exist = True
+                #         break
+                if not all(this_eq_exist):
                     eqns.append(eq.replace())
                     all_invars.update([invar for invar in eq.invars if not isinstance(invar, Literal)])
                     all_outvars.update(eq.outvars)
@@ -868,8 +896,8 @@ def find_hidden_groups_from_jaxpr(
     weight_invars: Set[Var],
     invar_to_hidden_path: Dict[HiddenInVar, Path],
     outvar_to_hidden_path: Dict[HiddenOutVar, Path],
-    path_to_state: Dict[Path, bst.State],
-) -> Tuple[Sequence[HiddenGroup], bst.util.PrettyDict]:
+    path_to_state: Dict[Path, brainstate.State],
+) -> Tuple[Sequence[HiddenGroup], brainstate.util.PrettyDict]:
     """
     Find hidden groups from the jaxpr.
 
@@ -895,7 +923,7 @@ def find_hidden_groups_from_jaxpr(
         path_to_state=path_to_state,
     )
     hidden_groups, hid_path_to_group = evaluator.compile()
-    return hidden_groups, bst.util.PrettyDict(hid_path_to_group)
+    return hidden_groups, brainstate.util.PrettyDict(hid_path_to_group)
 
 
 def find_hidden_groups_from_minfo(
@@ -926,10 +954,10 @@ def find_hidden_groups_from_minfo(
 
 
 def find_hidden_groups_from_module(
-    model: bst.nn.Module,
+    model: brainstate.nn.Module,
     *model_args,
     **model_kwargs,
-) -> Tuple[Sequence[HiddenGroup], bst.util.PrettyDict]:
+) -> Tuple[Sequence[HiddenGroup], brainstate.util.PrettyDict]:
     """
     Find hidden groups from the model.
 

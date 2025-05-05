@@ -57,11 +57,15 @@ class MyArgumentParser(argparse.ArgumentParser):
         # training method
         if args.method != 'bptt':
             self.add_argument(
-                "--vjp_time", type=str, default='t', choices=['t', 't_minus_1'],
-                help="The VJP time,should be t or t-1."
+                "--vjp_method",
+                type=str,
+                default='multi-step',
+                choices=['multi-step', 'single-step'],
             )
             if args.method != 'diag':
                 self.add_argument(
-                    "--etrace_decay", type=float, default=0.9,
+                    "--etrace_decay",
+                    type=float,
+                    default=0.9,
                     help="The time constant of eligibility trace "
                 )

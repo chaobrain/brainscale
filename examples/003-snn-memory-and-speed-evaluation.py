@@ -20,7 +20,6 @@ from functools import reduce
 from typing import Any, Callable, Union
 
 import matplotlib.pyplot as plt
-
 import numpy as np
 
 from utils import MyArgumentParser
@@ -413,20 +412,20 @@ class Trainer(object):
             model = brainscale.IODimVjpAlgorithm(
                 _single_step,
                 self.args.etrace_decay,
-                vjp_time=self.args.vjp_time,
+                vjp_method=self.args.vjp_method,
             )
             model.compile_graph(0, jax.ShapeDtypeStruct(inputs.shape[1:], inputs.dtype))
         elif self.args.method == 'diag':
             model = brainscale.ParamDimVjpAlgorithm(
                 _single_step,
-                vjp_time=self.args.vjp_time,
+                vjp_method=self.args.vjp_method,
             )
             model.compile_graph(0, jax.ShapeDtypeStruct(inputs.shape[1:], inputs.dtype))
         elif self.args.method == 'hybrid':
             model = brainscale.HybridDimVjpAlgorithm(
                 _single_step,
                 self.args.etrace_decay,
-                vjp_time=self.args.vjp_time,
+                vjp_method=self.args.vjp_method,
             )
             model.compile_graph(0, jax.ShapeDtypeStruct(inputs.shape[1:], inputs.dtype))
         else:
