@@ -1,7 +1,5 @@
 <h1 align="center">BrainScale</h1>
-<h2 align="center">Scalable Online Learning in Biological Neural Networks</h2>
-
-[//]: # (# Scalable Online Learning in Biological Neural Networks)
+<h2 align="center">Scalable Online Learning for Brain Dynamics</h2>
 
 <p align="center">
   	<img alt="Header image of brainscale." src="https://raw.githubusercontent.com/chaobrain/brainscale/main/docs/_static/brainscale.jpg" width=40%>
@@ -19,12 +17,12 @@
 
 
 [``brainscale``](https://github.com/chaobrain/brainscale) provides online learning algorithms for biological neural networks. 
-It has been integrated into our establishing [Brain Dynamics Programming ecosystem](https://ecosystem-for-brain-dynamics.readthedocs.io/). 
+It has been integrated into our establishing [Brain Modeling ecosystem](https://brainmodeling.readthedocs.io/). 
 
 
 ## Installation
 
-``brainscale`` can run on Python 3.9+ installed on Linux, MacOS, and Windows. You can install ``brainscale`` via pip:
+``brainscale`` can run on Python 3.10+ installed on Linux, MacOS, and Windows. You can install ``brainscale`` via pip:
 
 ```bash
 pip install brainscale --upgrade
@@ -43,6 +41,7 @@ The official documentation is hosted on Read the Docs: [https://brainscale.readt
 
 
 
-## See also the BDP ecosystem
+## See also the brain modeling ecosystem
 
-We are building the Brain Dynamics Programming ecosystem: https://ecosystem-for-brain-dynamics.readthedocs.io/
+We are building the brain modeling ecosystem: https://brainmodeling.readthedocs.io/
+
