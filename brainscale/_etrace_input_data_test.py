@@ -16,7 +16,7 @@
 
 import unittest
 
-import brainstate as bst
+import brainstate
 import jax
 
 import brainscale
@@ -31,8 +31,8 @@ class TestEtraceInputData(unittest.TestCase):
 
         f(brainscale.SingleStepData(3))
         f(brainscale.MultiStepData(3))
-        f(brainscale.SingleStepData(bst.random.rand(10)))
-        f(brainscale.MultiStepData(bst.random.rand(10)))
+        f(brainscale.SingleStepData(brainstate.random.rand(10)))
+        f(brainscale.MultiStepData(brainstate.random.rand(10)))
 
     def test_grad(self):
         def f(x):

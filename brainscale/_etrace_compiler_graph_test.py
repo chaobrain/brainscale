@@ -17,7 +17,7 @@
 import unittest
 from pprint import pprint
 
-import brainstate as bst
+import brainstate
 import brainunit as u
 
 import brainscale
@@ -41,9 +41,9 @@ class TestCompileGraphRNN(unittest.TestCase):
         n_out = 4
 
         gru = brainscale.nn.GRUCell(n_in, n_out)
-        bst.nn.init_all_states(gru)
+        brainstate.nn.init_all_states(gru)
 
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
         graph = brainscale.compile_etrace_graph(gru, input, include_hidden_perturb=False)
 
         self.assertTrue(isinstance(graph, brainscale.ETraceGraph))
@@ -51,7 +51,7 @@ class TestCompileGraphRNN(unittest.TestCase):
         self.assertTrue(len(graph.module_info.compiled_model_states) == 4)
         self.assertTrue(len(graph.hidden_groups) == 1)
 
-        param_states = gru.states(bst.ParamState)
+        param_states = gru.states(brainstate.ParamState)
         self.assertTrue(len(param_states) == 3)
         self.assertTrue(len(graph.hidden_param_op_relations) == 2)
 
@@ -62,9 +62,9 @@ class TestCompileGraphRNN(unittest.TestCase):
         n_out = 4
 
         lru = brainscale.nn.LRUCell(n_in, n_out)
-        bst.nn.init_all_states(lru)
+        brainstate.nn.init_all_states(lru)
 
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
         graph = brainscale.compile_etrace_graph(lru, input, include_hidden_perturb=False)
 
         self.assertTrue(len(graph.hidden_groups) == 1)
@@ -81,9 +81,9 @@ class TestCompileGraphRNN(unittest.TestCase):
         n_out = 4
 
         lstm = brainscale.nn.LSTMCell(n_in, n_out)
-        bst.nn.init_all_states(lstm)
+        brainstate.nn.init_all_states(lstm)
 
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
         graph = brainscale.compile_etrace_graph(lstm, input, include_hidden_perturb=False)
 
         self.assertTrue(isinstance(graph, brainscale.ETraceGraph))
@@ -95,7 +95,7 @@ class TestCompileGraphRNN(unittest.TestCase):
         hid_states = lstm.states(brainscale.ETraceState)
         self.assertTrue(len(hid_states) == len(graph.hid_path_to_group))
 
-        param_states = lstm.states(bst.ParamState)
+        param_states = lstm.states(brainstate.ParamState)
         self.assertTrue(len(param_states) == len(graph.hidden_param_op_relations))
 
         hidden_paths = set(graph.hidden_groups[0].hidden_paths)
@@ -111,14 +111,14 @@ class TestCompileGraphRNN(unittest.TestCase):
         n_in = 3
         n_out = 4
 
-        net = bst.nn.Sequential(
+        net = brainstate.nn.Sequential(
             brainscale.nn.LSTMCell(n_in, n_out),
-            bst.nn.ReLU(),
+            brainstate.nn.ReLU(),
             brainscale.nn.LSTMCell(n_out, n_in),
         )
-        bst.nn.init_all_states(net)
+        brainstate.nn.init_all_states(net)
 
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
         graph = brainscale.compile_etrace_graph(net, input, include_hidden_perturb=False)
 
         self.assertTrue(isinstance(graph, brainscale.ETraceGraph))
@@ -144,14 +144,14 @@ class TestCompileGraphRNN(unittest.TestCase):
         n_in = 3
         n_out = 4
 
-        net = bst.nn.Sequential(
+        net = brainstate.nn.Sequential(
             brainscale.nn.LRUCell(n_in, n_out),
-            bst.nn.ReLU(),
+            brainstate.nn.ReLU(),
             brainscale.nn.LRUCell(n_in, n_out),
         )
-        bst.nn.init_all_states(net)
+        brainstate.nn.init_all_states(net)
 
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
         graph = brainscale.compile_etrace_graph(net, input, include_hidden_perturb=False)
 
         self.assertTrue(len(graph.hidden_groups) == 2)
@@ -172,14 +172,14 @@ class TestCompileGraphRNN(unittest.TestCase):
         n_in = 4
         n_out = 4
 
-        net = bst.nn.Sequential(
+        net = brainstate.nn.Sequential(
             brainscale.nn.LRUCell(n_in, n_out),
-            bst.nn.ReLU(),
+            brainstate.nn.ReLU(),
             brainscale.nn.LRUCell(n_in, n_out),
         )
-        bst.nn.init_all_states(net)
+        brainstate.nn.init_all_states(net)
 
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
         graph = brainscale.compile_etrace_graph(net, input, include_hidden_perturb=False)
 
         self.assertTrue(len(graph.hidden_groups) == 2)
@@ -201,16 +201,16 @@ class TestCompileGraphSNN(unittest.TestCase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        bst.environ.set(dt=0.1 * u.ms)
+        brainstate.environ.set(dt=0.1 * u.ms)
 
     def test_if_delta_dense(self):
         n_in = 3
         n_rec = 4
 
         net = IF_Delta_Dense_Layer(n_in, n_rec)
-        bst.nn.init_all_states(net)
+        brainstate.nn.init_all_states(net)
 
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
         graph = brainscale.compile_etrace_graph(net, input, include_hidden_perturb=False)
 
         pprint(graph)
@@ -221,9 +221,9 @@ class TestCompileGraphSNN(unittest.TestCase):
         n_rec = 4
 
         net = LIF_ExpCo_Dense_Layer(n_in, n_rec)
-        bst.nn.init_all_states(net)
+        brainstate.nn.init_all_states(net)
 
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
         graph = brainscale.compile_etrace_graph(net, input, include_hidden_perturb=False)
 
         pprint(graph)
@@ -233,9 +233,9 @@ class TestCompileGraphSNN(unittest.TestCase):
         n_rec = 4
 
         net = ALIF_ExpCo_Dense_Layer(n_in, n_rec)
-        bst.nn.init_all_states(net)
+        brainstate.nn.init_all_states(net)
 
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
         graph = brainscale.compile_etrace_graph(net, input, include_hidden_perturb=False)
 
         pprint(graph)
@@ -245,9 +245,9 @@ class TestCompileGraphSNN(unittest.TestCase):
         n_rec = 4
 
         net = LIF_ExpCu_Dense_Layer(n_in, n_rec)
-        bst.nn.init_all_states(net)
+        brainstate.nn.init_all_states(net)
 
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
         graph = brainscale.compile_etrace_graph(net, input, include_hidden_perturb=False)
 
         pprint(graph)
@@ -257,9 +257,9 @@ class TestCompileGraphSNN(unittest.TestCase):
         n_rec = 4
 
         net = LIF_STDExpCu_Dense_Layer(n_in, n_rec)
-        bst.nn.init_all_states(net)
+        brainstate.nn.init_all_states(net)
 
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
         graph = brainscale.compile_etrace_graph(net, input, include_hidden_perturb=False)
 
         pprint(graph)
@@ -269,9 +269,9 @@ class TestCompileGraphSNN(unittest.TestCase):
         n_rec = 4
 
         net = LIF_STPExpCu_Dense_Layer(n_in, n_rec)
-        bst.nn.init_all_states(net)
+        brainstate.nn.init_all_states(net)
 
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
         graph = brainscale.compile_etrace_graph(net, input, include_hidden_perturb=False)
 
         pprint(graph)
@@ -281,9 +281,9 @@ class TestCompileGraphSNN(unittest.TestCase):
         n_rec = 4
 
         net = ALIF_ExpCu_Dense_Layer(n_in, n_rec)
-        bst.nn.init_all_states(net)
+        brainstate.nn.init_all_states(net)
 
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
         graph = brainscale.compile_etrace_graph(net, input, include_hidden_perturb=False)
 
         pprint(graph)
@@ -293,9 +293,9 @@ class TestCompileGraphSNN(unittest.TestCase):
         n_rec = 4
 
         net = ALIF_Delta_Dense_Layer(n_in, n_rec)
-        bst.nn.init_all_states(net)
+        brainstate.nn.init_all_states(net)
 
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
         graph = brainscale.compile_etrace_graph(net, input, include_hidden_perturb=False)
 
         pprint(graph)
@@ -305,9 +305,9 @@ class TestCompileGraphSNN(unittest.TestCase):
         n_rec = 4
 
         net = ALIF_STDExpCu_Dense_Layer(n_in, n_rec)
-        bst.nn.init_all_states(net)
+        brainstate.nn.init_all_states(net)
 
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
         graph = brainscale.compile_etrace_graph(net, input, include_hidden_perturb=False)
 
         pprint(graph)
@@ -317,9 +317,9 @@ class TestCompileGraphSNN(unittest.TestCase):
         n_rec = 4
 
         net = ALIF_STPExpCu_Dense_Layer(n_in, n_rec)
-        bst.nn.init_all_states(net)
+        brainstate.nn.init_all_states(net)
 
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
         graph = brainscale.compile_etrace_graph(net, input, include_hidden_perturb=False)
 
         pprint(graph)

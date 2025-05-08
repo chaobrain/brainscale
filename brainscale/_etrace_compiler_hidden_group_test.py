@@ -22,7 +22,7 @@ os.environ['JAX_TRACEBACK_FILTERING'] = 'off'
 import unittest
 from pprint import pprint
 
-import brainstate as bst
+import brainstate
 import brainunit as u
 import jax
 import pytest
@@ -138,9 +138,9 @@ class Test_find_hidden_groups_from_module:
         n_out = 4
 
         gru = cls(n_in, n_out)
-        bst.nn.init_all_states(gru)
+        brainstate.nn.init_all_states(gru)
 
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
         hidden_groups, hid_path_to_group = find_hidden_groups_from_module(gru, input)
 
         print()
@@ -167,13 +167,13 @@ class Test_find_hidden_groups_from_module:
     def test_snn_single_layer(self, cls):
         n_in = 3
         n_out = 4
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
 
         print(cls)
 
-        with bst.environ.context(dt=0.1 * u.ms):
+        with brainstate.environ.context(dt=0.1 * u.ms):
             layer = cls(n_in, n_out)
-            bst.nn.init_all_states(layer)
+            brainstate.nn.init_all_states(layer)
             hidden_groups, hid_path_to_group = find_hidden_groups_from_module(layer, input)
 
         print()
@@ -201,14 +201,14 @@ class Test_find_hidden_groups_from_module:
     def test_snn_two_layers(self, cls):
         n_in = 3
         n_out = 4
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
 
         print()
         print(cls)
 
-        with bst.environ.context(dt=0.1 * u.ms):
-            layer = bst.nn.Sequential(cls(n_in, n_out), cls(n_out, n_out))
-            bst.nn.init_all_states(layer)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            layer = brainstate.nn.Sequential(cls(n_in, n_out), cls(n_out, n_out))
+            brainstate.nn.init_all_states(layer)
             hidden_groups, hid_path_to_group = find_hidden_groups_from_module(layer, input)
 
         for group in hidden_groups:
@@ -235,13 +235,13 @@ class Test_module_with_group_state:
     ):
         n_in = 3
         n_out = 4
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
 
-        with bst.environ.context(dt=0.1 * u.ms):
+        with brainstate.environ.context(dt=0.1 * u.ms):
             layer_without_group = cls_without_group(n_in, n_out)
             layer_with_group = cls_with_group(n_in, n_out)
-            bst.nn.init_all_states(layer_without_group)
-            bst.nn.init_all_states(layer_with_group)
+            brainstate.nn.init_all_states(layer_without_group)
+            brainstate.nn.init_all_states(layer_with_group)
             hidden_groups_without_group, _ = find_hidden_groups_from_module(layer_without_group, input)
             hidden_groups_with_group, _ = find_hidden_groups_from_module(layer_with_group, input)
 
@@ -268,18 +268,18 @@ class Test_module_with_group_state:
         cls_without_group,
         cls_with_group,
     ):
-        rec_init = lambda shape: bst.random.RandomState(0).randn(*shape)
-        ff_init = lambda shape: bst.random.RandomState(1).randn(*shape)
+        rec_init = lambda shape: brainstate.random.RandomState(0).randn(*shape)
+        ff_init = lambda shape: brainstate.random.RandomState(1).randn(*shape)
 
         n_in = 3
         n_out = 4
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
 
-        with bst.environ.context(dt=0.1 * u.ms):
+        with brainstate.environ.context(dt=0.1 * u.ms):
             layer_without_group = cls_without_group(n_in, n_out, rec_init=rec_init, ff_init=ff_init)
             layer_with_group = cls_with_group(n_in, n_out, rec_init=rec_init, ff_init=ff_init)
-            bst.nn.init_all_states(layer_without_group)
-            bst.nn.init_all_states(layer_with_group)
+            brainstate.nn.init_all_states(layer_without_group)
+            brainstate.nn.init_all_states(layer_with_group)
 
             graph_without_group = brainscale.compile_etrace_graph(layer_without_group, input)
             graph_with_group = brainscale.compile_etrace_graph(layer_with_group, input)
@@ -330,24 +330,24 @@ class Test_module_with_group_state:
         cls_without_group,
         cls_with_group,
     ):
-        rec_init = lambda shape: bst.random.RandomState(0).randn(*shape)
-        ff_init = lambda shape: bst.random.RandomState(1).randn(*shape)
+        rec_init = lambda shape: brainstate.random.RandomState(0).randn(*shape)
+        ff_init = lambda shape: brainstate.random.RandomState(1).randn(*shape)
 
         n_in = 3
         n_out = 4
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
 
-        with bst.environ.context(dt=0.1 * u.ms):
-            layer_without_group = bst.nn.Sequential(
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            layer_without_group = brainstate.nn.Sequential(
                 cls_without_group(n_in, n_out, rec_init=rec_init, ff_init=ff_init),
                 cls_without_group(n_out, n_out, rec_init=rec_init, ff_init=ff_init)
             )
-            layer_with_group = bst.nn.Sequential(
+            layer_with_group = brainstate.nn.Sequential(
                 cls_with_group(n_in, n_out, rec_init=rec_init, ff_init=ff_init),
                 cls_with_group(n_out, n_out, rec_init=rec_init, ff_init=ff_init)
             )
-            bst.nn.init_all_states(layer_without_group)
-            bst.nn.init_all_states(layer_with_group)
+            brainstate.nn.init_all_states(layer_without_group)
+            brainstate.nn.init_all_states(layer_with_group)
 
             graph_without_group = brainscale.compile_etrace_graph(layer_without_group, input)
             graph_with_group = brainscale.compile_etrace_graph(layer_with_group, input)
@@ -405,18 +405,18 @@ class Test_module_with_group_state:
         cls_without_group,
         cls_with_group,
     ):
-        rec_init = lambda shape: bst.random.RandomState(0).randn(*shape)
-        ff_init = lambda shape: bst.random.RandomState(1).randn(*shape)
+        rec_init = lambda shape: brainstate.random.RandomState(0).randn(*shape)
+        ff_init = lambda shape: brainstate.random.RandomState(1).randn(*shape)
 
         n_in = 3
         n_out = 4
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
 
-        with bst.environ.context(dt=0.1 * u.ms):
+        with brainstate.environ.context(dt=0.1 * u.ms):
             layer_without_group = cls_without_group(n_in, n_out, rec_init=rec_init, ff_init=ff_init)
             layer_with_group = cls_with_group(n_in, n_out, rec_init=rec_init, ff_init=ff_init)
-            bst.nn.init_all_states(layer_without_group)
-            bst.nn.init_all_states(layer_with_group)
+            brainstate.nn.init_all_states(layer_without_group)
+            brainstate.nn.init_all_states(layer_with_group)
 
             graph_without_group = brainscale.compile_etrace_graph(layer_without_group, input)
             graph_with_group = brainscale.compile_etrace_graph(layer_with_group, input)
@@ -467,24 +467,24 @@ class Test_module_with_group_state:
         cls_without_group,
         cls_with_group,
     ):
-        rec_init = lambda shape: bst.random.RandomState(0).randn(*shape)
-        ff_init = lambda shape: bst.random.RandomState(1).randn(*shape)
+        rec_init = lambda shape: brainstate.random.RandomState(0).randn(*shape)
+        ff_init = lambda shape: brainstate.random.RandomState(1).randn(*shape)
 
         n_in = 3
         n_out = 4
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
 
-        with bst.environ.context(dt=0.1 * u.ms):
-            layer_without_group = bst.nn.Sequential(
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            layer_without_group = brainstate.nn.Sequential(
                 cls_without_group(n_in, n_out, rec_init=rec_init, ff_init=ff_init),
                 cls_without_group(n_out, n_out, rec_init=rec_init, ff_init=ff_init)
             )
-            layer_with_group = bst.nn.Sequential(
+            layer_with_group = brainstate.nn.Sequential(
                 cls_with_group(n_in, n_out, rec_init=rec_init, ff_init=ff_init),
                 cls_with_group(n_out, n_out, rec_init=rec_init, ff_init=ff_init)
             )
-            bst.nn.init_all_states(layer_without_group)
-            bst.nn.init_all_states(layer_with_group)
+            brainstate.nn.init_all_states(layer_without_group)
+            brainstate.nn.init_all_states(layer_with_group)
 
             graph_without_group = brainscale.compile_etrace_graph(layer_without_group, input)
             graph_with_group = brainscale.compile_etrace_graph(layer_with_group, input)
@@ -546,16 +546,16 @@ class TestHiddenGroup_state_transition:
         n_out = 4
 
         gru = cls(n_in, n_out)
-        bst.nn.init_all_states(gru)
+        brainstate.nn.init_all_states(gru)
 
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
         hidden_groups, hid_path_to_group = find_hidden_groups_from_module(gru, input)
 
         print()
         for group in hidden_groups:
             print(group)
-            hidden_vals = [bst.random.rand_like(invar.aval) for invar in group.hidden_invars]
-            input_vals = [bst.random.rand_like(invar.aval) for invar in group.transition_jaxpr_constvars]
+            hidden_vals = [brainstate.random.rand_like(invar.aval) for invar in group.hidden_invars]
+            input_vals = [brainstate.random.rand_like(invar.aval) for invar in group.transition_jaxpr_constvars]
             out_vals = group.transition(hidden_vals, input_vals)
             print(out_vals)
 
@@ -577,20 +577,20 @@ class TestHiddenGroup_state_transition:
     def test_snn_single_layer(self, cls):
         n_in = 3
         n_out = 4
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
 
         print()
         print(cls)
 
-        with bst.environ.context(dt=0.1 * u.ms):
+        with brainstate.environ.context(dt=0.1 * u.ms):
             layer = cls(n_in, n_out)
-            bst.nn.init_all_states(layer)
+            brainstate.nn.init_all_states(layer)
             hidden_groups, hid_path_to_group = find_hidden_groups_from_module(layer, input)
 
         for group in hidden_groups:
             pprint(group.hidden_paths)
-            hidden_vals = [bst.random.rand_like(invar.aval) for invar in group.hidden_invars]
-            input_vals = [bst.random.rand_like(invar.aval) for invar in group.transition_jaxpr_constvars]
+            hidden_vals = [brainstate.random.rand_like(invar.aval) for invar in group.hidden_invars]
+            input_vals = [brainstate.random.rand_like(invar.aval) for invar in group.transition_jaxpr_constvars]
             out_vals = group.transition(hidden_vals, input_vals)
             print(out_vals)
 
@@ -612,19 +612,19 @@ class TestHiddenGroup_state_transition:
     def test_snn_two_layers(self, cls):
         n_in = 3
         n_out = 4
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
 
         print()
         print(cls)
-        with bst.environ.context(dt=0.1 * u.ms):
-            layer = bst.nn.Sequential(cls(n_in, n_out), cls(n_out, n_out))
-            bst.nn.init_all_states(layer)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            layer = brainstate.nn.Sequential(cls(n_in, n_out), cls(n_out, n_out))
+            brainstate.nn.init_all_states(layer)
             hidden_groups, hid_path_to_group = find_hidden_groups_from_module(layer, input)
 
         for group in hidden_groups:
             pprint(group.hidden_paths)
-            hidden_vals = [bst.random.rand_like(invar.aval) for invar in group.hidden_invars]
-            input_vals = [bst.random.rand_like(invar.aval) for invar in group.transition_jaxpr_constvars]
+            hidden_vals = [brainstate.random.rand_like(invar.aval) for invar in group.hidden_invars]
+            input_vals = [brainstate.random.rand_like(invar.aval) for invar in group.transition_jaxpr_constvars]
             out_vals = group.transition(hidden_vals, input_vals)
             print(out_vals)
 
@@ -645,15 +645,15 @@ class TestHiddenGroup_diagonal_jacobian:
         n_out = 4
 
         gru = cls(n_in, n_out)
-        bst.nn.init_all_states(gru)
+        brainstate.nn.init_all_states(gru)
 
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
         hidden_groups, hid_path_to_group = find_hidden_groups_from_module(gru, input)
 
         print()
         for group in hidden_groups:
-            hidden_vals = [bst.random.rand_like(invar.aval) for invar in group.hidden_invars]
-            input_vals = [bst.random.rand_like(invar.aval) for invar in group.transition_jaxpr_constvars]
+            hidden_vals = [brainstate.random.rand_like(invar.aval) for invar in group.hidden_invars]
+            input_vals = [brainstate.random.rand_like(invar.aval) for invar in group.transition_jaxpr_constvars]
             diag_jac = group.diagonal_jacobian(hidden_vals, input_vals)
             print(diag_jac)
 
@@ -672,15 +672,15 @@ class TestHiddenGroup_diagonal_jacobian:
         n_out = 1
 
         gru = cls(n_in, n_out)
-        bst.nn.init_all_states(gru)
+        brainstate.nn.init_all_states(gru)
 
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
         hidden_groups, hid_path_to_group = find_hidden_groups_from_module(gru, input)
 
         print()
         for group in hidden_groups:
-            hidden_vals = [bst.random.rand_like(invar.aval) for invar in group.hidden_invars]
-            input_vals = [bst.random.rand_like(invar.aval) for invar in group.transition_jaxpr_constvars]
+            hidden_vals = [brainstate.random.rand_like(invar.aval) for invar in group.hidden_invars]
+            input_vals = [brainstate.random.rand_like(invar.aval) for invar in group.transition_jaxpr_constvars]
             diag_jac = group.diagonal_jacobian(hidden_vals, input_vals)
             diag_jac = u.math.squeeze(diag_jac)
             print(diag_jac)
@@ -710,20 +710,20 @@ class TestHiddenGroup_diagonal_jacobian:
     def test_snn_single_layer(self, cls):
         n_in = 3
         n_out = 4
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
 
         print()
         print(cls)
 
-        with bst.environ.context(dt=0.1 * u.ms):
+        with brainstate.environ.context(dt=0.1 * u.ms):
             layer = cls(n_in, n_out)
-            bst.nn.init_all_states(layer)
+            brainstate.nn.init_all_states(layer)
             hidden_groups, hid_path_to_group = find_hidden_groups_from_module(layer, input)
 
         for group in hidden_groups:
             pprint(group.hidden_paths)
-            hidden_vals = [bst.random.rand_like(invar.aval) for invar in group.hidden_invars]
-            input_vals = [bst.random.rand_like(invar.aval) for invar in group.transition_jaxpr_constvars]
+            hidden_vals = [brainstate.random.rand_like(invar.aval) for invar in group.hidden_invars]
+            input_vals = [brainstate.random.rand_like(invar.aval) for invar in group.transition_jaxpr_constvars]
             diag_jac = group.diagonal_jacobian(hidden_vals, input_vals)
             print(diag_jac)
 
@@ -745,20 +745,20 @@ class TestHiddenGroup_diagonal_jacobian:
     def test_snn_single_layer_accuracy(self, cls):
         n_in = 1
         n_out = 1
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
 
         print()
         print(cls)
 
-        with bst.environ.context(dt=0.1 * u.ms):
+        with brainstate.environ.context(dt=0.1 * u.ms):
             layer = cls(n_in, n_out)
-            bst.nn.init_all_states(layer)
+            brainstate.nn.init_all_states(layer)
             hidden_groups, hid_path_to_group = find_hidden_groups_from_module(layer, input)
 
         for group in hidden_groups:
             pprint(group.hidden_paths)
-            hidden_vals = [bst.random.rand_like(invar.aval) for invar in group.hidden_invars]
-            input_vals = [bst.random.rand_like(invar.aval) for invar in group.transition_jaxpr_constvars]
+            hidden_vals = [brainstate.random.rand_like(invar.aval) for invar in group.hidden_invars]
+            input_vals = [brainstate.random.rand_like(invar.aval) for invar in group.transition_jaxpr_constvars]
             diag_jac = group.diagonal_jacobian(hidden_vals, input_vals)
             diag_jac = u.math.squeeze(diag_jac)
             print(diag_jac)
@@ -788,19 +788,19 @@ class TestHiddenGroup_diagonal_jacobian:
     def test_snn_two_layers(self, cls):
         n_in = 3
         n_out = 4
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
 
         print()
         print(cls)
-        with bst.environ.context(dt=0.1 * u.ms):
-            layer = bst.nn.Sequential(cls(n_in, n_out), cls(n_out, n_out))
-            bst.nn.init_all_states(layer)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            layer = brainstate.nn.Sequential(cls(n_in, n_out), cls(n_out, n_out))
+            brainstate.nn.init_all_states(layer)
             hidden_groups, hid_path_to_group = find_hidden_groups_from_module(layer, input)
 
         for group in hidden_groups:
             pprint(group.hidden_paths)
-            hidden_vals = [bst.random.rand_like(invar.aval) for invar in group.hidden_invars]
-            input_vals = [bst.random.rand_like(invar.aval) for invar in group.transition_jaxpr_constvars]
+            hidden_vals = [brainstate.random.rand_like(invar.aval) for invar in group.hidden_invars]
+            input_vals = [brainstate.random.rand_like(invar.aval) for invar in group.transition_jaxpr_constvars]
             diag_jac = group.diagonal_jacobian(hidden_vals, input_vals)
             print(diag_jac)
 
@@ -822,19 +822,19 @@ class TestHiddenGroup_diagonal_jacobian:
     def test_snn_two_layers_accuracy(a, cls, ):
         n_in = 1
         n_out = 1
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
 
         print()
         print(cls)
-        with bst.environ.context(dt=0.1 * u.ms):
-            layer = bst.nn.Sequential(cls(n_in, n_out), cls(n_out, n_out))
-            bst.nn.init_all_states(layer)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            layer = brainstate.nn.Sequential(cls(n_in, n_out), cls(n_out, n_out))
+            brainstate.nn.init_all_states(layer)
             hidden_groups, hid_path_to_group = find_hidden_groups_from_module(layer, input)
 
         for group in hidden_groups:
             pprint(group.hidden_paths)
-            hidden_vals = [bst.random.rand_like(invar.aval) for invar in group.hidden_invars]
-            input_vals = [bst.random.rand_like(invar.aval) for invar in group.transition_jaxpr_constvars]
+            hidden_vals = [brainstate.random.rand_like(invar.aval) for invar in group.hidden_invars]
+            input_vals = [brainstate.random.rand_like(invar.aval) for invar in group.transition_jaxpr_constvars]
             diag_jac = group.diagonal_jacobian(hidden_vals, input_vals)
             diag_jac = u.math.squeeze(diag_jac)
             print(diag_jac)

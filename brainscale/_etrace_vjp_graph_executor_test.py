@@ -14,7 +14,7 @@
 # ==============================================================================
 import unittest
 
-import brainstate as bst
+import brainstate
 import brainunit as u
 import jax
 import jax.numpy as jnp
@@ -31,8 +31,8 @@ class TestETraceVjpGraphExecutor(unittest.TestCase):
 
     def setUp(self):
         self.model = brainscale.nn.GRUCell(self.in_size, 4)
-        bst.nn.init_all_states(self.model)
-        bst.environ.set(dt=0.1 * u.ms)
+        brainstate.nn.init_all_states(self.model)
+        brainstate.environ.set(dt=0.1 * u.ms)
 
     def test_initialization(self):
         executor = brainscale.ETraceVjpGraphExecutor(self.model)

@@ -15,7 +15,7 @@
 
 from pprint import pprint
 
-import brainstate as bst
+import brainstate
 import brainunit as u
 import pytest
 
@@ -51,10 +51,10 @@ class TestFindHiddenGroupsFromModule:
         n_out = 4
 
         gru = cls(n_in, n_out)
-        bst.nn.init_all_states(gru)
-        states = bst.graph.states(gru, brainscale.ETraceState)
+        brainstate.nn.init_all_states(gru)
+        states = brainstate.graph.states(gru, brainscale.ETraceState)
 
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
         hidden_perturb = add_hidden_perturbation_in_module(gru, input)
 
         print()
@@ -79,14 +79,14 @@ class TestFindHiddenGroupsFromModule:
     def test_snn_single_layer(self, cls):
         n_in = 3
         n_out = 4
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
 
         print(cls)
 
-        with bst.environ.context(dt=0.1 * u.ms):
+        with brainstate.environ.context(dt=0.1 * u.ms):
             layer = cls(n_in, n_out)
-            bst.nn.init_all_states(layer)
-            states = bst.graph.states(layer, brainscale.ETraceState)
+            brainstate.nn.init_all_states(layer)
+            states = brainstate.graph.states(layer, brainscale.ETraceState)
             hidden_perturb = add_hidden_perturbation_in_module(layer, input)
 
         print()
@@ -111,15 +111,15 @@ class TestFindHiddenGroupsFromModule:
     def test_snn_two_layers(self, cls):
         n_in = 3
         n_out = 4
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
 
         print()
         print(cls)
 
-        with bst.environ.context(dt=0.1 * u.ms):
-            layer = bst.nn.Sequential(cls(n_in, n_out), cls(n_out, n_out))
-            bst.nn.init_all_states(layer)
-            states = bst.graph.states(layer, brainscale.ETraceState)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            layer = brainstate.nn.Sequential(cls(n_in, n_out), cls(n_out, n_out))
+            brainstate.nn.init_all_states(layer)
+            states = brainstate.graph.states(layer, brainscale.ETraceState)
             hidden_perturb = add_hidden_perturbation_in_module(layer, input)
 
         perturb = hidden_perturb.init_perturb_data()
