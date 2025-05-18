@@ -24,8 +24,6 @@
 
 # -*- coding: utf-8 -*-
 
-from __future__ import annotations
-
 from collections import defaultdict
 from functools import partial
 from typing import Dict, Tuple, Any, List, Optional, Sequence

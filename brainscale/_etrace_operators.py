@@ -13,8 +13,6 @@
 # limitations under the License.
 # ==============================================================================
 
-from __future__ import annotations
-
 import contextlib
 import threading
 from typing import Callable, Optional, Dict, Sequence, Any

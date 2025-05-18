@@ -44,8 +44,6 @@
 
 # -*- coding: utf-8 -*-
 
-from __future__ import annotations
-
 from itertools import combinations
 from typing import List, Dict, Sequence, Tuple, Set, Optional, Callable, NamedTuple, Any
 

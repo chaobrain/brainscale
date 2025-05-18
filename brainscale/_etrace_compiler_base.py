@@ -13,8 +13,6 @@
 # limitations under the License.
 # ==============================================================================
 
-from __future__ import annotations
-
 from typing import Dict, Sequence, Set, List
 
 from ._compatible_imports import (

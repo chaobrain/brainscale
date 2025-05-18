@@ -14,8 +14,6 @@
 # ==============================================================================
 
 
-from __future__ import annotations
-
 import warnings
 from typing import List, Dict, Tuple, Sequence, NamedTuple, Any
 

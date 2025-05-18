@@ -13,8 +13,6 @@
 # limitations under the License.
 # ==============================================================================
 
-from __future__ import annotations
-
 import functools
 from typing import Dict, Sequence, List, Tuple, Optional, NamedTuple, Any
 

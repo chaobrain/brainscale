@@ -14,8 +14,6 @@
 # ==============================================================================
 
 
-from __future__ import annotations
-
 import brainstate
 import brainunit as u
 import jax.tree

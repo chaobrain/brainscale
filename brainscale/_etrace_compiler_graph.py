@@ -14,8 +14,6 @@
 # ==============================================================================
 
 
-from __future__ import annotations
-
 import threading
 from contextlib import contextmanager
 from typing import Dict, Sequence, Tuple, Optional, NamedTuple
