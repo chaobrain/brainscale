@@ -13,10 +13,6 @@
 # limitations under the License.
 # ==============================================================================
 
-import os
-
-os.environ['JAX_TRACEBACK_FILTERING'] = 'off'
-
 import brainstate
 import brainunit as u
 import pytest

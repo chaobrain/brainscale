@@ -13,11 +13,6 @@
 # limitations under the License.
 # ==============================================================================
 
-import os
-
-import numpy as np
-
-os.environ['JAX_TRACEBACK_FILTERING'] = 'off'
 
 import unittest
 from pprint import pprint
@@ -25,6 +20,7 @@ from pprint import pprint
 import brainstate
 import brainunit as u
 import jax
+import numpy as np
 import pytest
 
 import brainscale
