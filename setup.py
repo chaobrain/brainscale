@@ -72,13 +72,16 @@ setup(
         "Source Code": "https://github.com/chaobrain/brainscale",
     },
     extras_require={
-        'cpu': ['jax', ],
-        'cuda12': ['jax[cuda12]', ],
+        'cpu': ['jax[cpu]'],
+        'cuda12': ['jax[cuda12]'],
         'tpu': ['jax[tpu]'],
     },
-    keywords=('computational neuroscience, '
-              'brain-inspired computation, '
-              'brain dynamics programming'),
+    keywords=(
+        'computational neuroscience, '
+        'brain-inspired computing, '
+        'brain modeling, '
+        'online learning'
+    ),
     classifiers=[
         'Natural Language :: English',
         'Operating System :: OS Independent',
