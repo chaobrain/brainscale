@@ -724,7 +724,7 @@ class JaxprEvalForHiddenGroup(JaxprEvaluation):
         #
         # hidden outvar to group
         #
-        hidden_path_to_group: Dict[path, HiddenGroup] = dict()
+        hidden_path_to_group: Dict[Path, HiddenGroup] = dict()
         for group in hidden_groups:
             for path in group.hidden_paths:
                 if path in hidden_path_to_group:

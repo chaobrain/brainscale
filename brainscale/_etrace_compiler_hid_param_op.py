@@ -175,7 +175,7 @@ HiddenParamOpRelation.__module__ = 'brainscale'
 
 
 def _trace_simplify(
-    tracer: HiddenWeightOpTracer,
+    tracer: 'HiddenWeightOpTracer',
     hid_path_to_group: Dict[Path, HiddenGroup],
     state_id_to_path: Dict[int, Path],
     outvar_to_hidden_path: Dict[Var, Path],
@@ -344,7 +344,7 @@ def _jax_eqn_to_jaxpr(eqn: JaxprEqn) -> Jaxpr:
     )
 
 
-def _post_check(trace: HiddenWeightOpTracer) -> HiddenWeightOpTracer:
+def _post_check(trace: 'HiddenWeightOpTracer') -> 'HiddenWeightOpTracer':
     # Check the hidden states of the given weight. If the hidden states are not
     # used in the model, we raise an error. This is to avoid the situation that
     # the weight is defined but not used in the model.
