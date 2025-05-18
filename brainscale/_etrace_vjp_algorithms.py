@@ -2170,6 +2170,16 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
         Dict[ETraceX_Key, jax.Array],
         Dict[ETraceDF_Key, jax.Array]
     ]:
+        """
+        Get the eligibility trace data at the last time-step.
+
+        .. note::
+
+            This is the protocol method that should be implemented in the subclass.
+
+        Returns:
+            ETraceVals, the eligibility trace data.
+        """
         etrace_xs = {k: v.value for k, v in self.etrace_xs.items()}
         etrace_dfs = {k: v.value for k, v in self.etrace_dfs.items()}
         return etrace_xs, etrace_dfs
@@ -2181,6 +2191,15 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
             Dict[ETraceDF_Key, jax.Array]
         ]
     ):
+        """Assign the eligibility trace data to the states at the current time-step.
+
+        .. note::
+
+            This is the protocol method that should be implemented in the subclass.
+
+        Args:
+            hist_etrace_vals: ETraceVals, the eligibility trace data.
+        """
         #
         # For any operation:
         #
@@ -2214,6 +2233,33 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
         Dict[ETraceX_Key, jax.Array],
         Dict[ETraceDF_Key, jax.Array]
     ]:
+        """Update the eligibility trace data for a given timestep.
+
+        This method implements the core update equations for the eligibility trace
+        algorithm with input-output dimensional complexity. It processes historical
+        trace values along with current Jacobians to compute the updated eligibility
+        traces according to the algorithm's update rules.
+
+        Args:
+            running_index: Optional[int]
+                The current timestep index. Used for decay correction factors.
+            hist_etrace_vals: Tuple[Dict[ETraceX_Key, jax.Array], Dict[ETraceDF_Key, jax.Array]]
+                The eligibility trace values from the previous timestep, containing:
+                - Dictionary mapping weight inputs to their trace values
+                - Dictionary mapping differential functions to their trace values
+            hid2weight_jac_multi_times: Hid2WeightJacobian
+                The current hidden-to-weight Jacobians at time t (or t-1 depending on vjp_method).
+            hid2hid_jac_multi_times: HiddenGroupJacobian
+                The current hidden-to-hidden Jacobians for propagating gradients.
+            weight_vals: WeightVals
+                The current values of the model weights.
+
+        Returns:
+            Tuple[Dict[ETraceX_Key, jax.Array], Dict[ETraceDF_Key, jax.Array]]:
+                Updated eligibility trace values for both input traces and differential
+                function traces, computed according to the exponential smoothing rules
+                of the algorithm.
+        """
         #
         # "running_index":
         #            the running index
@@ -2261,8 +2307,35 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
         dl_to_nonetws_at_t: Dict[Path, PyTree],
         dl_to_etws_at_t: Optional[Dict[Path, PyTree]],
     ):
-        """
-        See the documentation in the super class for the details.
+        """Compute weight gradients using eligibility trace data and loss gradients.
+
+        This method implements the final stage of the eligibility trace algorithm, where
+        the eligibility traces are combined with the loss gradients to compute the weight
+        parameter gradients. It follows the mathematical equation:
+
+        ∇_θ L = ∑ (∂L/∂h) ⊙ ϵ
+
+        where ϵ represents the eligibility traces and ∂L/∂h are the gradients of
+        the loss with respect to hidden states.
+
+        Args:
+            running_index: int
+                The current timestep index, used for correction factor calculation.
+            etrace_h2w_at_t: Tuple[Dict[ETraceX_Key, jax.Array], Dict[ETraceDF_Key, jax.Array]]
+                The eligibility trace data at the current timestep, containing:
+                - Dictionary mapping weight inputs to their trace values
+                - Dictionary mapping differential functions to their trace values
+            dl_to_hidden_groups: Sequence[jax.Array]
+                Gradients of the loss with respect to each hidden group/state.
+            weight_vals: Dict[Path, PyTree]
+                Current values of the model weights.
+            dl_to_nonetws_at_t: Dict[Path, PyTree]
+                Gradients for non-eligibility trace weights computed through standard backprop.
+            dl_to_etws_at_t: Optional[Dict[Path, PyTree]]
+                Optional additional gradients for eligibility trace weights.
+
+        Returns:
+            Dict[Path, jax.Array]: Computed gradients for all weights in the model.
         """
 
         #
@@ -2374,11 +2447,7 @@ class ParamDimVjpAlgorithm(ETraceVjpAlgorithm):
         # The states of batched weight gradients
         self.etrace_bwg = dict()
         for relation in self.graph.hidden_param_op_relations:
-            _init_param_dim_state(
-                self.mode,
-                self.etrace_bwg,
-                relation,
-            )
+            _init_param_dim_state(self.mode, self.etrace_bwg, relation)
 
     def reset_state(self, batch_size: int = None, **kwargs):
         """
@@ -2423,12 +2492,49 @@ class ParamDimVjpAlgorithm(ETraceVjpAlgorithm):
         return etraces
 
     def _get_etrace_data(self) -> Dict:
+        """Retrieve the current eligibility trace data from all trace states.
+
+        This method collects all eligibility trace values from the internal state dictionary,
+        extracting the current values from the brainstate.State objects that store them.
+        It returns these values in a dictionary with the same keys as the original state
+        dictionary, making the current trace values available for processing.
+
+        This is an internal method used in the parameter dimension eligibility trace algorithm
+        to access the current trace state for updates and gradient calculations.
+
+        Returns:
+            Dict[ETraceWG_Key, jax.Array]: A dictionary mapping eligibility trace keys to
+                their current values. Each key represents a specific trace component
+                (typically involving a parameter and hidden state relationship), and
+                the corresponding value represents the accumulated eligibility trace.
+        """
         return {
             k: v.value
             for k, v in self.etrace_bwg.items()
         }
 
     def _assign_etrace_data(self, etrace_vals: Dict) -> None:
+        """Assign eligibility trace values to their corresponding state objects.
+
+        This method updates the internal eligibility trace state dictionary (etrace_bwg)
+        with new values from the provided dictionary. It iterates through each key-value
+        pair in the input dictionary and assigns the value to the corresponding state
+        object's value attribute.
+
+        This is an implementation of the abstract method from the parent class,
+        customized for the parameter dimension eligibility trace algorithm which
+        stores traces in a single dictionary rather than separate ones for inputs
+        and differential functions.
+
+        Args:
+            etrace_vals: Dict[ETraceWG_Key, jax.Array]
+                Dictionary mapping eligibility trace keys to their updated values.
+                Each key represents a specific parameter-hidden state relationship,
+                and the value represents the updated eligibility trace value.
+
+        Returns:
+            None
+        """
         for x, val in etrace_vals.items():
             self.etrace_bwg[x].value = val
 
@@ -2440,6 +2546,34 @@ class ParamDimVjpAlgorithm(ETraceVjpAlgorithm):
         hid2hid_jac_multi_times: HiddenGroupJacobian,
         weight_vals: Dict[Path, PyTree],
     ) -> Dict[ETraceWG_Key, PyTree]:
+        """Update eligibility trace data for the parameter dimension-based algorithm.
+
+        This method implements the core update equation for the D-RTRL algorithm's eligibility traces:
+
+        ε^t ≈ D^t·ε^{t-1} + diag(D_f^t)⊗x^t
+
+        It uses JAX's scan operation to efficiently process the historical trace values and
+        combines them with current Jacobians to compute updated traces according to the
+        parameter-dimension approximation approach.
+
+        Args:
+            running_index: Optional[int]
+                Current timestep counter, used for correcting exponential smoothing bias.
+            hist_etrace_vals: Dict[ETraceWG_Key, PyTree]
+                Dictionary containing historical eligibility trace values from previous timestep.
+                Keys are tuples identifying parameter-hidden state relationships.
+            hid2weight_jac_multi_times: Hid2WeightJacobian
+                Jacobians of hidden states with respect to weights at the current timestep.
+                Contains input gradients and differential function gradients.
+            hid2hid_jac_multi_times: HiddenGroupJacobian
+                Jacobians between hidden states (recurrent connections) at the current timestep.
+            weight_vals: Dict[Path, PyTree]
+                Dictionary mapping paths to current weight values in the model.
+
+        Returns:
+            Dict[ETraceWG_Key, PyTree]: Updated eligibility trace values dictionary with the
+                same structure as hist_etrace_vals but containing new values for the current timestep.
+        """
 
         scan_fn = partial(
             _update_param_dim_etrace_scan_fn,
@@ -2469,10 +2603,35 @@ class ParamDimVjpAlgorithm(ETraceVjpAlgorithm):
         dl_to_nonetws_at_t: Dict[Path, PyTree],
         dl_to_etws_at_t: Optional[Dict[Path, PyTree]],
     ):
-        """
-        Solve the weight gradients according to the eligibility trace data.
+        """Compute weight gradients using parameter dimension eligibility traces.
 
-        Particularly, for each weight, we compute its gradients according to the batched weight gradients.
+        This method implements the parameter dimension D-RTRL algorithm's weight gradient
+        computation. It combines the eligibility traces with the gradients of the loss
+        with respect to hidden states to compute the full parameter gradients according to:
+
+        ∇_θ L = ∑_{t' ∈ T} ∂L^{t'}/∂h^{t'} ∘ ε^{t'}
+
+        Where ε represents the eligibility traces and ∂L/∂h are the gradients of the loss
+        with respect to hidden states.
+
+        Args:
+            running_index: int
+                Current timestep counter used for bias correction.
+            etrace_h2w_at_t: Dict[ETraceWG_Key, PyTree]
+                Eligibility trace values at the current timestep, mapping parameter-hidden
+                state relationship keys to trace values.
+            dl_to_hidden_groups: Sequence[jax.Array]
+                Gradients of the loss with respect to hidden states at the current timestep.
+            weight_vals: Dict[WeightID, PyTree]
+                Current values of all weights in the model.
+            dl_to_nonetws_at_t: Dict[Path, PyTree]
+                Gradients of non-eligibility trace parameters at the current timestep.
+            dl_to_etws_at_t: Optional[Dict[Path, PyTree]]
+                Optional additional gradients for eligibility trace parameters at the
+                current timestep.
+
+        Returns:
+            Dict[Path, PyTree]: Dictionary mapping parameter paths to their gradient values.
         """
         dG_weights = {path: None for path in self.param_states}
 
@@ -2697,12 +2856,48 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
         return etrace_xs, etrace_dfs, etrace_bws
 
     def _get_etrace_data(self) -> Tuple[Dict, ...]:
+        """Retrieve all eligibility trace data from internal state dictionaries.
+
+        This method collects the current eligibility trace values from all three internal
+        state dictionaries that store different components of the trace information:
+        - etrace_xs: Input spatial gradients
+        - etrace_dfs: Hidden state differential function values
+        - etrace_wgrads: Weight gradients in parameter dimension
+
+        It extracts the current values from the brainstate.State objects and returns them
+        as a tuple of dictionaries with the same structure as the state dictionaries.
+
+        This method is used internally during the update process to provide the current
+        trace state for computation in the hybrid dimension algorithm.
+
+        Returns:
+            Tuple[Dict, ...]: A tuple containing three dictionaries:
+                - Input spatial gradients (etrace_xs)
+                - Hidden state differential values (etrace_dfs)
+                - Weight gradients (etrace_wgrads)
+        """
         etrace_xs = {x: val.value for x, val in self.etrace_xs.items()}
         etrace_dfs = {x: val.value for x, val in self.etrace_dfs.items()}
         etrace_wgrads = {x: val.value for x, val in self.etrace_bwg.items()}
         return etrace_xs, etrace_dfs, etrace_wgrads
 
-    def _assign_etrace_data(self, etrace_vals: Tuple[Dict, ...]) -> None:
+    def _assign_etrace_data(self, etrace_vals: Sequence[Dict]) -> None:
+        """Assign eligibility trace values to their corresponding state objects.
+
+        This method updates the eligibility trace states with new values provided in the input
+        dictionary. For the parameter dimension algorithm, it iterates through each key-value
+        pair in the input dictionary and assigns the value to the corresponding state's value
+        attribute in the etrace_bwg dictionary.
+
+        This is an implementation of the abstract method from the parent ETraceVjpAlgorithm class,
+        customized for storing traces specific to this algorithm's approach.
+
+        Args:
+            etrace_vals: Sequence[Dict]
+                Dictionary mapping eligibility trace keys to their updated values.
+                Each key identifies a specific weight-hidden state relationship,
+                and the value contains the updated trace information.
+        """
         etrace_xs, etrace_dfs, etrace_wgrads = etrace_vals
         for x, val in etrace_xs.items():
             self.etrace_xs[x].value = val
@@ -2719,6 +2914,38 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
         hid2hid_jac_multi_times: Hid2HidJacobian,
         weight_vals: Dict[Path, PyTree],
     ) -> Tuple[Dict, ...]:
+        """Update eligibility trace data for the hybrid dimension algorithm.
+
+        This method combines the approaches from both IO dimension and parameter dimension
+        algorithms to update eligibility traces. It decides which algorithm to use for each
+        weight-hidden relationship based on the complexity characteristics of each operation.
+
+        The hybrid algorithm chooses between:
+        - IO dimension approach (O(BI+BO) complexity) when I+O < theta
+        - Parameter dimension approach (O(B*theta) complexity) when I+O >= theta
+
+        Where B is batch size, I is input dimensions, O is output dimensions, and theta is
+        the number of parameters.
+
+        Args:
+            running_index: Optional[int]
+                Current timestep counter used for decay corrections.
+            hist_etrace_vals: Tuple[Dict, ...]
+                Historical eligibility trace values as a tuple containing three dictionaries:
+                (etrace_xs, etrace_dfs, etrace_wgrads) for input traces, differential function
+                traces, and weight gradient traces respectively.
+            hid2weight_jac_multi_times: Hid2WeightJacobian
+                Jacobians of hidden states with respect to weights at current timestep.
+            hid2hid_jac_multi_times: Hid2HidJacobian
+                Jacobians of hidden states with respect to previous hidden states.
+            weight_vals: Dict[Path, PyTree]
+                Current values of all weights in the model.
+
+        Returns:
+            Tuple[Dict, ...]: Updated eligibility trace values as a tuple of three dictionaries
+                containing the updated traces for inputs, differential functions, and weight
+                gradients, maintaining the same structure as the input hist_etrace_vals.
+        """
 
         # the history etrace values
         hist_xs, hist_dfs, hist_bwg = hist_etrace_vals
