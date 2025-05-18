@@ -72,9 +72,9 @@ setup(
         "Source Code": "https://github.com/chaobrain/brainscale",
     },
     extras_require={
-        'cpu': ['jax[cpu]'],
-        'cuda12': ['jax[cuda12]'],
-        'tpu': ['jax[tpu]'],
+        'cpu': ['jax[cpu]', 'brainunit[cpu]', 'brainstate[cpu]'],
+        'cuda12': ['jax[cuda12]', 'brainunit[cuda12]', 'brainstate[cuda12]'],
+        'tpu': ['jax[tpu]', 'brainunit[tpu]', 'brainstate[tpu]'],
     },
     keywords=(
         'computational neuroscience, '
