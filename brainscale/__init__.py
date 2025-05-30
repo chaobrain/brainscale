@@ -72,8 +72,8 @@ from brainscale._etrace_operators import (
 )
 from brainscale._etrace_vjp_algorithms import (
     ETraceVjpAlgorithm,
-    IODimVjpAlgorithm,
-    ParamDimVjpAlgorithm,
+    IODimVjpAlgorithm, ES_D_RTRL,
+    ParamDimVjpAlgorithm, D_RTRL,
     HybridDimVjpAlgorithm,
 )
 from brainscale._etrace_vjp_graph_executor import (
@@ -87,10 +87,3 @@ from brainscale._misc import (
     NotSupportedError,
 )
 from . import nn
-
-# # Added 2024-10-27
-# from ._misc import deprecation_getattr
-#
-# _deprecations = {k: (f"'brainscale.{k}' has been moved into brainscale.nn.{k}", getattr(nn, k)) for k in nn.__all__}
-# __getattr__ = deprecation_getattr(__name__, _deprecations)
-# del deprecation_getattr

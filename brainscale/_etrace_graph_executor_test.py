@@ -13,11 +13,9 @@
 # limitations under the License.
 # ==============================================================================
 
-from __future__ import annotations
-
 import unittest
 
-import brainstate as bst
+import brainstate
 import brainunit as u
 import jax.numpy as jnp
 
@@ -31,11 +29,11 @@ class TestShowGraph(unittest.TestCase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        bst.environ.set(dt=0.1 * u.ms)
+        brainstate.environ.set(dt=0.1 * u.ms)
 
     def test_show_lstm_graph(self):
         cell = brainscale.nn.LSTMCell(10, 20, activation=jnp.tanh)
-        bst.nn.init_all_states(cell, 16)
+        brainstate.nn.init_all_states(cell, 16)
 
         graph = brainscale.ETraceGraphExecutor(cell)
         graph.compile_graph(jnp.zeros((16, 10)))
@@ -43,7 +41,7 @@ class TestShowGraph(unittest.TestCase):
 
     def test_show_gru_graph(self):
         cell = brainscale.nn.GRUCell(10, 20, activation=jnp.tanh)
-        bst.nn.init_all_states(cell, 16)
+        brainstate.nn.init_all_states(cell, 16)
 
         graph = brainscale.ETraceGraphExecutor(cell)
         graph.compile_graph(jnp.zeros((16, 10)))
@@ -51,7 +49,7 @@ class TestShowGraph(unittest.TestCase):
 
     def test_show_lru_graph(self):
         cell = brainscale.nn.LRUCell(10, 20)
-        bst.nn.init_all_states(cell)
+        brainstate.nn.init_all_states(cell)
 
         graph = brainscale.ETraceGraphExecutor(cell)
         graph.compile_graph(jnp.zeros((10,)))
@@ -62,8 +60,8 @@ class TestShowGraph(unittest.TestCase):
         n_rec = 4
 
         net = ALIF_STPExpCu_Dense_Layer(n_in, n_rec)
-        bst.nn.init_all_states(net)
+        brainstate.nn.init_all_states(net)
 
         graph = brainscale.ETraceGraphExecutor(net)
-        graph.compile_graph(bst.random.rand(n_in))
+        graph.compile_graph(brainstate.random.rand(n_in))
         graph.show_graph()

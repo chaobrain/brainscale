@@ -15,15 +15,16 @@
 
 # -*- coding: utf-8 -*-
 
-from __future__ import annotations
-
 from functools import partial
 from typing import Callable, Union, Sequence, Optional, Any
 
 import brainstate
 import brainunit as u
 import jax
-from brainstate.nn._interaction._normalizations import _BatchNorm
+if brainstate.__version__ >= '0.1.3':
+    from brainstate.nn._normalizations import _BatchNorm
+else:
+    from brainstate.nn._interaction._normalizations import _BatchNorm
 
 from brainscale._etrace_concepts import ETraceParam
 from brainscale._etrace_operators import ETraceOp, Y, W, general_y2w

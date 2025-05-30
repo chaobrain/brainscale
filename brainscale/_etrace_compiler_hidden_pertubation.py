@@ -14,8 +14,6 @@
 # ==============================================================================
 
 
-from __future__ import annotations
-
 from typing import Dict, Set, Sequence, NamedTuple, Any
 
 import brainstate

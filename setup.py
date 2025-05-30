@@ -64,7 +64,7 @@ setup(
     author_email='chao.brain@qq.com',
     packages=packages,
     python_requires='>=3.10',
-    install_requires=['brainstate>=0.1.0'],
+    install_requires=['brainstate>=0.1.0', 'brainunit'],
     url='https://github.com/chaobrain/brainscale',
     project_urls={
         "Bug Tracker": "https://github.com/chaobrain/brainscale/issues",
@@ -72,17 +72,16 @@ setup(
         "Source Code": "https://github.com/chaobrain/brainscale",
     },
     extras_require={
-        'cpu': ['jaxlib', ],
-        'cuda11': ['jaxlib[cuda11]', ],
-        'cuda12': ['jaxlib[cuda12]', ],
-        'tpu': ['jaxlib[tpu]'],
-        'cpu_mini': ['jaxlib'],
-        'cuda11_mini': ['jaxlib[cuda11]'],
-        'cuda12_mini': ['jaxlib[cuda12]'],
+        'cpu': ['jax[cpu]', 'brainunit[cpu]', 'brainstate[cpu]'],
+        'cuda12': ['jax[cuda12]', 'brainunit[cuda12]', 'brainstate[cuda12]'],
+        'tpu': ['jax[tpu]', 'brainunit[tpu]', 'brainstate[tpu]'],
     },
-    keywords=('computational neuroscience, '
-              'brain-inspired computation, '
-              'brain dynamics programming'),
+    keywords=(
+        'computational neuroscience, '
+        'brain-inspired computing, '
+        'brain modeling, '
+        'online learning'
+    ),
     classifiers=[
         'Natural Language :: English',
         'Operating System :: OS Independent',

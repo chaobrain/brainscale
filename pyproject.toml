@@ -57,8 +57,6 @@ dependencies = [
 
 dynamic = ['version']
 
-[tool.flit.module]
-name = "brainscale"
 
 [project.urls]
 homepage = 'http://github.com/chaobrain/brainscale'

@@ -13,11 +13,7 @@
 # limitations under the License.
 # ==============================================================================
 
-import os
-
-os.environ['JAX_TRACEBACK_FILTERING'] = 'off'
-
-import brainstate as bst
+import brainstate
 import brainunit as u
 import pytest
 import brainscale
@@ -52,25 +48,25 @@ class TestDiagOn:
         n_rec = 5
         n_seq = 10
         model = cls(n_in, n_rec)
-        model = bst.nn.init_all_states(model)
+        model = brainstate.nn.init_all_states(model)
 
-        inputs = bst.random.randn(n_seq, n_in)
+        inputs = brainstate.random.randn(n_seq, n_in)
         algorithm = brainscale.IODimVjpAlgorithm(model, decay_or_rank=0.9)
         algorithm.compile_graph(inputs[0])
 
-        outs = bst.compile.for_loop(algorithm, inputs)
+        outs = brainstate.compile.for_loop(algorithm, inputs)
         print(outs.shape)
 
-        @bst.compile.jit
+        @brainstate.compile.jit
         def grad_single_step_vjp(inp):
-            return bst.augment.grad(
+            return brainstate.augment.grad(
                 lambda inp: algorithm(inp).sum(),
-                model.states(bst.ParamState)
+                model.states(brainstate.ParamState)
             )(inp)
 
         grads = grad_single_step_vjp(inputs[0])
         grads = grad_single_step_vjp(inputs[1])
-        print(bst.util.PrettyDict(grads))
+        print(brainstate.util.PrettyDict(grads))
 
     @pytest.mark.parametrize(
         "cls",
@@ -87,27 +83,27 @@ class TestDiagOn:
         n_rec = 5
         n_seq = 10
         model = cls(n_in, n_rec)
-        model = bst.nn.init_all_states(model)
+        model = brainstate.nn.init_all_states(model)
 
-        inputs = bst.random.randn(n_seq, n_in)
+        inputs = brainstate.random.randn(n_seq, n_in)
         algorithm = brainscale.IODimVjpAlgorithm(model, decay_or_rank=0.9, vjp_method='multi-step')
         algorithm.compile_graph(inputs[0])
 
         outs = algorithm(brainscale.MultiStepData(inputs))
         print(outs.shape)
 
-        @bst.compile.jit
+        @brainstate.compile.jit
         def grad_single_step_vjp(inp):
-            return bst.augment.grad(
+            return brainstate.augment.grad(
                 lambda inp: algorithm(brainscale.MultiStepData(inp)).sum(),
-                model.states(bst.ParamState)
+                model.states(brainstate.ParamState)
             )(inp)
 
         grads = grad_single_step_vjp(inputs[:1])
-        print(bst.util.PrettyDict(grads))
+        print(brainstate.util.PrettyDict(grads))
         print()
         grads = grad_single_step_vjp(inputs[1:2])
-        print(bst.util.PrettyDict(grads))
+        print(brainstate.util.PrettyDict(grads))
 
     @pytest.mark.parametrize(
         "cls",
@@ -125,30 +121,30 @@ class TestDiagOn:
         ]
     )
     def test_snn_single_step_vjp(self, cls):
-        with bst.environ.context(dt=0.1 * u.ms):
+        with brainstate.environ.context(dt=0.1 * u.ms):
             n_in = 4
             n_rec = 5
             n_seq = 10
             model = cls(n_in, n_rec)
-            model = bst.nn.init_all_states(model)
+            model = brainstate.nn.init_all_states(model)
 
-            inputs = bst.random.randn(n_seq, n_in)
+            inputs = brainstate.random.randn(n_seq, n_in)
             algorithm = brainscale.IODimVjpAlgorithm(model, decay_or_rank=0.9)
             algorithm.compile_graph(inputs[0])
 
-            outs = bst.compile.for_loop(algorithm, inputs)
+            outs = brainstate.compile.for_loop(algorithm, inputs)
             print(outs.shape)
 
-            @bst.compile.jit
+            @brainstate.compile.jit
             def grad_single_step_vjp(inp):
-                return bst.augment.grad(
+                return brainstate.augment.grad(
                     lambda inp: algorithm(inp).sum(),
-                    model.states(bst.ParamState)
+                    model.states(brainstate.ParamState)
                 )(inp)
 
             grads = grad_single_step_vjp(inputs[0])
             grads = grad_single_step_vjp(inputs[1])
-            print(bst.util.PrettyDict(grads))
+            print(brainstate.util.PrettyDict(grads))
 
     @pytest.mark.parametrize(
         "cls",
@@ -166,34 +162,34 @@ class TestDiagOn:
         ]
     )
     def test_snn_multi_step_vjp(self, cls):
-        with bst.environ.context(dt=0.1 * u.ms):
+        with brainstate.environ.context(dt=0.1 * u.ms):
             print(cls)
 
             n_in = 4
             n_rec = 5
             n_seq = 10
             model = cls(n_in, n_rec)
-            model = bst.nn.init_all_states(model)
+            model = brainstate.nn.init_all_states(model)
 
-            inputs = bst.random.randn(n_seq, n_in)
+            inputs = brainstate.random.randn(n_seq, n_in)
             algorithm = brainscale.IODimVjpAlgorithm(model, decay_or_rank=0.9, vjp_method='multi-step')
             algorithm.compile_graph(inputs[0])
 
             outs = algorithm(brainscale.MultiStepData(inputs))
             print(outs.shape)
 
-            @bst.compile.jit
+            @brainstate.compile.jit
             def grad_single_step_vjp(inp):
-                return bst.augment.grad(
+                return brainstate.augment.grad(
                     lambda inp: algorithm(brainscale.MultiStepData(inp)).sum(),
-                    model.states(bst.ParamState)
+                    model.states(brainstate.ParamState)
                 )(inp)
 
             grads = grad_single_step_vjp(inputs[:1])
-            print(bst.util.PrettyDict(grads))
+            print(brainstate.util.PrettyDict(grads))
             print()
             grads = grad_single_step_vjp(inputs[1:2])
-            print(bst.util.PrettyDict(grads))
+            print(brainstate.util.PrettyDict(grads))
 
 
 class TestDiagOn2:
@@ -212,25 +208,25 @@ class TestDiagOn2:
         n_rec = 5
         n_seq = 10
         model = cls(n_in, n_rec)
-        model = bst.nn.init_all_states(model)
+        model = brainstate.nn.init_all_states(model)
 
-        inputs = bst.random.randn(n_seq, n_in)
+        inputs = brainstate.random.randn(n_seq, n_in)
         algorithm = brainscale.ParamDimVjpAlgorithm(model)
         algorithm.compile_graph(inputs[0])
 
-        outs = bst.compile.for_loop(algorithm, inputs)
+        outs = brainstate.compile.for_loop(algorithm, inputs)
         print(outs.shape)
 
-        @bst.compile.jit
+        @brainstate.compile.jit
         def grad_single_step_vjp(inp):
-            return bst.augment.grad(
+            return brainstate.augment.grad(
                 lambda inp: algorithm(inp).sum(),
-                model.states(bst.ParamState)
+                model.states(brainstate.ParamState)
             )(inp)
 
         grads = grad_single_step_vjp(inputs[0])
         grads = grad_single_step_vjp(inputs[1])
-        print(bst.util.PrettyDict(grads))
+        print(brainstate.util.PrettyDict(grads))
 
     @pytest.mark.parametrize(
         "cls",
@@ -247,27 +243,27 @@ class TestDiagOn2:
         n_rec = 5
         n_seq = 10
         model = cls(n_in, n_rec)
-        model = bst.nn.init_all_states(model)
+        model = brainstate.nn.init_all_states(model)
 
-        inputs = bst.random.randn(n_seq, n_in)
+        inputs = brainstate.random.randn(n_seq, n_in)
         algorithm = brainscale.ParamDimVjpAlgorithm(model, vjp_method='multi-step')
         algorithm.compile_graph(inputs[0])
 
         outs = algorithm(brainscale.MultiStepData(inputs))
         print(outs.shape)
 
-        @bst.compile.jit
+        @brainstate.compile.jit
         def grad_single_step_vjp(inp):
-            return bst.augment.grad(
+            return brainstate.augment.grad(
                 lambda inp: algorithm(brainscale.MultiStepData(inp)).sum(),
-                model.states(bst.ParamState)
+                model.states(brainstate.ParamState)
             )(inp)
 
         grads = grad_single_step_vjp(inputs[:1])
-        print(bst.util.PrettyDict(grads))
+        print(brainstate.util.PrettyDict(grads))
         print()
         grads = grad_single_step_vjp(inputs[1:2])
-        print(bst.util.PrettyDict(grads))
+        print(brainstate.util.PrettyDict(grads))
 
     @pytest.mark.parametrize(
         "cls",
@@ -285,34 +281,34 @@ class TestDiagOn2:
         ]
     )
     def test_snn_single_step_vjp(self, cls):
-        with bst.environ.context(dt=0.1 * u.ms):
+        with brainstate.environ.context(dt=0.1 * u.ms):
             print(cls)
 
             n_in = 4
             n_rec = 5
             n_seq = 10
             model = cls(n_in, n_rec)
-            model = bst.nn.init_all_states(model)
+            model = brainstate.nn.init_all_states(model)
 
-            param_states = model.states(bst.ParamState).to_dict_values()
+            param_states = model.states(brainstate.ParamState).to_dict_values()
 
-            inputs = bst.random.randn(n_seq, n_in)
+            inputs = brainstate.random.randn(n_seq, n_in)
             algorithm = brainscale.ParamDimVjpAlgorithm(model)
             algorithm.compile_graph(inputs[0])
 
-            outs = bst.compile.for_loop(algorithm, inputs)
+            outs = brainstate.compile.for_loop(algorithm, inputs)
             print(outs.shape)
 
-            @bst.compile.jit
+            @brainstate.compile.jit
             def grad_single_step_vjp(inp):
-                return bst.augment.grad(
+                return brainstate.augment.grad(
                     lambda inp: algorithm(inp).sum(),
-                    model.states(bst.ParamState)
+                    model.states(brainstate.ParamState)
                 )(inp)
 
             grads = grad_single_step_vjp(inputs[0])
             grads = grad_single_step_vjp(inputs[1])
-            print(bst.util.PrettyDict(grads))
+            print(brainstate.util.PrettyDict(grads))
 
             for k in grads:
                 assert u.get_unit(param_states[k]) == u.get_unit(grads[k])
@@ -333,36 +329,36 @@ class TestDiagOn2:
         ]
     )
     def test_snn_multi_step_vjp(self, cls):
-        with bst.environ.context(dt=0.1 * u.ms):
+        with brainstate.environ.context(dt=0.1 * u.ms):
             print(cls)
 
             n_in = 4
             n_rec = 5
             n_seq = 10
             model = cls(n_in, n_rec)
-            model = bst.nn.init_all_states(model)
+            model = brainstate.nn.init_all_states(model)
 
-            param_states = model.states(bst.ParamState).to_dict_values()
+            param_states = model.states(brainstate.ParamState).to_dict_values()
 
-            inputs = bst.random.randn(n_seq, n_in)
+            inputs = brainstate.random.randn(n_seq, n_in)
             algorithm = brainscale.ParamDimVjpAlgorithm(model, vjp_method='multi-step')
             algorithm.compile_graph(inputs[0])
 
             outs = algorithm(brainscale.MultiStepData(inputs))
             print(outs.shape)
 
-            @bst.compile.jit
+            @brainstate.compile.jit
             def grad_single_step_vjp(inp):
-                return bst.augment.grad(
+                return brainstate.augment.grad(
                     lambda inp: algorithm(brainscale.MultiStepData(inp)).sum(),
-                    model.states(bst.ParamState)
+                    model.states(brainstate.ParamState)
                 )(inp)
 
             grads = grad_single_step_vjp(inputs[:1])
-            print(bst.util.PrettyDict(grads))
+            print(brainstate.util.PrettyDict(grads))
             print()
             grads = grad_single_step_vjp(inputs[1:2])
-            print(bst.util.PrettyDict(grads))
+            print(brainstate.util.PrettyDict(grads))
 
             for k in grads:
                 assert u.get_unit(param_states[k]) == u.get_unit(grads[k])

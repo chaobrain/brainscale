@@ -166,7 +166,7 @@ class _LIF_ExpCu_Dense_Layer(bst.nn.Module):
         w_init = jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0)
         self.syn = bst.nn.AlignPostProj(
             comm=brainscale.nn.Linear(n_in + n_rec, n_rec, w_init),
-            syn=brainscale.nn.Expon.delayed(size=n_rec, tau=tau_syn),
+            syn=brainscale.nn.Expon.desc(n_rec, tau=tau_syn),
             out=bst.nn.CUBA.desc(),
             post=self.neu
         )
@@ -435,7 +435,7 @@ class Trainer(object):
 
         def _etrace_grad(i, inp):
             # call the model
-            out = model(i, inp, running_index=i)
+            out = model(i, inp)
             # calculate the loss
             loss = self._loss(out, targets)
             return loss, out
@@ -463,7 +463,7 @@ class Trainer(object):
         indices = np.arange(inputs.shape[0])
         if self.args.warmup_ratio > 0:
             n_sim = _format_sim_epoch(self.args.warmup_ratio, inputs.shape[0])
-            bst.compile.for_loop(lambda i, inp: model(i, inp, running_index=i), indices[:n_sim], inputs[:n_sim])
+            bst.compile.for_loop(lambda i, inp: model(i, inp), indices[:n_sim], inputs[:n_sim])
             loss, outs = _etrace_train(indices[n_sim:], inputs[n_sim:])
         else:
             loss, outs = _etrace_train(indices, inputs)

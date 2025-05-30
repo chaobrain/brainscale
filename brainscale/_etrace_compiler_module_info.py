@@ -13,8 +13,6 @@
 # limitations under the License.
 # ==============================================================================
 
-from __future__ import annotations
-
 import functools
 from typing import Dict, Sequence, List, Tuple, Optional, NamedTuple, Any
 
@@ -25,7 +23,7 @@ import jax
 from ._compatible_imports import (
     Var,
     Jaxpr,
-    ClosedJaxpr
+    ClosedJaxpr,
 )
 from ._etrace_concepts import (
     ETraceParam,
@@ -234,7 +232,7 @@ class ModuleInfo(NamedTuple):
     stateful_model: brainstate.compile.StatefulFunction
 
     # jaxpr
-    closed_jaxpr: jax.core.ClosedJaxpr
+    closed_jaxpr: ClosedJaxpr
 
     # states
     retrieved_model_states: brainstate.util.FlattedDict[Path, brainstate.State]
@@ -269,7 +267,7 @@ class ModuleInfo(NamedTuple):
     def add_jaxpr_outs(
         self,
         jax_vars: Sequence[Var],
-    ) -> ModuleInfo:
+    ) -> 'ModuleInfo':
         """
         Adding the jaxpr outputs to the model jaxpr, so that it can return the additional variables which
         needed for the etrace compiler.

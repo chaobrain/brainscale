@@ -18,6 +18,7 @@
 
 import brainstate
 import braintools
+import brainscale
 import jax
 import matplotlib.pyplot as plt
 import numpy as np
@@ -122,7 +123,7 @@ class OnlineTrainer(Trainer):
         @brainstate.augment.vmap_new_states(state_tag='new', axis_size=inputs.shape[1])
         def init():
             # 对于每一个batch的数据，重新初始化模型状态
-            brainstate.nn.init_all_states(self.target, )
+            brainstate.nn.init_all_states(self.target)
             # 使用一个样例数据编译在线学习eligibility trace
             model.compile_graph(inputs[0, 0])
 

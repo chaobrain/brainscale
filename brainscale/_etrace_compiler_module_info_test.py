@@ -15,7 +15,7 @@
 
 from pprint import pprint
 
-import brainstate as bst
+import brainstate
 import brainunit as u
 import pytest
 
@@ -50,9 +50,9 @@ class Test_extract_model_info:
         n_out = 4
 
         rnn = cls(n_in, n_out)
-        bst.nn.init_all_states(rnn)
+        brainstate.nn.init_all_states(rnn)
 
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
         minfo = brainscale.extract_module_info(rnn, input)
         pprint(minfo)
 
@@ -74,13 +74,13 @@ class Test_extract_model_info:
     def test_snn_single_layer(self, cls):
         n_in = 3
         n_out = 4
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
 
         print(cls)
 
-        with bst.environ.context(dt=0.1 * u.ms):
+        with brainstate.environ.context(dt=0.1 * u.ms):
             layer = cls(n_in, n_out)
-            bst.nn.init_all_states(layer)
+            brainstate.nn.init_all_states(layer)
             minfo = brainscale.extract_module_info(layer, input)
             pprint(minfo)
 
@@ -102,13 +102,13 @@ class Test_extract_model_info:
     def test_snn_two_layers(self, cls):
         n_in = 3
         n_out = 4
-        input = bst.random.rand(n_in)
+        input = brainstate.random.rand(n_in)
 
         print()
         print(cls)
 
-        with bst.environ.context(dt=0.1 * u.ms):
-            layer = bst.nn.Sequential(cls(n_in, n_out), cls(n_out, n_out))
-            bst.nn.init_all_states(layer)
+        with brainstate.environ.context(dt=0.1 * u.ms):
+            layer = brainstate.nn.Sequential(cls(n_in, n_out), cls(n_out, n_out))
+            brainstate.nn.init_all_states(layer)
             minfo = brainscale.extract_module_info(layer, input)
             pprint(minfo)

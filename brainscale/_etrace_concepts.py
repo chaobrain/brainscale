@@ -30,8 +30,6 @@
 
 # -*- coding: utf-8 -*-
 
-from __future__ import annotations
-
 from enum import Enum
 from typing import Callable, Optional, Dict, Tuple, Sequence
 

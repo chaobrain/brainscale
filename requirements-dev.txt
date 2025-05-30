@@ -1,4 +1,3 @@
 -r requirements.txt
 braintools
 pytest
-absl-py
