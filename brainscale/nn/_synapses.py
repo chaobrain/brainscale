@@ -15,8 +15,6 @@
 
 # -*- coding: utf-8 -*-
 
-from __future__ import annotations
-
 import brainstate
 
 from brainscale._etrace_concepts import ETraceState
