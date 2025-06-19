@@ -527,7 +527,7 @@ def _solve_IO_dim_weight_gradients(
             #    dw = df(dx, dy)
             #
             fn_vmap = jax.vmap(
-                lambda df: weight_op.xy_to_w(x, df, weight_vals[weight_path]),
+                lambda df: weight_op.xy_to_dw(x, df, weight_vals[weight_path]),
                 in_axes=-1,
                 out_axes=-1,
             )

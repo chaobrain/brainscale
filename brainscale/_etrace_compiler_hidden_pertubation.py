@@ -25,6 +25,7 @@ from ._compatible_imports import (
     JaxprEqn,
     Jaxpr,
     ClosedJaxpr,
+    new_var
 )
 from ._etrace_compiler_base import (
     JaxprEvaluation,
@@ -302,7 +303,7 @@ class JaxprEvalForHiddenPerturbation(JaxprEvaluation):
         self.revised_eqns.append(eqn.replace())
 
     def _new_var_like(self, v):
-        return Var('', jax.core.ShapedArray(v.aval.shape, v.aval.dtype))
+        return new_var('', jax.core.ShapedArray(v.aval.shape, v.aval.dtype))
 
 
 def add_hidden_perturbation_in_jaxpr(
