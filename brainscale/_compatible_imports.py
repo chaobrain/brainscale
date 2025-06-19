@@ -22,6 +22,7 @@ __all__ = [
     'Jaxpr',
     'ClosedJaxpr',
     'Literal',
+    'new_var',
 ]
 
 if jax.__version_info__ < (0, 4, 38):
@@ -30,3 +31,9 @@ if jax.__version_info__ < (0, 4, 38):
 else:
     from jax.extend.core import Primitive, Var, JaxprEqn, Jaxpr, ClosedJaxpr, Literal
 
+
+def new_var(suffix, aval):
+    if jax.__version_info__ < (0, 6, 2):
+        return Var(suffix, aval)
+    else:
+        return Var(aval)
