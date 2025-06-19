@@ -23,7 +23,6 @@ import jax
 import numpy as np
 from jax.api_util import shaped_abstractify
 
-
 __all__ = [
     'ETraceOp',  # base class
     'MatMulOp',  # x @ f(w * m) + b
@@ -292,43 +291,41 @@ class ETraceOp(brainstate.util.PrettyObject):
         """
         raise NotImplementedError
 
-    def xy_to_w(
+    def xy_to_dw(
         self,
         input_dim_arr: X,
         hidden_dim_arr: Y,
         weights: W,
     ) -> W:
-        """
-        Computes the weight dimensional array from the input and hidden dimensional inputs.
+        r"""
+        Computes the gradient of the weights (dw) with respect to the loss.
 
-        This function is primarily used for computing eligibility trace updates based on
-        the IODimVjpAlgorithm. It calculates the weight updates by performing a vector-Jacobian
-        product (VJP) operation.
+        This function is primarily used for computing eligibility trace updates.
+        It calculates the weight gradients by performing a vector-Jacobian
+        product (VJP) operation. The core idea is to apply the chain rule:
+
+        $$
+        dw = \frac{\partial L}{\partial w} = \frac{\partial L}{\partial y} \frac{\partial y}{\partial w}
+        $$
+
+        where $L$ is the loss, $y$ is the output of the operator ($y = f(x, w)$),
+        and $w$ are the weights.
 
         Args:
-            input_dim_arr (X): The input dimensional array, representing the input data.
-            hidden_dim_arr (Y): The hidden dimensional array, representing the intermediate
-                outputs or activations.
-            weights (W): The weight dimensional array, representing the current weights
-                of the operator.
+            input_dim_arr (X): The input dimensional array, representing the input data ($x$).
+            hidden_dim_arr (Y): The hidden dimensional array, representing the gradient of the loss
+                with respect to the operator's output ($\frac{\partial L}{\partial y}$).
+            weights (W): The current weight parameters of the operator ($w$).
 
         Returns:
-            W: The updated weight dimensional array, computed based on the input and hidden
-            dimensional arrays.
+            W: The computed gradient of the weights ($\frac{\partial L}{\partial w}$).
         """
-        primals, f_vjp = jax.vjp(
-            # dimensionless processing
-            lambda w: u.get_mantissa(self.xw_to_y(input_dim_arr, w)),
-            weights
-        )
+        primals, f_vjp = jax.vjp(lambda w: u.get_mantissa(self.xw_to_y(input_dim_arr, w)), weights)
         assert hidden_dim_arr.shape == primals.shape, (
             f'The shape of the hidden_dim_arr must be the same as the primals. '
             f'Got {hidden_dim_arr.shape} and {primals.shape}'
         )
-        w_like = f_vjp(
-            # dimensionless processing
-            u.get_mantissa(hidden_dim_arr)
-        )[0]
+        w_like = f_vjp(u.get_mantissa(hidden_dim_arr))[0]
         return w_like
 
 
@@ -586,7 +583,7 @@ class ConvOp(ETraceOp):
         # bias
         if 'bias' in weights:
             y = y + weights['bias']
-        return y[0]
+        return u.math.squeeze(y, axis=0)
 
     def xw_to_y(
         self,
@@ -918,7 +915,7 @@ class ElemWiseOp(ETraceOp):
         inputs: Optional[X],
         weights: W
     ) -> Y:
-        """
+        r"""
         This function is used to compute the output of the element-wise operator.
 
         It computes:
@@ -941,7 +938,7 @@ class ElemWiseOp(ETraceOp):
         hidden_dim_arr: Y,
         weight_dim_tree: W,
     ) -> W:
-        """
+        r"""
         This function is used to compute the weight from the hidden dimensional array.
 
         It computes:
@@ -978,28 +975,32 @@ class ElemWiseOp(ETraceOp):
         )
         return new_w
 
-    def xy_to_w(
+    def xy_to_dw(
         self,
         input_dim_arr: Optional[X],
         hidden_dim_arr: Y,
         weights: W,
     ) -> W:
-        """
-        This function is used to compute the weight dimensional array from the input and hidden dimensional inputs.
+        r"""
+        Computes the gradient of the weights (dw) based on the hidden dimensional array.
 
-        It computes:
+        For element-wise operations, the computation is typically:
 
         $$
-        w = f(x, y)
+        dw = \frac{\partial L}{\partial w} = \frac{\partial L}{\partial y} \frac{\partial y}{\partial w}
         $$
+
+        where $y = f(w)$. This method computes $\frac{\partial y}{\partial w}$ and multiplies
+        it by the incoming gradient $\frac{\partial L}{\partial y}$ (represented by `hidden_dim_arr`).
 
         Args:
-            input_dim_arr: The input dimensional array. It is None.
-            hidden_dim_arr: The hidden dimensional array.
-            weights: The weight dimensional
+            input_dim_arr: The input dimensional array. This is not used for ElemWiseOp.
+            hidden_dim_arr: The hidden dimensional array, representing the gradient of the loss
+                            with respect to the operator's output ($dL/dy$).
+            weights: The current weight parameters of the operator.
 
         Returns:
-            The weight dimensional array.
+            The computed gradient of the weights (dw).
         """
 
         primals, f_vjp = jax.vjp(
