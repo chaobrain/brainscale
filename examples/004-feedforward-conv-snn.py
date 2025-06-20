@@ -125,10 +125,13 @@ class Trainer(object):
 
     @brainstate.transform.jit(static_argnums=0)
     def batch_eval(self, xs, ys):
+        brainstate.nn.vmap_init_all_states(self.target, axis_size=xs.shape[1], state_tag='new')
+        model = brainstate.nn.Vmap(self.target, vmap_states='new')
+
         def _step(inp):
             with brainstate.environ.context(fit=False):
                 # call the model
-                out = self.target(inp)
+                out = model(inp)
                 # calculate the loss
                 loss = braintools.metric.softmax_cross_entropy_with_integer_labels(out, ys).mean()
                 return loss, out
