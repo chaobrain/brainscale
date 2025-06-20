@@ -2049,7 +2049,7 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
     -----------
     model: brainstate.nn.Module
         The model function, which receives the input arguments and returns the model output.
-    vjp_time: str, optional
+    vjp_method: str, optional
         The time to compute the loss-to-hidden Jacobian.
 
         - ``0``: the current time step: $\frac{\partial L^t}{\partial h^t}$.  Memory is
@@ -2057,9 +2057,9 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
         - ``k``: the t-k time step: $\frac{\partial L^{t-k}}{\partial h^{t-k}}$.
 
     decay_or_rank: float, int
-        The exponential smoothing factor for the eligibility trace. If it is a float,
-        it is the decay factor, should be in the range of (0, 1). If it is an integer,
-        it is the number of approximation rank for the algorithm, should be greater than 0.
+        The exponential smoothing factor for the eligibility trace.
+        If it is a float, it is the decay factor, should be in the range of (0, 1).
+        If it is an integer, it is the number of approximation rank for the algorithm, should be greater than 0.
     name: str, optional
         The name of the etrace algorithm.
     mode: Optional[brainscale.mixin.Mode]
