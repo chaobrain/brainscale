@@ -24,6 +24,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from utils import MyArgumentParser
+import sys
+sys.path.append('../')
 
 parser = MyArgumentParser()
 
@@ -506,9 +508,9 @@ class Trainer(object):
 
     # @brainstate.transform.jit(static_argnums=0)
     def etrace_train(self, inputs, targets):
-        mem_before = jax.pure_callback(get_mem_usage, jax.ShapeDtypeStruct((), brainstate.environ.dftype()))
+        # mem_before = jax.pure_callback(get_mem_usage, jax.ShapeDtypeStruct((), brainstate.environ.dftype()))
 
-        inputs = u.math.flatten(inputs, start_axis=2)
+        inputs = np.reshape(inputs, (inputs.shape[0], inputs.shape[1], -1))  # [n_steps, n_samples, n_in]
         self._etrace_reset_fun()
 
         # initial gradients
@@ -526,9 +528,9 @@ class Trainer(object):
         outs, losses = [], []
         for i in indices:
             if i < n_sim:
-                self._etrace_pred_fun(i, inputs[i])
+                self._etrace_pred_fun(i, jnp.asarray(inputs[i]))
             else:
-                grads, (out, loss) = self._etrace_train_fun(grads, (i, inputs[i]), targets)
+                grads, (out, loss) = self._etrace_train_fun(grads, (i, jnp.asarray(inputs[i])), targets)
                 outs.append(out)
                 losses.append(loss)
 
@@ -541,7 +543,7 @@ class Trainer(object):
 
         # memory
         mem_after = jax.pure_callback(get_mem_usage, jax.ShapeDtypeStruct((), brainstate.environ.dftype()))
-        return jnp.asarray(losses).mean(), acc, mem_after - mem_before
+        return jnp.asarray(losses).mean(), acc, mem_after
 
     @brainstate.transform.jit(static_argnums=(0,))
     def bptt_train(self, inputs, targets):
@@ -585,7 +587,7 @@ class Trainer(object):
         acc = self._acc(outs, targets)
 
         mem_after = jax.pure_callback(get_mem_usage, jax.ShapeDtypeStruct((), brainstate.environ.dftype()))
-        return loss, acc, mem_after - mem_before
+        return loss, acc, mem_after
 
     def f_train(self, train_loader, test_loader):
         print(self.args)
@@ -595,8 +597,8 @@ class Trainer(object):
             epoch_acc, epoch_loss, epoch_time, epoch_mem = [], [], [], []
             for batch, (x_local, y_local) in enumerate(train_loader):
                 # inputs and targets
-                x_local = jnp.asarray(x_local)
-                y_local = jnp.asarray(y_local)
+                x_local = np.asarray(x_local)
+                y_local = np.asarray(y_local)
                 # training
                 t0 = time.time()
                 if self.args.method == 'bptt':
@@ -634,7 +636,7 @@ class Trainer(object):
             # testing accuracy
             epoch_acc, epoch_loss, epoch_time, epoch_mem = [], [], [], []
             for batch, (x_local, y_local) in enumerate(test_loader):
-                x_local = jnp.asarray(x_local)
+                x_local = np.asarray(x_local)
                 y_local = jnp.asarray(y_local)
                 loss, acc = self.predict(x_local, y_local)
                 epoch_acc.append(acc)
@@ -691,7 +693,7 @@ def network_training():
     brainstate.environ.set(dt=global_args.dt)
 
     # loading the data
-    train_loader, test_loader = _get_gesture_data(global_args)
+    train_loader, test_loader = _get_gesture_data(global_args,  cache_dir='/mnt/d/codes/projects/brainscale-exp-for-snns/data')
 
     # net
     net = ETraceNet(
