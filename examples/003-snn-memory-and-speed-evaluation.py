@@ -477,6 +477,7 @@ class Trainer(object):
         def reset_state():
             brainstate.nn.reset_all_states(run_model)
 
+        @brainstate.transform.jit
         def _etrace_single_run(i, batch_inp):
             with brainstate.environ.context(i=i, t=i * brainstate.environ.get_dt()):
                 run_model(batch_inp)
@@ -489,6 +490,7 @@ class Trainer(object):
             loss = self._loss(out, targets)
             return loss, out
 
+        @brainstate.transform.jit
         def _etrace_step(prev_grads, inputs, targets):
             i, inp = inputs
             # no need to return weights and states, since they are generated then no longer needed
@@ -502,7 +504,7 @@ class Trainer(object):
         self._etrace_pred_fun = _etrace_single_run
         self._etrace_train_fun = _etrace_step
 
-    @brainstate.transform.jit(static_argnums=0)
+    # @brainstate.transform.jit(static_argnums=0)
     def etrace_train(self, inputs, targets):
         mem_before = jax.pure_callback(get_mem_usage, jax.ShapeDtypeStruct((), brainstate.environ.dftype()))
 
@@ -515,12 +517,20 @@ class Trainer(object):
         # training
         indices = np.arange(inputs.shape[0])
         n_sim = _format_sim_epoch(self.args.warmup_ratio, inputs.shape[0])
-        brainstate.transform.for_loop(self._etrace_pred_fun, indices[:n_sim], inputs[:n_sim])
-        grads, (outs, losses) = brainstate.transform.scan(
-            functools.partial(self._etrace_train_fun, targets=targets),
-            grads,
-            (indices[n_sim:], inputs[n_sim:])
-        )
+        # brainstate.transform.for_loop(self._etrace_pred_fun, indices[:n_sim], inputs[:n_sim])
+        # grads, (outs, losses) = brainstate.transform.scan(
+        #     functools.partial(self._etrace_train_fun, targets=targets),
+        #     grads,
+        #     (indices[n_sim:], inputs[n_sim:])
+        # )
+        outs, losses = [], []
+        for i in indices:
+            if i < n_sim:
+                self._etrace_pred_fun(i, inputs[i])
+            else:
+                grads, (out, loss) = self._etrace_train_fun(grads, (i, inputs[i]), targets)
+                outs.append(out)
+                losses.append(loss)
 
         # gradient updates
         grads = brainstate.functional.clip_grad_norm(grads, 1.)
