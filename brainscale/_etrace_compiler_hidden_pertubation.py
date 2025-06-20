@@ -371,7 +371,7 @@ def add_hidden_perturbation_in_module(
 
     Parameters
     ----------
-    model (bst.nn.Module): The neural network module to which hidden state perturbations will be added.
+    model (brainstate.nn.Module): The neural network module to which hidden state perturbations will be added.
     *model_args: Additional positional arguments to be passed to the model.
     **model_kwargs: Additional keyword arguments to be passed to the model.
 

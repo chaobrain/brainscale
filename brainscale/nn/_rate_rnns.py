@@ -45,8 +45,8 @@ class ValinaRNNCell(brainstate.nn.RNNCell):
     Vanilla RNN cell.
   
     Args:
-      in_size: bst.typing.Size. The number of input units.
-      out_size: bst.typing.Size. The number of hidden units.
+      in_size: brainstate.typing.Size. The number of input units.
+      out_size: brainstate.typing.Size. The number of hidden units.
       state_init: callable, ArrayLike. The state initializer.
       w_init: callable, ArrayLike. The input weight initializer.
       b_init: optional, callable, ArrayLike. The bias weight initializer.
@@ -107,8 +107,8 @@ class GRUCell(brainstate.nn.RNNCell):
     Statistical Machine Translation <https://arxiv.org/abs/1406.1078>`_.
 
     Args:
-      in_size: bst.typing.Size. The number of input units.
-      out_size: bst.typing.Size. The number of hidden units.
+      in_size: brainstate.typing.Size. The number of input units.
+      out_size: brainstate.typing.Size. The number of hidden units.
       state_init: callable, ArrayLike. The state initializer.
       w_init: callable, ArrayLike. The input weight initializer.
       b_init: optional, callable, ArrayLike. The bias weight initializer.
@@ -172,8 +172,8 @@ class CFNCell(brainstate.nn.RNNCell):
     `A recurrent neural network without chaos <https://arxiv.org/abs/1612.06212>`_.
 
     Args:
-      in_size: bst.typing.Size. The number of input units.
-      out_size: bst.typing.Size. The number of hidden units.
+      in_size: brainstate.typing.Size. The number of input units.
+      out_size: brainstate.typing.Size. The number of hidden units.
       state_init: callable, ArrayLike. The state initializer.
       w_init: callable, ArrayLike. The input weight initializer.
       b_init: optional, callable, ArrayLike. The bias weight initializer.
@@ -251,8 +251,8 @@ class MGUCell(brainstate.nn.RNNCell):
     - :math:`W, U, b`: parameter matrices and vector
   
     Args:
-      in_size: bst.typing.Size. The number of input units.
-      out_size: bst.typing.Size. The number of hidden units.
+      in_size: brainstate.typing.Size. The number of input units.
+      out_size: brainstate.typing.Size. The number of hidden units.
       state_init: callable, ArrayLike. The state initializer.
       w_init: callable, ArrayLike. The input weight initializer.
       b_init: optional, callable, ArrayLike. The bias weight initializer.
@@ -340,9 +340,9 @@ class LSTMCell(brainstate.nn.RNNCell):
   
     Parameters
     ----------
-    in_size: bst.typing.Size
+    in_size: brainstate.typing.Size
       The dimension of the input vector
-    out_size: bst.typing.Size
+    out_size: brainstate.typing.Size
       The number of hidden unit in the node.
     state_init: callable, ArrayLike
       The state initializer.
@@ -510,9 +510,9 @@ class MinimalRNNCell(brainstate.nn.RNNCell):
   
     Parameters
     ----------
-    in_size: bst.typing.Size
+    in_size: brainstate.typing.Size
       The number of input units.
-    out_size: bst.typing.Size
+    out_size: brainstate.typing.Size
       The number of hidden units.
     w_init: callable, ArrayLike
       The input weight initializer.
@@ -594,9 +594,9 @@ class MiniGRU(brainstate.nn.RNNCell):
 
     Parameters
     ----------
-    in_size: bst.typing.Size
+    in_size: brainstate.typing.Size
         The number of input units.
-    out_size: bst.typing.Size
+    out_size: brainstate.typing.Size
         The number of hidden units.
     w_init: callable, ArrayLike
         The input weight initializer.
@@ -671,9 +671,9 @@ class MiniLSTM(brainstate.nn.RNNCell):
 
     Parameters
     ----------
-    in_size: bst.typing.Size
+    in_size: brainstate.typing.Size
         The number of input units.
-    out_size: bst.typing.Size
+    out_size: brainstate.typing.Size
         The number of hidden units.
     w_init: callable, ArrayLike
         The input weight initializer.

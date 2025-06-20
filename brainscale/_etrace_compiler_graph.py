@@ -201,7 +201,7 @@ def compile_etrace_graph(
     Jacobians.
 
     Args:
-        model (bst.nn.Module): The model for which the eligibility trace graph is to be built.
+        model (brainstate.nn.Module): The model for which the eligibility trace graph is to be built.
         model_args (Tuple): The arguments required by the model.
         include_hidden_perturb (bool): Indicates whether to include hidden perturbations in the graph.
             Defaults to True.

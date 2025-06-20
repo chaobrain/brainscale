@@ -76,7 +76,7 @@ class ETraceGraphExecutor:
         # The original model
         if not isinstance(model, brainstate.nn.Module):
             raise TypeError(
-                'The model should be an instance of "bst.nn.Module" since '
+                'The model should be an instance of "brainstate.nn.Module" since '
                 'we can extract the program structure from the model for '
                 'better debugging.'
             )

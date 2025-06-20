@@ -240,13 +240,13 @@ class ETraceGroupState(ETraceState):
 
         Parameters
         ----------
-        value (bst.typing.ArrayLike): The input value representing hidden states.
+        value (brainstate.typing.ArrayLike): The input value representing hidden states.
             It must be an instance of numpy.ndarray, jax.Array, or brainunit.Quantity
             with at least two dimensions.
 
         Returns
         -------
-        Tuple[bst.typing.ArrayLike, Dict[str, int]]: A tuple containing:
+        Tuple[brainstate.typing.ArrayLike, Dict[str, int]]: A tuple containing:
             - The validated and possibly modified input value.
             - A dictionary mapping string representations of indices to integer indices.
 
@@ -309,7 +309,7 @@ class ETraceGroupState(ETraceState):
 
         Parameters
         ----------
-        val (Dict[int | str, bst.typing.ArrayLike] | Sequence[bst.typing.ArrayLike]): 
+        val (Dict[int | str, brainstate.typing.ArrayLike] | Sequence[brainstate.typing.ArrayLike]):
             A dictionary or sequence containing the new values for the hidden states.
             - If a dictionary, keys can be integers (indices) or strings (names) of the hidden states.
             - If a sequence, it is converted to a dictionary with indices as keys.
@@ -486,7 +486,7 @@ class ETraceTreeState(ETraceGroupState):
                 - Each hidden state should be a numpy.ndarray, jax.Array, or brainunit.Quantity.
 
         Returns:
-            Tuple[bst.typing.ArrayLike, Dict[str, u.Unit], Dict[str, int]]:
+            Tuple[brainstate.typing.ArrayLike, Dict[str, u.Unit], Dict[str, int]]:
                 - A stacked array of hidden state magnitudes.
                 - A dictionary mapping hidden state names to their units.
                 - A dictionary mapping hidden state names to their indices.
@@ -563,7 +563,7 @@ class ETraceTreeState(ETraceGroupState):
 
         Parameters
         ----------
-        val (Dict[int | str, bst.typing.ArrayLike] | Sequence[bst.typing.ArrayLike]): 
+        val (Dict[int | str, brainstate.typing.ArrayLike] | Sequence[brainstate.typing.ArrayLike]):
             A dictionary or sequence containing the new values for the hidden states.
             - If a dictionary, keys can be integers (indices) or strings (names) of the hidden states.
             - If a sequence, it is converted to a dictionary with indices as keys.
@@ -853,10 +853,10 @@ class FakeETraceParam(object):
         Executes the associated operator on the input data and the stored parameter value.
 
         Args:
-            x (bst.typing.ArrayLike): The input data on which the operator will be executed.
+            x (brainstate.typing.ArrayLike): The input data on which the operator will be executed.
 
         Returns:
-            bst.typing.ArrayLike: The result of applying the operator to the input data and the parameter value.
+            brainstate.typing.ArrayLike: The result of applying the operator to the input data and the parameter value.
         """
         return self.op(x, self.value)
 
@@ -903,6 +903,6 @@ class FakeElemWiseParam(object):
         state, simulating the behavior of an element-wise operation without computing gradients.
 
         Returns:
-            bst.typing.ArrayLike: The result of applying the operator to the weight.
+            brainstate.typing.ArrayLike: The result of applying the operator to the weight.
         """
         return self.op(None, self.value)

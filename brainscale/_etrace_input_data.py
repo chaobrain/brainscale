@@ -68,8 +68,8 @@ class SingleStepData(ETraceInputData):
 
     Examples::
 
-        >>> import brainstate as bst
-        >>> data = SingleStepData(bst.random.randn(2, 3))
+        >>> import brainstate as brainstate
+        >>> data = SingleStepData(brainstate.random.randn(2, 3))
 
     """
     __module__ = 'brainscale'
@@ -84,17 +84,17 @@ class MultiStepData(ETraceInputData):
 
     Examples::
 
-        >>> import brainstate as bst
+        >>> import brainstate as brainstate
         # data at 10 time steps, each time step has 2 samples, each sample has 3 features
-        >>> data = MultiStepData(bst.random.randn(10, 2, 3))
+        >>> data = MultiStepData(brainstate.random.randn(10, 2, 3))
 
 
     Another example::
 
-        >>> import brainstate as bst
+        >>> import brainstate as brainstate
         >>> data = MultiStepData(
-        ...     bst.random.randn(10, 2, 3),
-        ...     bst.random.randn(10, 5),
+        ...     brainstate.random.randn(10, 2, 3),
+        ...     brainstate.random.randn(10, 5),
         ... )
 
     """

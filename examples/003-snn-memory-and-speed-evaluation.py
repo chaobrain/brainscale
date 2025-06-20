@@ -14,10 +14,10 @@
 # ==============================================================================
 
 import argparse
-import os.path
+import os
 import time
 from functools import reduce
-from typing import Any, Callable, Union
+from typing import Callable, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -74,14 +74,12 @@ parser.add_argument("--spk_reset", type=str, default='soft')
 global_args = parser.parse_args()
 
 import brainscale
-import brainstate as bst
+import brainstate
 import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
 from torch.utils.data import DataLoader
-
-PyTree = Any
 
 
 def _format_sim_epoch(sim: Union[int, float], length: int):
@@ -115,26 +113,28 @@ def _raster_plot(sp_matrix, times):
     return index, times
 
 
-class _LIF_Delta_Dense_Layer(bst.nn.Module):
+class _LIF_Delta_Dense_Layer(brainstate.nn.Module):
     """
     LIF neurons and dense connected delta synapses.
     """
 
     def __init__(
         self,
-        n_in, n_rec,
-        tau_mem=5., V_th=1.,
-        spk_fun: Callable = bst.surrogate.ReluGrad(),
+        n_in,
+        n_rec,
+        tau_mem=5.,
+        V_th=1.,
+        spk_fun: Callable = brainstate.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
         rec_scale: float = 1.,
         ff_scale: float = 1.,
     ):
         super().__init__()
         self.neu = brainscale.nn.LIF(n_rec, tau=tau_mem, spk_fun=spk_fun, spk_reset=spk_reset, V_th=V_th)
-        rec_init: Callable = bst.init.KaimingNormal(rec_scale)
-        ff_init: Callable = bst.init.KaimingNormal(ff_scale)
+        rec_init: Callable = brainstate.init.KaimingNormal(rec_scale)
+        ff_init: Callable = brainstate.init.KaimingNormal(ff_scale)
         w_init = jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0)
-        self.syn = bst.nn.DeltaProj(
+        self.syn = brainstate.nn.DeltaProj(
             comm=brainscale.nn.Linear(n_in + n_rec, n_rec, w_init=w_init),
             post=self.neu
         )
@@ -146,28 +146,32 @@ class _LIF_Delta_Dense_Layer(bst.nn.Module):
         return self.neu.get_spike()
 
 
-class _LIF_ExpCu_Dense_Layer(bst.nn.Module):
+class _LIF_ExpCu_Dense_Layer(brainstate.nn.Module):
     """
     LIF neurons and dense connected exponential current synapses.
     """
 
     def __init__(
-        self, n_in, n_rec,
-        tau_mem=5., tau_syn=10., V_th=1.,
-        spk_fun: Callable = bst.surrogate.ReluGrad(),
+        self,
+        n_in,
+        n_rec,
+        tau_mem=5.,
+        tau_syn=10.,
+        V_th=1.,
+        spk_fun: Callable = brainstate.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
         rec_scale: float = 1.,
         ff_scale: float = 1.,
     ):
         super().__init__()
         self.neu = brainscale.nn.LIF(n_rec, tau=tau_mem, spk_fun=spk_fun, spk_reset=spk_reset, V_th=V_th)
-        rec_init: Callable = bst.init.KaimingNormal(rec_scale)
-        ff_init: Callable = bst.init.KaimingNormal(ff_scale)
+        rec_init: Callable = brainstate.init.KaimingNormal(rec_scale)
+        ff_init: Callable = brainstate.init.KaimingNormal(ff_scale)
         w_init = jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0)
-        self.syn = bst.nn.AlignPostProj(
+        self.syn = brainstate.nn.AlignPostProj(
             comm=brainscale.nn.Linear(n_in + n_rec, n_rec, w_init),
             syn=brainscale.nn.Expon.desc(n_rec, tau=tau_syn),
-            out=bst.nn.CUBA.desc(),
+            out=brainstate.nn.CUBA.desc(),
             post=self.neu
         )
 
@@ -177,9 +181,14 @@ class _LIF_ExpCu_Dense_Layer(bst.nn.Module):
         return self.neu.get_spike()
 
 
-class ETraceNet(bst.nn.Module):
+class ETraceNet(brainstate.nn.Module):
     def __init__(
-        self, n_in, n_rec, n_out, n_layer, args,
+        self,
+        n_in,
+        n_rec,
+        n_out,
+        n_layer,
+        args,
     ):
         super().__init__()
 
@@ -190,18 +199,18 @@ class ETraceNet(bst.nn.Module):
         self.n_layer = args.n_layer
 
         if args.spk_fun == 's2nn':
-            spk_fun = bst.surrogate.S2NN()
+            spk_fun = brainstate.surrogate.S2NN()
         elif args.spk_fun == 'relu':
-            spk_fun = bst.surrogate.ReluGrad()
+            spk_fun = brainstate.surrogate.ReluGrad()
         elif args.spk_fun == 'multi_gaussian':
-            spk_fun = bst.surrogate.MultiGaussianGrad()
+            spk_fun = brainstate.surrogate.MultiGaussianGrad()
         else:
             raise ValueError('Unknown spiking surrogate gradient function.')
 
         # recurrent layers
         self.rec_layers = []
         for layer_idx in range(n_layer):
-            tau_mem = (bst.random.normal(args.tau_mem, args.tau_mem_sigma, [n_rec])
+            tau_mem = (brainstate.random.normal(args.tau_mem, args.tau_mem_sigma, [n_rec])
                        if args.tau_mem_sigma > 0. else
                        args.tau_mem)
             if args.model == 'lif-exp-cu':
@@ -228,7 +237,7 @@ class ETraceNet(bst.nn.Module):
             in_size=n_rec,
             out_size=n_out,
             tau=args.tau_o,
-            w_init=bst.init.KaimingNormal()
+            w_init=brainstate.init.KaimingNormal()
         )
 
     def update(self, x):
@@ -240,7 +249,7 @@ class ETraceNet(bst.nn.Module):
         loss = 0.
         if factor > 0.:
             # extract all Neuron models
-            neurons = self.nodes().subset(bst.nn.Neuron).unique().values()
+            neurons = self.nodes().subset(brainstate.nn.Neuron).unique().values()
             # evaluate the membrane potential
             for l in neurons:
                 loss += jnp.square(jnp.mean(jax.nn.relu(l.V.value - mem_high) ** 2 +
@@ -253,16 +262,16 @@ class ETraceNet(bst.nn.Module):
         loss = 0.
         if factor > 0.:
             # extract all Neuron models
-            neurons = self.nodes().subset(bst.nn.Neuron).unique().values()
+            neurons = self.nodes().subset(brainstate.nn.Neuron).unique().values()
             # evaluate the spiking dynamics
             for l in neurons:
-                loss += (jnp.mean(l.get_spike()) - target_fr / 1e3 * bst.environ.get_dt()) ** 2
+                loss += (jnp.mean(l.get_spike()) - target_fr / 1e3 * brainstate.environ.get_dt()) ** 2
             loss = loss * factor
         return loss
 
     def verify(self, dataloader, x_func, num_show=5, filepath=None):
         def _step(index, x):
-            with bst.environ.context(i=index, t=index * bst.environ.get_dt()):
+            with brainstate.environ.context(i=index, t=index * brainstate.environ.get_dt()):
                 out = self.update(x)
             return out, [r.neu.get_spike() for r in self.rec_layers], [r.neu.V.value for r in self.rec_layers]
 
@@ -270,17 +279,17 @@ class ETraceNet(bst.nn.Module):
         xs, ys = next(dataloader)  # xs: [n_samples, n_steps, n_in]
         xs = jnp.asarray(x_func(xs))
         print(xs.shape, ys.shape)
-        bst.nn.init_all_states(self, xs.shape[1])
+        brainstate.nn.init_all_states(self, xs.shape[1])
 
         time_indices = np.arange(0, xs.shape[0])
-        outs, sps, vs = bst.compile.for_loop(_step, time_indices, xs)
+        outs, sps, vs = brainstate.compile.for_loop(_step, time_indices, xs)
         outs = u.math.as_numpy(outs)
         sps = [u.math.as_numpy(out) for out in sps]
         vs = [u.math.as_numpy(out) for out in vs]
         # vs = [np.where(sp, v + sps_inc, v) for sp, v in zip(sps, vs)]
 
-        ts = time_indices * bst.environ.get_dt()
-        max_t = xs.shape[0] * bst.environ.get_dt()
+        ts = time_indices * brainstate.environ.get_dt()
+        max_t = xs.shape[0] * brainstate.environ.get_dt()
 
         for i in range(min(num_show, xs.shape[1])):
             fig, gs = braintools.visualize.get_figure(2, len(self.rec_layers) + 1, 3., 3.)
@@ -330,7 +339,7 @@ class Trainer(object):
     def __init__(
         self,
         target: ETraceNet,
-        opt: bst.optim.Optimizer,
+        opt: brainstate.optim.Optimizer,
         arguments: argparse.Namespace,
     ):
         super().__init__()
@@ -351,7 +360,7 @@ class Trainer(object):
 
         # optimizer
         self.opt = opt
-        opt.register_trainable_weights(self.target.states().subset(bst.ParamState))
+        opt.register_trainable_weights(self.target.states().subset(brainstate.ParamState))
 
     def _acc(self, out, target):
         return jnp.mean(jnp.equal(target, jnp.argmax(jnp.mean(out, axis=0), axis=1)))
@@ -361,7 +370,7 @@ class Trainer(object):
 
         # L1 regularization loss
         if self.args.weight_L1 != 0.:
-            leaves = self.target.states().subset(bst.ParamState).to_dict_values()
+            leaves = self.target.states().subset(brainstate.ParamState).to_dict_values()
             loss += self.args.weight_L1 * reduce(jnp.add, jax.tree.map(lambda x: jnp.sum(jnp.abs(x)), leaves))
 
         # membrane potential regularization loss
@@ -377,33 +386,33 @@ class Trainer(object):
 
         return loss
 
-    @bst.compile.jit(static_argnums=0)
+    @brainstate.compile.jit(static_argnums=0)
     def predict(self, inputs, targets):
         def _step(i, inp):
             # call the model
-            with bst.environ.context(i=i, t=i * bst.environ.get_dt()):
+            with brainstate.environ.context(i=i, t=i * brainstate.environ.get_dt()):
                 out = self.target(inp)
                 # calculate the loss
                 loss = self._loss(out, targets)
                 return loss, out
 
         # initialize the states
-        bst.nn.init_all_states(self.target, inputs.shape[1])
+        brainstate.nn.init_all_states(self.target, inputs.shape[1])
         indices = np.arange(inputs.shape[0])
-        losses, outs = bst.compile.for_loop(_step, indices, inputs)
+        losses, outs = brainstate.compile.for_loop(_step, indices, inputs)
         acc = self._acc(outs, targets)
         return losses.mean(), acc
 
-    @bst.compile.jit(static_argnums=(0,))
+    @brainstate.compile.jit(static_argnums=(0,))
     def etrace_train(self, inputs, targets):
         # initialize the states
-        bst.nn.init_all_states(self.target, inputs.shape[1])
+        brainstate.nn.init_all_states(self.target, inputs.shape[1])
         # weights
-        weights = self.target.states().subset(bst.ParamState)
+        weights = self.target.states().subset(brainstate.ParamState)
 
         # the model for a single step
         def _single_step(i, inp, fit: bool = True):
-            with bst.environ.context(i=i, t=i * bst.environ.get_dt(), fit=fit):
+            with brainstate.environ.context(i=i, t=i * brainstate.environ.get_dt(), fit=fit):
                 out = self.target(inp)
             return out
 
@@ -443,7 +452,7 @@ class Trainer(object):
         def _etrace_step(prev_grads, x):
             # no need to return weights and states, since they are generated then no longer needed
             i, inp = x
-            f_grad = bst.augment.grad(_etrace_grad, grad_vars=weights, has_aux=True, return_value=True)
+            f_grad = brainstate.augment.grad(_etrace_grad, grad_vars=weights, has_aux=True, return_value=True)
             cur_grads, local_loss, out = f_grad(i, inp)
             next_grads = jax.tree.map(lambda a, b: a + b, prev_grads, cur_grads)
             return next_grads, (out, local_loss)
@@ -451,10 +460,10 @@ class Trainer(object):
         def _etrace_train(indices_, inputs_):
             # forward propagation
             grads = jax.tree.map(lambda a: jnp.zeros_like(a), weights.to_dict_values())
-            grads, (outs, losses) = bst.compile.scan(_etrace_step, grads, (indices_, inputs_))
+            grads, (outs, losses) = brainstate.compile.scan(_etrace_step, grads, (indices_, inputs_))
             # gradient updates
             # jax.debug.print('grads = {g}', g=jax.tree.map(lambda a: jnp.max(jnp.abs(a)), grads))
-            grads = bst.functional.clip_grad_norm(grads, 1.)
+            grads = brainstate.functional.clip_grad_norm(grads, 1.)
             self.opt.update(grads)
             # accuracy
             return losses.mean(), outs
@@ -463,7 +472,7 @@ class Trainer(object):
         indices = np.arange(inputs.shape[0])
         if self.args.warmup_ratio > 0:
             n_sim = _format_sim_epoch(self.args.warmup_ratio, inputs.shape[0])
-            bst.compile.for_loop(lambda i, inp: model(i, inp), indices[:n_sim], inputs[:n_sim])
+            brainstate.compile.for_loop(lambda i, inp: model(i, inp), indices[:n_sim], inputs[:n_sim])
             loss, outs = _etrace_train(indices[n_sim:], inputs[n_sim:])
         else:
             loss, outs = _etrace_train(indices, inputs)
@@ -472,20 +481,20 @@ class Trainer(object):
 
         mem = jax.pure_callback(
             lambda: jax.devices()[0].memory_stats()['bytes_in_use'] / 1024 / 1024 / 1024,
-            jax.ShapeDtypeStruct((), bst.environ.dftype())
+            jax.ShapeDtypeStruct((), brainstate.environ.dftype())
         )
         # returns
         return loss, acc, mem
 
     def memory_efficient_etrace_functions(self, input_info):
         # initialize the states
-        bst.nn.init_all_states(self.target, self.args.batch_size)
+        brainstate.nn.init_all_states(self.target, self.args.batch_size)
         # weights
-        weights = self.target.states().subset(bst.ParamState)
+        weights = self.target.states().subset(brainstate.ParamState)
 
         # the model for a single step
         def _single_step(i, inp, fit: bool = True):
-            with bst.environ.context(i=i, t=i * bst.environ.get_dt(), fit=fit):
+            with brainstate.environ.context(i=i, t=i * brainstate.environ.get_dt(), fit=fit):
                 out = self.target(inp)
             return out
 
@@ -503,10 +512,10 @@ class Trainer(object):
             raise ValueError(f'Unknown online learning methods: {self.args.method}.')
 
         def reset_state(batch_size):
-            bst.nn.reset_all_states(self.target, batch_size)
+            brainstate.nn.reset_all_states(self.target, batch_size)
             model.reset_state(batch_size)
 
-        @bst.compile.jit
+        @brainstate.compile.jit
         def _etrace_single_run(i, inp):
             model(inp)
 
@@ -517,10 +526,10 @@ class Trainer(object):
             loss = self._loss(out, targets)
             return loss, out
 
-        @bst.compile.jit
+        @brainstate.compile.jit
         def _etrace_step(prev_grads, inp, targets):
             # no need to return weights and states, since they are generated then no longer needed
-            f_grad = bst.augment.grad(_etrace_grad, grad_vars=weights, has_aux=True, return_value=True)
+            f_grad = brainstate.augment.grad(_etrace_grad, grad_vars=weights, has_aux=True, return_value=True)
             cur_grads, local_loss, out = f_grad(inp, targets)
             next_grads = jax.tree.map(lambda a, b: a + b, prev_grads, cur_grads)
             return next_grads, out, local_loss
@@ -545,7 +554,7 @@ class Trainer(object):
                 losses.append(loss)
 
         # gradient updates
-        grads = bst.functional.clip_grad_norm(grads, 1.)
+        grads = brainstate.functional.clip_grad_norm(grads, 1.)
         self.opt.update(grads)
         # accuracy
         acc = self._acc(jnp.asarray(outs), targets)
@@ -553,21 +562,21 @@ class Trainer(object):
         mem = jax.devices()[0].memory_stats()['bytes_in_use'] / 1024 / 1024 / 1024
         return jnp.asarray(losses).mean(), acc, mem
 
-    @bst.compile.jit(static_argnums=(0,))
+    @brainstate.compile.jit(static_argnums=(0,))
     def bptt_train(self, inputs, targets):
         # running indices
         indices = np.arange(inputs.shape[0])
         # initialize the states
-        bst.nn.init_all_states(self.target, inputs.shape[1])
+        brainstate.nn.init_all_states(self.target, inputs.shape[1])
 
         # the model for a single step
         def _single_step(i, inp, fit: bool = True):
-            with bst.environ.context(i=i, t=i * bst.environ.get_dt(), fit=fit):
+            with brainstate.environ.context(i=i, t=i * brainstate.environ.get_dt(), fit=fit):
                 out = self.target(inp)
             return out
 
         def _run_step_train(i, inp):
-            with bst.environ.context(i=i, t=i * bst.environ.get_dt()):
+            with brainstate.environ.context(i=i, t=i * brainstate.environ.get_dt()):
                 out = self.target(inp)
                 loss = self._loss(out, targets)
             return out, loss
@@ -575,18 +584,18 @@ class Trainer(object):
         def _bptt_grad_step():
             if self.args.warmup_ratio > 0:
                 n_sim = _format_sim_epoch(self.args.warmup_ratio, inputs.shape[0])
-                _ = bst.compile.for_loop(_single_step, indices[:n_sim], inputs[:n_sim])
-                outs, losses = bst.compile.for_loop(_run_step_train, indices[n_sim:], inputs[n_sim:])
+                _ = brainstate.compile.for_loop(_single_step, indices[:n_sim], inputs[:n_sim])
+                outs, losses = brainstate.compile.for_loop(_run_step_train, indices[n_sim:], inputs[n_sim:])
             else:
-                outs, losses = bst.compile.for_loop(_run_step_train, indices, inputs)
+                outs, losses = brainstate.compile.for_loop(_run_step_train, indices, inputs)
             return losses.mean(), outs
 
         # gradients
-        weights = self.target.states().subset(bst.ParamState)
-        grads, loss, outs = bst.augment.grad(_bptt_grad_step, grad_vars=weights, has_aux=True, return_value=True)()
+        weights = self.target.states().subset(brainstate.ParamState)
+        grads, loss, outs = brainstate.augment.grad(_bptt_grad_step, grad_vars=weights, has_aux=True, return_value=True)()
 
         # optimization
-        grads = bst.functional.clip_grad_norm(grads, 1.)
+        grads = brainstate.functional.clip_grad_norm(grads, 1.)
         self.opt.update(grads)
 
         # accuracy
@@ -594,7 +603,7 @@ class Trainer(object):
 
         mem = jax.pure_callback(
             lambda: jax.devices()[0].memory_stats()['bytes_in_use'] / 1024 / 1024 / 1024,
-            jax.ShapeDtypeStruct((), bst.environ.dftype())
+            jax.ShapeDtypeStruct((), brainstate.environ.dftype())
         )
 
         return loss, acc, mem
@@ -684,7 +693,7 @@ class FormattedDVSGesture:
         self.img_size = data['img_size']
 
     def __getitem__(self, idx):
-        arr = np.zeros(tuple(self.img_size), dtype=bst.environ.dftype())
+        arr = np.zeros(tuple(self.img_size), dtype=brainstate.environ.dftype())
         indices = self.xs[idx]
         time_indices = indices[:, 0]
         neuron_indices = indices[:, 1]
@@ -729,7 +738,7 @@ def _get_gesture_data(args, cache_dir=os.path.expanduser("./data")):
         num_workers=args.n_data_worker
     )
 
-    return bst.util.DotDict(
+    return brainstate.util.DotDict(
         {
             'train_loader': train_loader,
             'test_loader': test_loader,
@@ -743,8 +752,8 @@ def _get_gesture_data(args, cache_dir=os.path.expanduser("./data")):
 
 def network_training():
     # environment setting
-    bst.environ.set(
-        mode=bst.mixin.JointMode(bst.mixin.Batching(), bst.mixin.Training()),
+    brainstate.environ.set(
+        mode=brainstate.mixin.JointMode(brainstate.mixin.Batching(), brainstate.mixin.Training()),
         dt=global_args.dt
     )
 
@@ -767,18 +776,18 @@ def network_training():
 
     elif global_args.mode == 'train':
         if global_args.optimizer == 'adam':
-            opt_cls = bst.optim.Adam
+            opt_cls = brainstate.optim.Adam
         elif global_args.optimizer == 'momentum':
-            opt_cls = bst.optim.Momentum
+            opt_cls = brainstate.optim.Momentum
         elif global_args.optimizer == 'sgd':
-            opt_cls = bst.optim.SGD
+            opt_cls = brainstate.optim.SGD
         else:
             raise ValueError(f'Unknown optimizer: {global_args.optimizer}')
         if global_args.lr_milestones == '':
             lr = global_args.lr
         else:
             lr_milestones = [int(m) for m in global_args.lr_milestones.split(',')]
-            lr = bst.optim.MultiStepLR(global_args.lr, milestones=lr_milestones, gamma=0.2)
+            lr = brainstate.optim.MultiStepLR(global_args.lr, milestones=lr_milestones, gamma=0.2)
         opt = opt_cls(lr=lr, weight_decay=global_args.weight_L2)
 
         # creating the trainer

@@ -79,16 +79,16 @@ class TestETraceTreeState(unittest.TestCase):
 
 # class TestETraceParam(unittest.TestCase):
 #     def test_init(self):
-#         weight = bst.random.randn(10, 10)
+#         weight = brainstate.random.randn(10, 10)
 #         op = brainscale.ETraceOp(lambda x, w: x + w)
 #         param = brainscale.ETraceParam(weight, op)
 #         self.assertEqual(param.gradient, brainscale.ETraceGrad.adaptive)
 #
 #     def test_execute(self):
-#         weight = bst.random.randn(10, 10)
+#         weight = brainstate.random.randn(10, 10)
 #         op = brainscale.ETraceOp(lambda x, w: x + w)
 #         param = brainscale.ETraceParam(weight, op)
-#         x = bst.random.randn(10, 10)
+#         x = brainstate.random.randn(10, 10)
 #         result = param.execute(x)
 #         self.assertTrue(u.math.allclose(result, x + weight))
 

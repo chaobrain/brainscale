@@ -258,9 +258,9 @@ def _init_IO_dim_state(
     repeatedly in the graph.
 
     Args:
-        etrace_xs (Dict[ETraceX_Key, bst.State]): A dictionary to store the 
+        etrace_xs (Dict[ETraceX_Key, brainstate.State]): A dictionary to store the
             eligibility trace states for the weight x, keyed by ETraceX_Key.
-        etrace_dfs (Dict[ETraceDF_Key, bst.State]): A dictionary to store the 
+        etrace_dfs (Dict[ETraceDF_Key, brainstate.State]): A dictionary to store the
             eligibility trace states for the differential functions, keyed by 
             ETraceDF_Key.
         etrace_xs_to_weights (defaultdict[ETraceX_Key, List[Path]]): A 
@@ -551,8 +551,8 @@ def _init_param_dim_state(
     is enabled.
 
     Args:
-        mode (bst.mixin.Mode): The mode indicating whether batching is enabled.
-        etrace_bwg (Dict[ETraceWG_Key, bst.State]): A dictionary to store the 
+        mode (brainstate.mixin.Mode): The mode indicating whether batching is enabled.
+        etrace_bwg (Dict[ETraceWG_Key, brainstate.State]): A dictionary to store the
             eligibility trace states, keyed by a unique identifier for each 
             weight group.
         relation (HiddenParamOpRelation): The relation object containing 
@@ -647,7 +647,7 @@ def _update_param_dim_etrace_scan_fn(
             their corresponding PyTree values.
         hidden_param_op_relations: A sequence of HiddenParamOpRelation objects representing
             the relationships between hidden parameters and operations.
-        mode (bst.mixin.Mode): The mode indicating whether batching is enabled.
+        mode (brainstate.mixin.Mode): The mode indicating whether batching is enabled.
 
     Returns:
         Tuple[Dict[ETraceWG_Key, jax.Array], None]: A tuple containing a dictionary of
@@ -817,7 +817,7 @@ def _solve_param_dim_weight_gradients(
             length as the total number of hidden groups.
         weight_hidden_relations (Sequence[HiddenParamOpRelation]): A sequence of HiddenParamOpRelation 
             objects representing the relationships between hidden parameters and operations.
-        mode (bst.mixin.Mode): The mode indicating whether batching is enabled.
+        mode (brainstate.mixin.Mode): The mode indicating whether batching is enabled.
 
     Returns:
         None: The function updates the dG_weights dictionary in place with the computed weight gradients.
@@ -894,10 +894,10 @@ def _remove_units(xs_maybe_quantity: brainstate.typing.PyTree):
     original units to the unitless PyTree.
 
     Args:
-        xs_maybe_quantity (bst.typing.PyTree): A PyTree structure containing quantities with units.
+        xs_maybe_quantity (brainstate.typing.PyTree): A PyTree structure containing quantities with units.
 
     Returns:
-        Tuple[bst.typing.PyTree, Callable]: A tuple containing:
+        Tuple[brainstate.typing.PyTree, Callable]: A tuple containing:
             - A PyTree with the same structure as the input, but with units removed from each quantity.
             - A function that takes a unitless PyTree and restores the original units to it.
     """
@@ -982,8 +982,8 @@ def _reset_state_in_a_dict(
     original shape of the state's value and the specified batch size.
 
     Args:
-        state_dict (Dict[Any, bst.State]): A dictionary where keys are any 
-            type and values are bst.State objects. Each state's value will be 
+        state_dict (Dict[Any, brainstate.State]): A dictionary where keys are any
+            type and values are brainstate.State objects. Each state's value will be
             reset to a zero array.
         batch_size (Optional[int]): The size of the batch. If provided, the 
             zero array will include a batch dimension; otherwise, it will not.
@@ -1028,7 +1028,7 @@ def _is_weight_need_full_grad(
     Args:
         relation (HiddenParamOpRelation): The relation object containing information
             about the weights and hidden groups involved in the computation.
-        mode (bst.mixin.Mode): The mode indicating whether batching is enabled.
+        mode (brainstate.mixin.Mode): The mode indicating whether batching is enabled.
 
     Returns:
         bool: True if the weight requires a full gradient computation using the O(n^2)
@@ -1736,17 +1736,17 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
 #     __module__ = 'brainscale'
 #
 #     # the spatial gradients of the weights
-#     etrace_xs: Dict[WeightXVar, bst.State]
+#     etrace_xs: Dict[WeightXVar, brainstate.State]
 #
 #     # the spatial gradients of the hidden states
-#     etrace_dfs: Dict[Tuple[WeightYVar, HiddenOutVar], bst.State]
+#     etrace_dfs: Dict[Tuple[WeightYVar, HiddenOutVar], brainstate.State]
 #
 #     # the truncation length
 #     n_truncation: int
 #
 #     def __init__(
 #         self,
-#         model: bst.nn.Module,
+#         model: brainstate.nn.Module,
 #         n_truncation: int,
 #         name: Optional[str] = None,
 #         vjp_method: str = 'single-step',
@@ -2795,9 +2795,9 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
 
         Parameters
         -----------
-        weight : bst.ParamState | Path
+        weight : brainstate.ParamState | Path
             The weight for which the eligibility trace is to be retrieved. It can be
-            specified either as a `bst.ParamState` object or a `Path` object.
+            specified either as a `brainstate.ParamState` object or a `Path` object.
 
         Returns:
         --------
