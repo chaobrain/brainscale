@@ -993,7 +993,7 @@ def _reset_state_in_a_dict(
         state's value to a zero array.
     """
     for k, v in state_dict.items():
-        state_dict[k].value = jax.tree.map(partial(_zeros_like_batch_or_not, batch_size), v)
+        state_dict[k].value = jax.tree.map(partial(_zeros_like_batch_or_not, batch_size), v.value)
 
 
 def _numel(pytree: PyTree):
