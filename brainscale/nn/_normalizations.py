@@ -21,6 +21,7 @@ from typing import Callable, Union, Sequence, Optional, Any
 import brainstate
 import brainunit as u
 import jax
+
 if brainstate.__version__ >= '0.1.3':
     from brainstate.nn._normalizations import _BatchNorm
 else:
@@ -29,6 +30,7 @@ else:
 from brainscale._etrace_concepts import ETraceParam
 from brainscale._etrace_operators import ETraceOp, Y, W, general_y2w
 from brainscale._typing import ArrayLike, Size, Axes
+from brainstate._state import BatchState
 
 __all__ = [
     'BatchNorm0d',
@@ -75,7 +77,7 @@ class _BatchNormETrace(_BatchNorm):
         axis_index_groups: Optional[Sequence[Sequence[int]]] = None,
         name: Optional[str] = None,
         dtype: Any = None,
-        mean_type: type = brainstate.LongTermState,
+        mean_type: type = BatchState,
         param_type: type = ETraceParam,
     ):
         weight_type = partial(
