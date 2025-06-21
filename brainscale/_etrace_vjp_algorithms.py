@@ -1781,7 +1781,11 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
         super().__init__(model, name=name, vjp_method=vjp_method)
 
         # computing mode
-        self.mode = brainstate.mixin.Mode() if mode is None else mode
+        if mode is None:
+            self.mode = brainstate.environ.get('mode', brainstate.mixin.Mode())
+        else:
+            self.mode = mode
+        assert isinstance(self.mode, brainstate.mixin.Mode), 'The mode should be an instance of brainstate.mixin.Mode.'
 
         # the learning parameters
         self.decay, num_rank = _format_decay_and_rank(decay_or_rank)
@@ -2139,7 +2143,13 @@ class ParamDimVjpAlgorithm(ETraceVjpAlgorithm):
         vjp_method: str = 'single-step'
     ):
         super().__init__(model, name=name, vjp_method=vjp_method)
-        self.mode = brainstate.mixin.Mode() if mode is None else mode
+
+        # computing mode
+        if mode is None:
+            self.mode = brainstate.environ.get('mode', brainstate.mixin.Mode())
+        else:
+            self.mode = mode
+        assert isinstance(self.mode, brainstate.mixin.Mode), 'The mode should be an instance of brainstate.mixin.Mode.'
 
     def init_etrace_state(self, *args, **kwargs):
         """
@@ -2432,7 +2442,11 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
         super().__init__(model, name=name, vjp_method=vjp_method)
 
         # computing mode
-        self.mode = brainstate.mixin.Mode() if mode is None else mode
+        if mode is None:
+            self.mode = brainstate.environ.get('mode', brainstate.mixin.Mode())
+        else:
+            self.mode = mode
+        assert isinstance(self.mode, brainstate.mixin.Mode), 'The mode should be an instance of brainstate.mixin.Mode.'
 
         # the learning parameters
         self.decay, num_rank = _format_decay_and_rank(decay_or_rank)
