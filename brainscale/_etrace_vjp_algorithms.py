@@ -1127,11 +1127,11 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
     name: str, optional
         The name of the etrace algorithm.
     vjp_method: str
-        The time to compute the loss-to-hidden Jacobian.
+        The method for computing the VJP. It should be either "single-step" or "multi-step".
 
-        - ``0``: the current time step: $\frac{\partial L^t}{\partial h^t}$.  Memory is
-        - ``1``: the last time step: $\frac{\partial L^{t-1}}{\partial h^{t-1}}$.
-        - ``k``: the t-k time step: $\frac{\partial L^{t-k}}{\partial h^{t-k}}$.
+        - "single-step": The VJP is computed at the current time step, i.e., $\partial L^t/\partial h^t$.
+        - "multi-step": The VJP is computed at multiple time steps, i.e., $\partial L^t/\partial h^{t-k}$,
+          where $k$ is determined by the data input.
 
     """
 
@@ -1740,11 +1740,11 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
     model: brainstate.nn.Module
         The model function, which receives the input arguments and returns the model output.
     vjp_method: str, optional
-        The time to compute the loss-to-hidden Jacobian.
+        The method for computing the VJP. It should be either "single-step" or "multi-step".
 
-        - ``0``: the current time step: $\frac{\partial L^t}{\partial h^t}$.  Memory is
-        - ``1``: the last time step: $\frac{\partial L^{t-1}}{\partial h^{t-1}}$.
-        - ``k``: the t-k time step: $\frac{\partial L^{t-k}}{\partial h^{t-k}}$.
+        - "single-step": The VJP is computed at the current time step, i.e., $\partial L^t/\partial h^t$.
+        - "multi-step": The VJP is computed at multiple time steps, i.e., $\partial L^t/\partial h^{t-k}$,
+          where $k$ is determined by the data input.
 
     decay_or_rank: float, int
         The exponential smoothing factor for the eligibility trace.
@@ -1752,7 +1752,7 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
         If it is an integer, it is the number of approximation rank for the algorithm, should be greater than 0.
     name: str, optional
         The name of the etrace algorithm.
-    mode: Optional[brainscale.mixin.Mode]
+    mode: brainscale.mixin.Mode
         The computing mode, indicating the batching information.
     """
 
@@ -2116,15 +2116,15 @@ class ParamDimVjpAlgorithm(ETraceVjpAlgorithm):
     -----------
     model: brainstate.nn.Module
         The model function, which receives the input arguments and returns the model output.
-    vjp_time: str, optional
-        The time to compute the loss-to-hidden Jacobian.
+    vjp_method: str, optional
+        The method for computing the VJP. It should be either "single-step" or "multi-step".
 
-        - ``0``: the current time step: $\frac{\partial L^t}{\partial h^t}$.  Memory is
-        - ``1``: the last time step: $\frac{\partial L^{t-1}}{\partial h^{t-1}}$.
-        - ``k``: the t-k time step: $\frac{\partial L^{t-k}}{\partial h^{t-k}}$.
+        - "single-step": The VJP is computed at the current time step, i.e., $\partial L^t/\partial h^t$.
+        - "multi-step": The VJP is computed at multiple time steps, i.e., $\partial L^t/\partial h^{t-k}$,
+          where $k$ is determined by the data input.
     name: str, optional
         The name of the etrace algorithm.
-    mode: Optional[brainstate.mixin.Mode]
+    mode: brainscale.mixin.Mode
         The computing mode, indicating the batching behavior.
     """
 
@@ -2390,19 +2390,19 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
     -----------
     model: Callable
         The model function, which receives the input arguments and returns the model output.
-    vjp_time: str, optional
-        The time to compute the loss-to-hidden Jacobian.
+    vjp_method: str, optional
+        The method for computing the VJP. It should be either "single-step" or "multi-step".
 
-        - ``0``: the current time step: $\frac{\partial L^t}{\partial h^t}$.  Memory is
-        - ``1``: the last time step: $\frac{\partial L^{t-1}}{\partial h^{t-1}}$.
-        - ``k``: the t-k time step: $\frac{\partial L^{t-k}}{\partial h^{t-k}}$.
+        - "single-step": The VJP is computed at the current time step, i.e., $\partial L^t/\partial h^t$.
+        - "multi-step": The VJP is computed at multiple time steps, i.e., $\partial L^t/\partial h^{t-k}$,
+          where $k$ is determined by the data input.
     name: str, optional
         The name of the etrace algorithm.
     decay_or_rank: float, int
         The exponential smoothing factor for the eligibility trace. If it is a float,
         it is the decay factor, should be in the range of (0, 1). If it is an integer,
         it is the number of approximation rank for the algorithm, should be greater than 0.
-    mode: Optional[brainstate.mixin.Mode]
+    mode: brainscale.mixin.Mode
         The computing mode, indicating the batching behavior.
     """
 
