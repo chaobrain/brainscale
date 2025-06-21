@@ -329,7 +329,11 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
 
         Returns:
             The outputs, hidden states, other states, and the spatial gradients of the weights.
+            Return the single-step results if inputs do not contain multiple-step data,
+            otherwise return the multi-step data.
         """
+
+        input_is_multi_step = has_multistep_data(*args)
 
         # --- split the states and state values --- #
         (
@@ -339,10 +343,10 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
             other_states
         ) = split_dict_states_v2(self.states)
 
-        etrace_state_vals = {path: st.value for path, st in etrace_states.items()}
-        other_state_vals = {path: st.value for path, st in other_states.items()}
-        non_etrace_param_vals = {path: st.value for path, st in non_etrace_params.items()}
         etrace_param_vals = {path: st.value for path, st in etrace_params.items()}
+        etrace_state_vals = {path: st.value for path, st in etrace_states.items()}
+        non_etrace_param_vals = {path: st.value for path, st in non_etrace_params.items()}
+        other_state_vals = {path: st.value for path, st in other_states.items()}
 
         # --- processing the inputs information --- #
         (
@@ -384,40 +388,37 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
 
             return (_etrace_state_vals, _oth_state_vals), (out, hid2weight_jac, hid2hid_jac)
 
-        def scan_over_multi_times(
-            args_at_multi_times: Dict,  # the inputs for multiple time steps
-            hidden_vals_,
-            other_vals_
-        ):
-            # KEY: always return output at multi-time steps
-            if len(args_at_multi_times):
-                return jax.lax.scan(scan_fn, (hidden_vals_, other_vals_), args_at_multi_times)
-            else:
-                r = scan_fn((hidden_vals_, other_vals_), args_at_multi_times)
-                return r[0], jax.tree.map(lambda x: jnp.expand_dims(x, 0), r[1])
-
         # check the batch size
         if len(args_multi_steps):
             args_dim = [jnp.shape(x)[0] for x in jax.tree.leaves(args_multi_steps)]
             if len(set(args_dim)) != 1:
                 raise ValueError(f'The sequence size should be the same for all inputs. But we got {args_dim}.')
 
-        # scan over multiple time steps
-        (
+        if input_is_multi_step:
             (
-                etrace_state_vals,
-                oth_state_vals
-            ),
+                (
+                    etrace_state_vals,
+                    other_state_vals
+                ),
+                (
+                    outs_single_or_multi_steps,
+                    hid2weight_jac_single_or_multi_steps,
+                    hid2hid_jac_single_or_multi_steps
+                )
+            ) = jax.lax.scan(scan_fn, (etrace_state_vals, other_state_vals), args_multi_steps)
+
+        else:
             (
-                outs_multi_steps,
-                hid2weight_jac_multi_steps,
-                hid2hid_jac_multi_steps
-            )
-        ) = scan_over_multi_times(
-            args_multi_steps,
-            etrace_state_vals,
-            other_state_vals
-        )
+                (
+                    etrace_state_vals,
+                    other_state_vals
+                ),
+                (
+                    outs_single_or_multi_steps,
+                    hid2weight_jac_single_or_multi_steps,
+                    hid2hid_jac_single_or_multi_steps
+                )
+            ) = scan_fn((etrace_state_vals, other_state_vals), {})
 
         # recovering the other non-etrace weights, although the weights are not changed
         assign_dict_state_values(non_etrace_params, non_etrace_param_vals, write=False)
@@ -425,11 +426,11 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
 
         # return the results
         return (
-            outs_multi_steps,
+            outs_single_or_multi_steps,
             etrace_state_vals,
-            oth_state_vals,
-            hid2weight_jac_multi_steps,
-            hid2hid_jac_multi_steps
+            other_state_vals,
+            hid2weight_jac_single_or_multi_steps,
+            hid2hid_jac_single_or_multi_steps
         )
 
     def solve_h2w_h2h_l2h_jacobian(
@@ -465,16 +466,16 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
         Returns:
           The outputs, hidden states, other states, the spatial gradients of the weights, and the residuals.
         """
+        input_is_multi_step = has_multistep_data(*args)
 
-        if self.is_single_step_vjp:
-            if has_multistep_data(*args):
-                raise NotImplementedError(
-                    'When the VJP method is "single-step", '
-                    'we only support the input data that is at a single time step, '
-                    'while we got the data at multiple time steps. \n'
-                    'This design is to ensure the correctness of the VJP gradient '
-                    'computation of hidden states.'
-                )
+        if self.is_single_step_vjp and input_is_multi_step:
+            raise NotImplementedError(
+                'When the VJP method is "single-step", '
+                'we only support the input data that is at a single time step, '
+                'while we got the data at multiple time steps. \n'
+                'This design is to ensure the correctness of the VJP gradient '
+                'computation of hidden states.'
+            )
 
         # ---------------------- [Part 1] ----------------------
         # weights, hidden, and states information
@@ -565,15 +566,15 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
 
             return out, _etrace_state_vals, _oth_state_vals, hid2weight_jac, hid2hid_jac
 
-        # ---------------------- [Part 2] ----------------------
+        # ---------------------- [Part 2.1] ----------------------
         # Scan VJP function over multiple time steps
-        # ------------------------------------------------------
+        # --------------------------------------------------------
 
         # In the following variable names, the suffix "_ss" means "single-step",
         # and the suffix "_ms" means "multi-step".
 
-        def scan_over_multiple_inputs(
-            inputs_ss_or_ms: Dict,  # the inputs for single/multiple time steps
+        def scan_over_multiple_steps(
+            inputs_single_or_multi: Dict,  # the inputs for single/multiple time steps
             hidden_vals_ss,  # the initial hidden states
             non_etrace_weight_vals_ss,  # the non-etrace weights
             etrace_weight_vals_ss,  # the etrace weights
@@ -582,13 +583,13 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
         ):
 
             # processing the inputs information
-            args_single_step, args_multi_steps, tree_def = split_input_data_types(*inputs_ss_or_ms)
+            args_single_step, args_multi_steps, tree_def = split_input_data_types(*inputs_single_or_multi)
+            assert len(args_multi_steps), 'The inputs should contain at least one multi-step data.'
 
-            if len(args_multi_steps):
-                # check the batch size
-                args_dim = [jnp.shape(x)[0] for x in jax.tree.leaves(args_multi_steps)]
-                if len(set(args_dim)) != 1:
-                    raise ValueError(f'The sequence size should be the same for all inputs. But we got {args_dim}.')
+            # check the batch size
+            args_dim = [jnp.shape(x)[0] for x in jax.tree.leaves(args_multi_steps)]
+            if len(set(args_dim)) != 1:
+                raise ValueError(f'The sequence size should be the same for all inputs. But we got {args_dim}.')
 
             # scan function
             def scan_fn(carray, x_ss: Dict):
@@ -616,36 +617,18 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
                 )
 
             # scan over multiple time steps
-            if len(args_multi_steps):
+            (
                 (
-                    (
-                        hidden_vals_ss,
-                        other_vals_ss
-                    ),
-                    (
-                        _outs_multi_steps,
-                        _hid2weight_jac_multi_steps,
-                        _hid2hid_jac_multi_steps
-                    )
-                ) = jax.lax.scan(scan_fn, (hidden_vals_ss, other_vals_ss), args_multi_steps)
-
-            else:
-                (
-                    (
-                        hidden_vals_ss,
-                        other_vals_ss
-                    ),
-                    (
-                        ret
-                    )
-                ) = scan_fn((hidden_vals_ss, other_vals_ss), args_multi_steps)
+                    hidden_vals_ss,
+                    other_vals_ss
+                ),
                 (
                     _outs_multi_steps,
                     _hid2weight_jac_multi_steps,
                     _hid2hid_jac_multi_steps
-                ) = jax.tree.map(lambda x: jnp.expand_dims(x, 0), ret)
+                )
+            ) = jax.lax.scan(scan_fn, (hidden_vals_ss, other_vals_ss), args_multi_steps)
 
-            # return the results
             return (
                 (
                     _outs_multi_steps,
@@ -658,6 +641,37 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
                 )
             )
 
+        # ---------------------- [Part 2.2] ----------------------
+        # Scan VJP function over single time step
+        # --------------------------------------------------------
+
+        def call_over_single_step(
+            inputs_single_or_multi: Dict,  # the inputs for single/multiple time steps
+            hidden_vals_ss,  # the initial hidden states
+            non_etrace_weight_vals_ss,  # the non-etrace weights
+            etrace_weight_vals_ss,  # the etrace weights
+            other_vals_ss,  # the initial other states
+            hidden_perturbs_ss  # the hidden perturbations, only used when is_single_step_vjp is True
+        ):
+            (
+                out,
+                hidden_vals_iter,
+                other_vals_iter,
+                hid2weight_jac,
+                hid2hid_jac
+            ) = fun_for_vjp(
+                inputs_single_or_multi,
+                hidden_vals_ss,
+                non_etrace_weight_vals_ss,
+                etrace_weight_vals_ss,
+                other_vals_ss,
+                hidden_perturbs_ss,
+            )
+            return (
+                (out, hidden_vals_iter, other_vals_iter),
+                (hid2weight_jac, hid2hid_jac)
+            )
+
         # ---------------------- [Part 3] ------------------------
         # Compile the AutoGrad of the VJP function that over time
         # into the residual jaxpr representation
@@ -667,18 +681,18 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
         # so that it can be computed when they are needed.
         (
             (
-                outs_multi_steps,
+                out_single_or_multi_steps,
                 etrace_state_vals,
                 other_state_vals
             ),
             f_vjp,
             (
-                hid2weight_jac_multi_steps,
-                hid2hid_jac_multi_steps
+                hid2weight_jac_single_or_multi_steps,
+                hid2hid_jac_single_or_multi_steps
             )
         ) = jax.vjp(
-            scan_over_multiple_inputs,  # the function
-            args,  # the inputs (multiple time)
+            (scan_over_multiple_steps if input_is_multi_step else call_over_single_step),  # the function
+            args,  # the inputs (multiple/single time)
             etrace_state_vals,  # the inputs (single time)
             non_etrace_param_vals,  # the inputs (single time)
             etrace_param_vals,  # the inputs (single time)
@@ -686,7 +700,7 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
             hidden_perturbs,  # the inputs (single time)
             has_aux=True
         )
-        out_flat, out_tree = jax.tree.flatten(((outs_multi_steps, etrace_state_vals, other_state_vals),))
+        out_flat, out_tree = jax.tree.flatten(((out_single_or_multi_steps, etrace_state_vals, other_state_vals),))
         rule, in_tree = jax.api_util.flatten_fun_nokwargs(lu.wrap_init(f_vjp), out_tree)
         out_avals = [jax.core.get_aval(x).at_least_vspace() for x in out_flat]
         jaxpr, _, consts = pe.trace_to_jaxpr_dynamic(rule, out_avals)
@@ -701,10 +715,10 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
         assign_dict_state_values(etrace_param_states, etrace_weight_vals_restore, write=False)
 
         return (
-            outs_multi_steps,
+            out_single_or_multi_steps,
             etrace_state_vals,
             other_state_vals,
-            hid2weight_jac_multi_steps,
-            hid2hid_jac_multi_steps,
-            residual
+            hid2weight_jac_single_or_multi_steps,
+            hid2hid_jac_single_or_multi_steps,
+            residual,
         )
