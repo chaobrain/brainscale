@@ -66,15 +66,15 @@ class ETraceAlgorithm(brainstate.nn.Module):
     -----------
     graph: ETraceGraphExecutor
         The etrace graph.
-    param_states: Dict[Hashable, bst.ParamState]
+    param_states: Dict[Hashable, brainstate.ParamState]
         The weight states.
     hidden_states: Dict[Hashable, ETraceState]
         The hidden states.
-    other_states: Dict[Hashable, bst.State]
+    other_states: Dict[Hashable, brainstate.State]
         The other states.
     is_compiled: bool
         Whether the etrace algorithm has been compiled.
-    running_index: bst.ParamState[int]
+    running_index: brainstate.ParamState[int]
         The running index.
     """
     __module__ = 'brainscale'

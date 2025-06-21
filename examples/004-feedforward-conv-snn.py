@@ -14,7 +14,6 @@
 # ==============================================================================
 
 
-import os
 from typing import Callable, Iterable
 
 import brainstate
@@ -37,8 +36,8 @@ class ConvSNN(brainstate.nn.Module):
 
     The model architecture is:
 
-    1. Conv2d -> BatchNorm2d -> IF -> MaxPool2d
-    2. Conv2d -> BatchNorm2d -> IF
+    1. Conv2d -> LayerNorm -> IF -> MaxPool2d
+    2. Conv2d -> LayerNorm -> IF
     3. MaxPool2d -> Flatten
     4. Linear -> IF
     5. LeakyRateReadout
@@ -68,14 +67,14 @@ class ConvSNN(brainstate.nn.Module):
 
         self.layer1 = brainstate.nn.Sequential(
             brainscale.nn.Conv2d(in_size, n_channel, kernel_size=3, padding=1, **conv_inits),
-            brainscale.nn.BatchNorm2d.desc(),
+            brainscale.nn.LayerNorm.desc(),
             brainscale.nn.IF.desc(**if_param),
             brainstate.nn.MaxPool2d.desc(kernel_size=2, stride=2)  # 14 * 14
         )
 
         self.layer2 = brainstate.nn.Sequential(
             brainscale.nn.Conv2d(self.layer1.out_size, n_channel, kernel_size=3, padding=1, **conv_inits),
-            brainscale.nn.BatchNorm2d.desc(),
+            brainscale.nn.LayerNorm.desc(),
             brainscale.nn.IF.desc(**if_param),
         )
         self.layer3 = brainstate.nn.Sequential(
@@ -124,17 +123,20 @@ class Trainer(object):
     def _acc(self, out, target):
         return jax.numpy.mean(jax.numpy.equal(target, jax.numpy.argmax(jax.numpy.mean(out, axis=0), axis=1)))
 
-    @brainstate.compile.jit(static_argnums=0)
+    @brainstate.transform.jit(static_argnums=0)
     def batch_eval(self, xs, ys):
+        brainstate.nn.vmap_init_all_states(self.target, axis_size=xs.shape[1], state_tag='new')
+        model = brainstate.nn.Vmap(self.target, vmap_states='new')
+
         def _step(inp):
             with brainstate.environ.context(fit=False):
                 # call the model
-                out = self.target(inp)
+                out = model(inp)
                 # calculate the loss
                 loss = braintools.metric.softmax_cross_entropy_with_integer_labels(out, ys).mean()
                 return loss, out
 
-        losses, outs = brainstate.compile.for_loop(_step, xs)
+        losses, outs = brainstate.transform.for_loop(_step, xs)
         return losses.mean(), self._acc(outs, ys)
 
     def batch_train(self, xs, ys):
@@ -188,19 +190,28 @@ class OnlineTrainer(Trainer):
         super().__init__(*args, **kwargs)
         self.decay_or_rank = decay_or_rank
 
-    @brainstate.compile.jit(static_argnums=(0,))
+    @brainstate.transform.jit(static_argnums=(0,))
     def batch_train(self, inputs, targets):
-        # initialize the states
-        brainstate.nn.init_all_states(self.target, inputs.shape[1])
+        # inputs: [n_step, n_batch, ...]
+        # targets: [n_batch, n_out]
+
+        model = brainscale.IODimVjpAlgorithm(self.target, self.decay_or_rank)
+
+        @brainstate.transform.vmap_new_states(
+            state_tag='new',
+            axis_size=inputs.shape[1],
+        )
+        def init():
+            brainstate.nn.init_all_states(self.target)
+            # initialize the online learning model
+            with brainstate.environ.context(fit=True):
+                model.compile_graph(inputs[0, 0])
+
+        init()
+        model = brainstate.nn.Vmap(model, vmap_states='new')
 
         # weights
         weights = self.target.states().subset(brainstate.ParamState)
-
-        # initialize the online learning model
-        with brainstate.environ.context(fit=True):
-            # model = brainscale.ParamDimVjpAlgorithm(self.target, mode=bst.mixin.Batching())
-            model = brainscale.IODimVjpAlgorithm(self.target, self.decay_or_rank)
-            model.compile_graph(inputs[0])
 
         def _etrace_grad(inp):
             with brainstate.environ.context(fit=True):
@@ -212,43 +223,39 @@ class OnlineTrainer(Trainer):
 
         def _etrace_step(prev_grads, x):
             # no need to return weights and states, since they are generated then no longer needed
-            f_grad = brainstate.augment.grad(_etrace_grad, weights, has_aux=True, return_value=True)
+            f_grad = brainstate.transform.grad(_etrace_grad, weights, has_aux=True, return_value=True)
             cur_grads, local_loss, out = f_grad(x)
             next_grads = jax.tree.map(lambda a, b: a + b, prev_grads, cur_grads)
             return next_grads, (out, local_loss)
 
-        def _etrace_train(inputs_):
-            # forward propagation
-            grads = jax.tree.map(u.math.zeros_like, weights.to_dict_values())
-            grads, (outs, losses) = brainstate.compile.scan(_etrace_step, grads, inputs_)
-            # gradient updates
-            # grads = bst.functional.clip_grad_norm(grads, 1.)
-            self.opt.update(grads)
-            # accuracy
-            return losses.mean(), outs
+        # forward propagation
+        grads = jax.tree.map(u.math.zeros_like, weights.to_dict_values())
+        grads, (outs, losses) = brainstate.transform.scan(_etrace_step, grads, inputs)
 
-        # running indices
-        loss, outs = _etrace_train(inputs)
-
-        # returns
+        # gradient updates
+        # grads = brainstate.functional.clip_grad_norm(grads, 1.)
+        self.opt.update(grads)
+        loss, outs = losses.mean(), outs
         return loss, self._acc(outs, targets)
 
 
 class BPTTTrainer(Trainer):
-    @brainstate.compile.jit(static_argnums=(0,))
+    @brainstate.transform.jit(static_argnums=(0,))
     def batch_train(self, inputs, targets):
-        # initialize the states
-        brainstate.nn.vmap_init_all_states(self.target, axis_size=inputs.shape[1])
+        # inputs: [n_step, n_batch, ...]
+
+        brainstate.nn.vmap_init_all_states(self.target, axis_size=inputs.shape[1], state_tag='new')
+        model = brainstate.nn.Vmap(self.target, vmap_states='new')
 
         # the model for a single step
         def _run_step_train(inp):
             with brainstate.environ.context(fit=True):
-                out = self.target(inp)
+                out = model(inp)
                 loss = braintools.metric.softmax_cross_entropy_with_integer_labels(out, targets).mean()
                 return out, loss
 
         def _bptt_grad_step():
-            outs, losses = brainstate.compile.for_loop(_run_step_train, inputs)
+            outs, losses = brainstate.transform.for_loop(_run_step_train, inputs)
             return losses.mean(), outs
 
         # gradients
@@ -256,7 +263,7 @@ class BPTTTrainer(Trainer):
         grads, loss, outs = brainstate.augment.grad(_bptt_grad_step, weights, has_aux=True, return_value=True)()
 
         # optimization
-        # grads = bst.functional.clip_grad_norm(grads, 1.)
+        # grads = brainstate.functional.clip_grad_norm(grads, 1.)
         self.opt.update(grads)
 
         return loss, self._acc(outs, targets)
@@ -295,10 +302,12 @@ def get_shd_data(
         num_workers=n_data_worker
     )
 
-    return brainstate.util.DotDict({'train_loader': train_loader,
-                                    'test_loader': test_loader,
-                                    'in_shape': in_shape,
-                                    'out_shape': out_shape})
+    return brainstate.util.DotDict(
+        {'train_loader': train_loader,
+         'test_loader': test_loader,
+         'in_shape': in_shape,
+         'out_shape': out_shape}
+    )
 
 
 def get_nmnist_data(
@@ -332,10 +341,12 @@ def get_nmnist_data(
         num_workers=n_data_worker
     )
 
-    return brainstate.util.DotDict({'train_loader': train_loader,
-                                    'test_loader': test_loader,
-                                    'in_shape': in_shape,
-                                    'out_shape': out_shape})
+    return brainstate.util.DotDict(
+        {'train_loader': train_loader,
+         'test_loader': test_loader,
+         'in_shape': in_shape,
+         'out_shape': out_shape}
+    )
 
 
 def data_processing(x_local):
@@ -347,7 +358,7 @@ def data_processing(x_local):
 if __name__ == '__main__':
     with brainstate.environ.context(dt=1.0):
         # n-mnist data
-        data = get_nmnist_data(batch_size=256)
+        data = get_nmnist_data(batch_size=256, cache_dir='./data/')
 
         # SHD data
         # data = get_shd_data(batch_size=256)
@@ -355,15 +366,15 @@ if __name__ == '__main__':
         # model
         net = ConvSNN(data.in_shape, data.out_shape)
 
-        # # Online Trainer
-        # r = OnlineTrainer(
-        #     target=net,
-        #     opt=brainstate.optim.Adam(lr=1e-3),
-        #     train_loader=data.train_loader,
-        #     test_loader=data.test_loader,
-        #     x_fun=data_processing,
-        #     n_epoch=30
-        # ).f_train()
+        # Online Trainer
+        r = OnlineTrainer(
+            target=net,
+            opt=brainstate.optim.Adam(lr=1e-3),
+            train_loader=data.train_loader,
+            test_loader=data.test_loader,
+            x_fun=data_processing,
+            n_epoch=30
+        ).f_train()
 
         # Offline Trainer
         r = BPTTTrainer(

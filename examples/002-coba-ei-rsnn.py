@@ -425,7 +425,6 @@ class Trainer:
     @brainstate.compile.jit(static_argnums=(0,))
     def etrace_train(self, inputs, targets):
         inputs = jnp.asarray(inputs, dtype=brainstate.environ.dftype())  # [T, B, N]
-        indices = np.arange(inputs.shape[0])
         weights = self.target.states().subset(brainstate.ParamState)
 
         # initialize the online learning model
@@ -493,10 +492,12 @@ class Trainer:
             mse_ls, acc = self.etrace_train(inputs, outputs)
             if (bar_idx + 1) % 100 == 0:
                 self.optimizer.lr.step_epoch()
-            desc = (f'Batch {bar_idx:2d}, '
-                    f'CE={float(mse_ls):.8f}, '
-                    f'acc={float(acc):.6f}, '
-                    f'time={time.time() - t0:.2f} s')
+            desc = (
+                f'Batch {bar_idx:2d}, '
+                f'CE={float(mse_ls):.8f}, '
+                f'acc={float(acc):.6f}, '
+                f'time={time.time() - t0:.2f} s'
+            )
             print(desc)
             if acc > acc_max:
                 acc_max = acc

@@ -258,9 +258,9 @@ def _init_IO_dim_state(
     repeatedly in the graph.
 
     Args:
-        etrace_xs (Dict[ETraceX_Key, bst.State]): A dictionary to store the 
+        etrace_xs (Dict[ETraceX_Key, brainstate.State]): A dictionary to store the
             eligibility trace states for the weight x, keyed by ETraceX_Key.
-        etrace_dfs (Dict[ETraceDF_Key, bst.State]): A dictionary to store the 
+        etrace_dfs (Dict[ETraceDF_Key, brainstate.State]): A dictionary to store the
             eligibility trace states for the differential functions, keyed by 
             ETraceDF_Key.
         etrace_xs_to_weights (defaultdict[ETraceX_Key, List[Path]]): A 
@@ -551,8 +551,8 @@ def _init_param_dim_state(
     is enabled.
 
     Args:
-        mode (bst.mixin.Mode): The mode indicating whether batching is enabled.
-        etrace_bwg (Dict[ETraceWG_Key, bst.State]): A dictionary to store the 
+        mode (brainstate.mixin.Mode): The mode indicating whether batching is enabled.
+        etrace_bwg (Dict[ETraceWG_Key, brainstate.State]): A dictionary to store the
             eligibility trace states, keyed by a unique identifier for each 
             weight group.
         relation (HiddenParamOpRelation): The relation object containing 
@@ -647,7 +647,7 @@ def _update_param_dim_etrace_scan_fn(
             their corresponding PyTree values.
         hidden_param_op_relations: A sequence of HiddenParamOpRelation objects representing
             the relationships between hidden parameters and operations.
-        mode (bst.mixin.Mode): The mode indicating whether batching is enabled.
+        mode (brainstate.mixin.Mode): The mode indicating whether batching is enabled.
 
     Returns:
         Tuple[Dict[ETraceWG_Key, jax.Array], None]: A tuple containing a dictionary of
@@ -817,7 +817,7 @@ def _solve_param_dim_weight_gradients(
             length as the total number of hidden groups.
         weight_hidden_relations (Sequence[HiddenParamOpRelation]): A sequence of HiddenParamOpRelation 
             objects representing the relationships between hidden parameters and operations.
-        mode (bst.mixin.Mode): The mode indicating whether batching is enabled.
+        mode (brainstate.mixin.Mode): The mode indicating whether batching is enabled.
 
     Returns:
         None: The function updates the dG_weights dictionary in place with the computed weight gradients.
@@ -894,10 +894,10 @@ def _remove_units(xs_maybe_quantity: brainstate.typing.PyTree):
     original units to the unitless PyTree.
 
     Args:
-        xs_maybe_quantity (bst.typing.PyTree): A PyTree structure containing quantities with units.
+        xs_maybe_quantity (brainstate.typing.PyTree): A PyTree structure containing quantities with units.
 
     Returns:
-        Tuple[bst.typing.PyTree, Callable]: A tuple containing:
+        Tuple[brainstate.typing.PyTree, Callable]: A tuple containing:
             - A PyTree with the same structure as the input, but with units removed from each quantity.
             - A function that takes a unitless PyTree and restores the original units to it.
     """
@@ -982,8 +982,8 @@ def _reset_state_in_a_dict(
     original shape of the state's value and the specified batch size.
 
     Args:
-        state_dict (Dict[Any, bst.State]): A dictionary where keys are any 
-            type and values are bst.State objects. Each state's value will be 
+        state_dict (Dict[Any, brainstate.State]): A dictionary where keys are any
+            type and values are brainstate.State objects. Each state's value will be
             reset to a zero array.
         batch_size (Optional[int]): The size of the batch. If provided, the 
             zero array will include a batch dimension; otherwise, it will not.
@@ -993,7 +993,7 @@ def _reset_state_in_a_dict(
         state's value to a zero array.
     """
     for k, v in state_dict.items():
-        state_dict[k].value = jax.tree.map(partial(_zeros_like_batch_or_not, batch_size), v)
+        state_dict[k].value = jax.tree.map(partial(_zeros_like_batch_or_not, batch_size), v.value)
 
 
 def _numel(pytree: PyTree):
@@ -1028,7 +1028,7 @@ def _is_weight_need_full_grad(
     Args:
         relation (HiddenParamOpRelation): The relation object containing information
             about the weights and hidden groups involved in the computation.
-        mode (bst.mixin.Mode): The mode indicating whether batching is enabled.
+        mode (brainstate.mixin.Mode): The mode indicating whether batching is enabled.
 
     Returns:
         bool: True if the weight requires a full gradient computation using the O(n^2)
@@ -1127,11 +1127,11 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
     name: str, optional
         The name of the etrace algorithm.
     vjp_method: str
-        The time to compute the loss-to-hidden Jacobian.
+        The method for computing the VJP. It should be either "single-step" or "multi-step".
 
-        - ``0``: the current time step: $\frac{\partial L^t}{\partial h^t}$.  Memory is
-        - ``1``: the last time step: $\frac{\partial L^{t-1}}{\partial h^{t-1}}$.
-        - ``k``: the t-k time step: $\frac{\partial L^{t-k}}{\partial h^{t-k}}$.
+        - "single-step": The VJP is computed at the current time step, i.e., $\partial L^t/\partial h^t$.
+        - "multi-step": The VJP is computed at multiple time steps, i.e., $\partial L^t/\partial h^{t-k}$,
+          where $k$ is determined by the data input.
 
     """
 
@@ -1248,8 +1248,6 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
         # 4. if vjp_method = 'multi-step', input = MultiStepData, then output is multiple step data
         #
 
-        input_is_multi_step = has_multistep_data(*args)
-
         # check the compilation
         self._assert_compiled()
 
@@ -1314,11 +1312,7 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
         self.running_index.value = jax.lax.stop_gradient(jnp.where(running_index >= 0, running_index, 0))
 
         # return the model output
-        return (
-            out
-            if input_is_multi_step else
-            jax.tree.map(lambda x: x[0], out)
-        )
+        return out
 
     def _update_fn(
         self,
@@ -1348,6 +1342,7 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
         Note that the weight values are assumed not changed in this function.
 
         """
+        input_is_multi_step = has_multistep_data(*args)
 
         # state value assignment
         assign_state_values_v2(self.param_states, weight_vals, write=False)
@@ -1359,8 +1354,8 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
             out,
             hidden_vals,
             oth_state_vals,
-            hid2weight_jac_multi_steps,
-            hid2hid_jac_multi_steps
+            hid2weight_jac_single_or_multi_steps,
+            hid2hid_jac_single_or_multi_steps
         ) = self.graph_executor.solve_h2w_h2h_jacobian(*args)
 
         # eligibility trace update
@@ -1371,9 +1366,10 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
         etrace_vals = self._update_etrace_data(
             running_index,
             etrace_vals,
-            hid2weight_jac_multi_steps,
-            hid2hid_jac_multi_steps,
+            hid2weight_jac_single_or_multi_steps,
+            hid2hid_jac_single_or_multi_steps,
             weight_vals,
+            input_is_multi_step,
         )
 
         # returns
@@ -1416,6 +1412,7 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
               * the weight id to its value mapping
               * the running index
         """
+        input_is_multi_step = has_multistep_data(*args)
 
         # state value assignment
         assign_state_values_v2(self.param_states, weight_vals, write=False)
@@ -1427,8 +1424,8 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
             out,
             hiddens,
             oth_states,
-            hid2weight_jac_multi_steps,
-            hid2hid_jac_multi_steps,
+            hid2weight_jac_single_or_multi_steps,
+            hid2hid_jac_single_or_multi_steps,
             residuals
         ) = self.graph_executor.solve_h2w_h2h_l2h_jacobian(*args)
 
@@ -1440,9 +1437,10 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
         new_etrace_vals = self._update_etrace_data(
             running_index,
             etrace_vals,
-            hid2weight_jac_multi_steps,
-            hid2hid_jac_multi_steps,
+            hid2weight_jac_single_or_multi_steps,
+            hid2hid_jac_single_or_multi_steps,
             weight_vals,
+            input_is_multi_step
         )
 
         # returns
@@ -1658,9 +1656,10 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
         self,
         running_index: Optional[int],
         etrace_vals_util_t_1: ETraceVals,
-        hid2weight_jac_multi_times: Hid2WeightJacobian,
-        hid2hid_jac_multi_times: Sequence[jax.Array],
+        hid2weight_jac_single_or_multi_times: Hid2WeightJacobian,
+        hid2hid_jac_single_or_multi_times: Sequence[jax.Array],
         weight_vals: WeightVals,
+        input_is_multi_step: bool,
     ) -> ETraceVals:
         """
         The method to update the eligibility trace data.
@@ -1672,8 +1671,8 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
         Args:
           running_index: Optional[int], the running index.
           etrace_vals_util_t_1: ETraceVals, the history eligibility trace data that have accumulated util :math:`t-1`.
-          hid2weight_jac_multi_times: ETraceVals, the current eligibility trace data at the time :math:`t`.
-          hid2hid_jac_multi_times: The data for computing the hidden-to-hidden Jacobian at the time :math:`t`.
+          hid2weight_jac_single_or_multi_times: ETraceVals, the current eligibility trace data at the time :math:`t`.
+          hid2hid_jac_single_or_multi_times: The data for computing the hidden-to-hidden Jacobian at the time :math:`t`.
           weight_vals: Dict[WeightID, PyTree], the weight values.
 
         Returns:
@@ -1708,315 +1707,6 @@ class ETraceVjpAlgorithm(ETraceAlgorithm):
         raise NotImplementedError
 
 
-# class TruncatedVjpAlgorithm(ETraceVjpAlgorithm):
-#     r"""
-#     The online gradient computation algorithm with the diagonal approximation and
-#     the input-output dimensional complexity.
-#
-#     This algorithm has the :math:`O(nBI+nBO)` memory complexity and :math:`O(nBIO)` computational
-#     complexity, where :math:`I` and :math:`O` are the number of input and output dimensions,
-#     :math:`B` the batch size, and :math:`n` the number of truncation length.
-#
-#     Parameters
-#     -----------
-#     model: brainstate.nn.Module
-#         The model function, which receives the input arguments and returns the model output.
-#     vjp_time: str, optional
-#         The time to compute the loss-to-hidden Jacobian.
-#
-#         - ``0``: the current time step: $\frac{\partial L^t}{\partial h^t}$.  Memory is
-#         - ``1``: the last time step: $\frac{\partial L^{t-1}}{\partial h^{t-1}}$.
-#         - ``k``: the t-k time step: $\frac{\partial L^{t-k}}{\partial h^{t-k}}$.
-#     name: str, optional
-#         The name of the etrace algorithm.
-#     n_truncation: int
-#         The truncation length.
-#     """
-#
-#     __module__ = 'brainscale'
-#
-#     # the spatial gradients of the weights
-#     etrace_xs: Dict[WeightXVar, bst.State]
-#
-#     # the spatial gradients of the hidden states
-#     etrace_dfs: Dict[Tuple[WeightYVar, HiddenOutVar], bst.State]
-#
-#     # the truncation length
-#     n_truncation: int
-#
-#     def __init__(
-#         self,
-#         model: bst.nn.Module,
-#         n_truncation: int,
-#         name: Optional[str] = None,
-#         vjp_method: str = 'single-step',
-#     ):
-#         super().__init__(model, name=name, vjp_method=vjp_method)
-#
-#         # the learning parameters
-#         assert isinstance(n_truncation, int), 'The truncation length should be an integer. '
-#         assert n_truncation > 0, 'The truncation length should be greater than 0. '
-#         self.n_truncation = n_truncation
-#
-#     def init_etrace_state(self, *args, **kwargs):
-#         """
-#         Initialize the eligibility trace states of the etrace algorithm.
-#
-#         This method is needed after compiling the etrace graph. See
-#         `.compile_graph()` for the details.
-#         """
-#         # The states of weight spatial gradients:
-#         #   1. x
-#         #   2. df
-#         self.etrace_xs = dict()
-#         self.etrace_dfs = dict()
-#         for relation in self.compiled.hidden_param_op_relations:
-#             # For the relation
-#             #
-#             #   h1, h2, ... = f(x, w)
-#             #
-#             # we need to initialize the eligibility trace states for the weight x and the df.
-#
-#             if relation.x not in self.etrace_xs:
-#                 shape = (self.n_truncation,) + relation.x.aval.shape
-#                 dtype = relation.x.aval.dtype
-#                 # wx may be repeatedly used in the graph
-#                 self.etrace_xs[relation.x] = EligibilityTrace(u.math.zeros(shape, dtype))
-#
-#             for group in relation.hidden_groups:
-#                 group: HiddenGroup
-#                 #
-#                 # Group 1:
-#                 #
-#                 #   [∂a^t-1/∂θ1, ∂b^t-1/∂θ1, ...]
-#                 #
-#                 # Group 2:
-#                 #
-#                 #   [∂A^t-1/∂θ1, ∂B^t-1/∂θ1, ...]
-#                 #
-#                 for hidden_outvar in group.hidden_outvars:
-#                     key = (relation.y, hidden_outvar)
-#                     if key in self.etrace_dfs:  # relation.y is an unique output of the weight operation
-#                         raise ValueError(f'The relation {key} has been added. ')
-#                     shape = (self.n_truncation,) + relation.y.aval.shape
-#                     dtype = relation.y.aval.dtype
-#                     self.etrace_dfs[key] = EligibilityTrace(u.math.zeros(shape, dtype))
-#
-#     def reset_state(self, batch_size: int = None, **kwargs):
-#         """
-#         Reset the eligibility trace states.
-#         """
-#
-#         def _zeros_like_batch_(x: jax.Array):
-#             if batch_size is not None:
-#                 assert isinstance(batch_size, int), 'The batch size should be an integer. '
-#                 shape = (self.n_truncation, batch_size) + x.shape[1:]
-#             else:
-#                 shape = (self.n_truncation,) + x.shape
-#             return u.math.zeros(shape, x.dtype)
-#
-#         for k, v in self.etrace_xs.items():
-#             self.etrace_xs[k].value = jax.tree.map(_zeros_like_batch_, v)
-#         for k, v in self.etrace_dfs.items():
-#             self.etrace_dfs[k].value = jax.tree.map(_zeros_like_batch_, v)
-#
-#     def _get_etrace_data(self) -> Tuple:
-#         etrace_xs = {k: v.value for k, v in self.etrace_xs.items()}
-#         etrace_dfs = {k: v.value for k, v in self.etrace_dfs.items()}
-#         return etrace_xs, etrace_dfs
-#
-#     def _assign_etrace_data(self, hist_etrace_vals):
-#         #
-#         # For any operation:
-#         #
-#         #           h^t = f(x^t \theta)
-#         #
-#         # etrace_xs:
-#         #           x^t
-#         #
-#         # etrace_dfs:
-#         #           df^t = ∂h^t / ∂y^t, where y^t = x^t \theta
-#         #
-#         (etrace_xs, etrace_dfs) = hist_etrace_vals
-#
-#         # the weight x and df
-#         for x, val in etrace_xs.items():
-#             self.etrace_xs[x].value = val
-#         for dfkey, val in etrace_dfs.items():
-#             self.etrace_dfs[dfkey].value = val
-#
-#     def _update_etrace_data(
-#         self,
-#         running_index: Optional[int],
-#         hist_etrace_vals: PyTree,
-#         hid2weight_jac_multi_times: Hid2WeightJacobian,
-#         hid2hid_jac_multi_times: Hid2HidJacobian,
-#         weight_vals: Dict[Path, PyTree],
-#     ) -> ETraceVals:
-#         #
-#         # "running_index":
-#         #            the running index
-#         #
-#         # "hist_etrace_vals":
-#         #            the history etrace values,
-#         #            including the x and df values, see "etrace_xs" and "etrace_dfs".
-#         #
-#         # "hid2weight_jac_multi_times":
-#         #           the current etrace values at the time "t", \epsilon^t, if vjp_time == "t".
-#         #           Otherwise, the etrace values at the time "t-1", \epsilon^{t-1}.
-#         #
-#         # "hid2hid_jac_multi_times":
-#         #           the data for computing the hidden-to-hidden Jacobian at the time "t".
-#         #
-#         # "weight_path_to_vals":
-#         #           the weight values.
-#         #
-#
-#         # --- the data --- #
-#         #
-#         # the etrace data at the current time step (t) of the O(n) algorithm
-#         # is a tuple, including the weight x and df values.
-#         #
-#         # For the weight x, it is a dictionary,
-#         #    {WeightXVar: jax.Array}
-#         #
-#         # For the weight df, it is a dictionary,
-#         #    {(WeightYVar, HiddenOutVar): jax.Array}
-#         #
-#         xs, dfs = hid2weight_jac_multi_times
-#
-#         #
-#         # the history etrace values
-#         #
-#         # - hist_xs: {WeightXVar: brainstate.State}
-#         # - hist_dfs: {(WeightYVar, HiddenOutVar): brainstate.State}
-#         #
-#         hist_xs, hist_dfs = hist_etrace_vals
-#
-#         #
-#         # the new etrace values
-#         new_etrace_xs, new_etrace_dfs = dict(), dict()
-#
-#         # --- the update --- #
-#
-#         #
-#         # Step 1:
-#         #
-#         #   update the weight x using the equation:
-#         #           x^t = α * x^t-1 + x^t, where α is the decay factor.
-#         #
-#         for xkey in hist_xs.keys():
-#             new_etrace_xs[xkey] = u.math.concatenate((hist_xs[xkey][1:], u.math.expand_dims(xs[xkey], 0)), axis=0)
-#
-#         for hwo_relation in self.compiled.hidden_param_op_relations:
-#             hwo_relation: HiddenParamOpRelation
-#
-#             for group in hwo_relation.hidden_groups:
-#                 group: HiddenGroup
-#                 #
-#                 # Step 2:
-#                 #
-#                 # update the eligibility trace * hidden diagonal Jacobian
-#                 #         dϵ^t = D_h ⊙ dϵ^t-1, where D_h is the hidden-to-hidden Jacobian diagonal matrix.
-#                 #
-#                 #
-#                 # JVP equation for the following Jacobian computation:
-#                 #
-#                 # [∂V^t/∂V^t-1, ∂V^t/∂a^t-1,  [∂V^t-1/∂θ1,
-#                 #  ∂a^t/∂V^t-1, ∂a^t/∂a^t-1]   ∂a^t-1/∂θ1,]
-#                 #
-#                 # [∂V^t/∂V^t-1, ∂V^t/∂a^t-1,  [∂V^t-1/∂θ2,
-#                 #  ∂a^t/∂V^t-1, ∂a^t/∂a^t-1]   ∂a^t-1/∂θ2]
-#                 #
-#
-#                 for hidden_outvar_at_t in group.hidden_outvars:
-#                     #
-#                     # computing the following vector-Jacobian product:
-#                     #  df^t = D_h ⊙ df^t-1
-#                     #
-#                     # i.e., the hidden-to-hidden Jacobian diagonal matrix * the hidden df at the previous time step
-#                     #
-#                     #  ∂V^t/∂θ1 = ∂V^t/∂V^t-1 * ∂V^t-1/∂θ1 + ∂V^t/∂a^t-1 * ∂a^t-1/∂θ1 + ...
-#                     #
-#                     new_etrace = None
-#                     for hidden_outvar_at_t_minus_1 in group.hidden_outvars:
-#                         diag_jac_key = (hidden_outvar_at_t_minus_1, hidden_outvar_at_t)
-#                         if diag_jac_key in hid2hid_jac_multi_times:
-#                             # diagonal Jacobian * hidden df
-#                             data = (hist_dfs[(hwo_relation.y, hidden_outvar_at_t_minus_1)] *
-#                                     u.math.expand_dims(hid2hid_jac_multi_times[diag_jac_key], axis=0))
-#                             new_etrace = data if new_etrace is None else new_etrace + data
-#                     assert new_etrace is not None, f'The new etrace should not be None. '
-#
-#                     #
-#                     # Step 3:
-#                     #
-#                     # update: eligibility trace * hidden diagonal Jacobian + new hidden df
-#                     #        dϵ^t = D_h ⊙ dϵ^t-1 + df^t, where D_h is the hidden-to-hidden Jacobian diagonal matrix.
-#                     #
-#                     new_df_key = (hwo_relation.y, hidden_outvar_at_t)
-#                     new_etrace_dfs[new_df_key] = u.math.concatenate(
-#                         [new_etrace[1:],
-#                          u.math.expand_dims(dfs.get(new_df_key, u.math.zeros_like(new_etrace[0])), axis=0)],
-#                         axis=0
-#                     )
-#         return new_etrace_xs, new_etrace_dfs
-#
-#     def _solve_weight_gradients(
-#         self,
-#         running_index: int,
-#         etrace_h2w_at_t: Tuple,
-#         dl_to_hidden_groups: Dict[HiddenOutVar, jax.Array],
-#         weight_id_to_its_val: Dict[WeightID, PyTree],
-#         dl_to_nonetws_at_t: List[PyTree],
-#         dl_to_etws_at_t: Optional[List[PyTree]],
-#     ):
-#         """
-#         See the documentation in the super class for the details.
-#         """
-#
-#         dG_weights = {id(st): None for st in self.param_states}
-#
-#         # update the etrace parameters
-#         xs, dfs = etrace_h2w_at_t
-#         for relation in self.graph.hidden_param_op_relations:
-#             x = xs[relation.x]
-#             weight_id = id(relation.weight)
-#
-#             #
-#             # Function to compute the weight gradients
-#             # according to the inputs and df gradients
-#             #
-#             fun_dxy2dw = lambda dx, dy: _weight_op_gradient(relation.op_jaxpr, dx, weight_id_to_its_val[weight_id], dy)
-#
-#             #
-#             # Solve the weight gradients by using the etrace data
-#             #
-#             #   dw = (dL/dH \circ df) \otimes x
-#             #
-#             for i, hid_var in enumerate(relation.hidden_vars):
-#                 df = dfs[(relation.y, hid_var)]  # the hidden gradients
-#                 df_hid = df * u.math.expand_dims(dl_to_hidden_groups[hid_var], axis=0)  # the hidden gradients
-#                 #
-#                 # Compute the weight gradients according to the x and y
-#                 #
-#                 #    dw = df(dx, dy)
-#                 #
-#                 dg_weight = jax.tree.map(lambda a: a.sum(0), jax.vmap(fun_dxy2dw)(x, df_hid))
-#                 _update_dict(dG_weights, weight_id, dg_weight)  # update the weight gradients
-#
-#         # update the non-etrace parameters
-#         etrace_params, _, non_etrace_params, _ = split_states_v2(self.graph.states)
-#         for st, dg in zip(non_etrace_params, dl_to_nonetws_at_t):
-#             _update_dict(dG_weights, id(st), dg)
-#
-#         # update the etrace parameters when "dl_to_etws_at_t" is not None
-#         if dl_to_etws_at_t is not None:
-#             for st, dg in zip(etrace_params, dl_to_etws_at_t):
-#                 _update_dict(dG_weights, id(st), dg, error_when_no_key=True)
-#         return list(dG_weights.values())
-
-
 class IODimVjpAlgorithm(ETraceVjpAlgorithm):
     r"""
     The online gradient computation algorithm with the diagonal approximation
@@ -2049,20 +1739,20 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
     -----------
     model: brainstate.nn.Module
         The model function, which receives the input arguments and returns the model output.
-    vjp_time: str, optional
-        The time to compute the loss-to-hidden Jacobian.
+    vjp_method: str, optional
+        The method for computing the VJP. It should be either "single-step" or "multi-step".
 
-        - ``0``: the current time step: $\frac{\partial L^t}{\partial h^t}$.  Memory is
-        - ``1``: the last time step: $\frac{\partial L^{t-1}}{\partial h^{t-1}}$.
-        - ``k``: the t-k time step: $\frac{\partial L^{t-k}}{\partial h^{t-k}}$.
+        - "single-step": The VJP is computed at the current time step, i.e., $\partial L^t/\partial h^t$.
+        - "multi-step": The VJP is computed at multiple time steps, i.e., $\partial L^t/\partial h^{t-k}$,
+          where $k$ is determined by the data input.
 
     decay_or_rank: float, int
-        The exponential smoothing factor for the eligibility trace. If it is a float,
-        it is the decay factor, should be in the range of (0, 1). If it is an integer,
-        it is the number of approximation rank for the algorithm, should be greater than 0.
+        The exponential smoothing factor for the eligibility trace.
+        If it is a float, it is the decay factor, should be in the range of (0, 1).
+        If it is an integer, it is the number of approximation rank for the algorithm, should be greater than 0.
     name: str, optional
         The name of the etrace algorithm.
-    mode: Optional[brainscale.mixin.Mode]
+    mode: brainscale.mixin.Mode
         The computing mode, indicating the batching information.
     """
 
@@ -2091,7 +1781,11 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
         super().__init__(model, name=name, vjp_method=vjp_method)
 
         # computing mode
-        self.mode = brainstate.mixin.Mode() if mode is None else mode
+        if mode is None:
+            self.mode = brainstate.environ.get('mode', brainstate.mixin.Mode())
+        else:
+            self.mode = mode
+        assert isinstance(self.mode, brainstate.mixin.Mode), 'The mode should be an instance of brainstate.mixin.Mode.'
 
         # the learning parameters
         self.decay, num_rank = _format_decay_and_rank(decay_or_rank)
@@ -2226,9 +1920,10 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
             Dict[ETraceX_Key, jax.Array],
             Dict[ETraceDF_Key, jax.Array]
         ],
-        hid2weight_jac_multi_times: Hid2WeightJacobian,
-        hid2hid_jac_multi_times: HiddenGroupJacobian,
+        hid2weight_jac_single_or_multi_times: Hid2WeightJacobian,
+        hid2hid_jac_single_or_multi_times: HiddenGroupJacobian,
         weight_vals: WeightVals,
+        input_is_multi_step: bool,
     ) -> Tuple[
         Dict[ETraceX_Key, jax.Array],
         Dict[ETraceDF_Key, jax.Array]
@@ -2247,9 +1942,9 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
                 The eligibility trace values from the previous timestep, containing:
                 - Dictionary mapping weight inputs to their trace values
                 - Dictionary mapping differential functions to their trace values
-            hid2weight_jac_multi_times: Hid2WeightJacobian
+            hid2weight_jac_single_or_multi_times: Hid2WeightJacobian
                 The current hidden-to-weight Jacobians at time t (or t-1 depending on vjp_method).
-            hid2hid_jac_multi_times: HiddenGroupJacobian
+            hid2hid_jac_single_or_multi_times: HiddenGroupJacobian
                 The current hidden-to-hidden Jacobians for propagating gradients.
             weight_vals: WeightVals
                 The current values of the model weights.
@@ -2268,11 +1963,11 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
         #            the history etrace values,
         #            including the x and df values, see "etrace_xs" and "etrace_dfs".
         #
-        # "hid2weight_jac_multi_times":
+        # "hid2weight_jac_single_or_multi_times":
         #           the current etrace values at the time "t", \epsilon^t, if vjp_time == "t".
         #           Otherwise, the etrace values at the time "t-1", \epsilon^{t-1}.
         #
-        # "hid2hid_jac_multi_times":
+        # "hid2hid_jac_single_or_multi_times":
         #           the data for computing the hidden-to-hidden Jacobian at the time "t".
         #
         # "weight_path_to_vals":
@@ -2284,15 +1979,28 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
             hid_weight_op_relations=self.graph.hidden_param_op_relations,
             decay=self.decay,
         )
-        hist_etrace_vals, _ = jax.lax.scan(
-            scan_fn,
-            hist_etrace_vals,
-            (
-                hid2weight_jac_multi_times[0],
-                hid2weight_jac_multi_times[1],
-                hid2hid_jac_multi_times,
-            ),
-        )
+
+        if input_is_multi_step:
+            hist_etrace_vals = jax.lax.scan(
+                scan_fn,
+                hist_etrace_vals,
+                (
+                    hid2weight_jac_single_or_multi_times[0],
+                    hid2weight_jac_single_or_multi_times[1],
+                    hid2hid_jac_single_or_multi_times,
+                ),
+            )[0]
+
+        else:
+            hist_etrace_vals = scan_fn(
+                hist_etrace_vals,
+                (
+                    hid2weight_jac_single_or_multi_times[0],
+                    hid2weight_jac_single_or_multi_times[1],
+                    hid2hid_jac_single_or_multi_times,
+                ),
+            )[0]
+
         return hist_etrace_vals
 
     def _solve_weight_gradients(
@@ -2412,15 +2120,15 @@ class ParamDimVjpAlgorithm(ETraceVjpAlgorithm):
     -----------
     model: brainstate.nn.Module
         The model function, which receives the input arguments and returns the model output.
-    vjp_time: str, optional
-        The time to compute the loss-to-hidden Jacobian.
+    vjp_method: str, optional
+        The method for computing the VJP. It should be either "single-step" or "multi-step".
 
-        - ``0``: the current time step: $\frac{\partial L^t}{\partial h^t}$.  Memory is
-        - ``1``: the last time step: $\frac{\partial L^{t-1}}{\partial h^{t-1}}$.
-        - ``k``: the t-k time step: $\frac{\partial L^{t-k}}{\partial h^{t-k}}$.
+        - "single-step": The VJP is computed at the current time step, i.e., $\partial L^t/\partial h^t$.
+        - "multi-step": The VJP is computed at multiple time steps, i.e., $\partial L^t/\partial h^{t-k}$,
+          where $k$ is determined by the data input.
     name: str, optional
         The name of the etrace algorithm.
-    mode: Optional[brainstate.mixin.Mode]
+    mode: brainscale.mixin.Mode
         The computing mode, indicating the batching behavior.
     """
 
@@ -2435,7 +2143,13 @@ class ParamDimVjpAlgorithm(ETraceVjpAlgorithm):
         vjp_method: str = 'single-step'
     ):
         super().__init__(model, name=name, vjp_method=vjp_method)
-        self.mode = brainstate.mixin.Mode() if mode is None else mode
+
+        # computing mode
+        if mode is None:
+            self.mode = brainstate.environ.get('mode', brainstate.mixin.Mode())
+        else:
+            self.mode = mode
+        assert isinstance(self.mode, brainstate.mixin.Mode), 'The mode should be an instance of brainstate.mixin.Mode.'
 
     def init_etrace_state(self, *args, **kwargs):
         """
@@ -2542,9 +2256,10 @@ class ParamDimVjpAlgorithm(ETraceVjpAlgorithm):
         self,
         running_index: Optional[int],
         hist_etrace_vals: Dict[ETraceWG_Key, PyTree],
-        hid2weight_jac_multi_times: Hid2WeightJacobian,
-        hid2hid_jac_multi_times: HiddenGroupJacobian,
+        hid2weight_jac_single_or_multi_times: Hid2WeightJacobian,
+        hid2hid_jac_single_or_multi_times: HiddenGroupJacobian,
         weight_vals: Dict[Path, PyTree],
+        input_is_multi_step: bool,
     ) -> Dict[ETraceWG_Key, PyTree]:
         """Update eligibility trace data for the parameter dimension-based algorithm.
 
@@ -2562,10 +2277,10 @@ class ParamDimVjpAlgorithm(ETraceVjpAlgorithm):
             hist_etrace_vals: Dict[ETraceWG_Key, PyTree]
                 Dictionary containing historical eligibility trace values from previous timestep.
                 Keys are tuples identifying parameter-hidden state relationships.
-            hid2weight_jac_multi_times: Hid2WeightJacobian
+            hid2weight_jac_single_or_multi_times: Hid2WeightJacobian
                 Jacobians of hidden states with respect to weights at the current timestep.
                 Contains input gradients and differential function gradients.
-            hid2hid_jac_multi_times: HiddenGroupJacobian
+            hid2hid_jac_single_or_multi_times: HiddenGroupJacobian
                 Jacobians between hidden states (recurrent connections) at the current timestep.
             weight_vals: Dict[Path, PyTree]
                 Dictionary mapping paths to current weight values in the model.
@@ -2582,15 +2297,26 @@ class ParamDimVjpAlgorithm(ETraceVjpAlgorithm):
             mode=self.mode,
         )
 
-        new_etrace = jax.lax.scan(
-            scan_fn,
-            hist_etrace_vals,
-            (
-                hid2weight_jac_multi_times[0],
-                hid2weight_jac_multi_times[1],
-                hid2hid_jac_multi_times,
-            )
-        )[0]
+        if input_is_multi_step:
+            new_etrace = jax.lax.scan(
+                scan_fn,
+                hist_etrace_vals,
+                (
+                    hid2weight_jac_single_or_multi_times[0],
+                    hid2weight_jac_single_or_multi_times[1],
+                    hid2hid_jac_single_or_multi_times,
+                )
+            )[0]
+
+        else:
+            new_etrace = scan_fn(
+                hist_etrace_vals,
+                (
+                    hid2weight_jac_single_or_multi_times[0],
+                    hid2weight_jac_single_or_multi_times[1],
+                    hid2hid_jac_single_or_multi_times,
+                )
+            )[0]
 
         return new_etrace
 
@@ -2674,19 +2400,19 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
     -----------
     model: Callable
         The model function, which receives the input arguments and returns the model output.
-    vjp_time: str, optional
-        The time to compute the loss-to-hidden Jacobian.
+    vjp_method: str, optional
+        The method for computing the VJP. It should be either "single-step" or "multi-step".
 
-        - ``0``: the current time step: $\frac{\partial L^t}{\partial h^t}$.  Memory is
-        - ``1``: the last time step: $\frac{\partial L^{t-1}}{\partial h^{t-1}}$.
-        - ``k``: the t-k time step: $\frac{\partial L^{t-k}}{\partial h^{t-k}}$.
+        - "single-step": The VJP is computed at the current time step, i.e., $\partial L^t/\partial h^t$.
+        - "multi-step": The VJP is computed at multiple time steps, i.e., $\partial L^t/\partial h^{t-k}$,
+          where $k$ is determined by the data input.
     name: str, optional
         The name of the etrace algorithm.
     decay_or_rank: float, int
         The exponential smoothing factor for the eligibility trace. If it is a float,
         it is the decay factor, should be in the range of (0, 1). If it is an integer,
         it is the number of approximation rank for the algorithm, should be greater than 0.
-    mode: Optional[brainstate.mixin.Mode]
+    mode: brainscale.mixin.Mode
         The computing mode, indicating the batching behavior.
     """
 
@@ -2716,7 +2442,11 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
         super().__init__(model, name=name, vjp_method=vjp_method)
 
         # computing mode
-        self.mode = brainstate.mixin.Mode() if mode is None else mode
+        if mode is None:
+            self.mode = brainstate.environ.get('mode', brainstate.mixin.Mode())
+        else:
+            self.mode = mode
+        assert isinstance(self.mode, brainstate.mixin.Mode), 'The mode should be an instance of brainstate.mixin.Mode.'
 
         # the learning parameters
         self.decay, num_rank = _format_decay_and_rank(decay_or_rank)
@@ -2795,9 +2525,9 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
 
         Parameters
         -----------
-        weight : bst.ParamState | Path
+        weight : brainstate.ParamState | Path
             The weight for which the eligibility trace is to be retrieved. It can be
-            specified either as a `bst.ParamState` object or a `Path` object.
+            specified either as a `brainstate.ParamState` object or a `Path` object.
 
         Returns:
         --------
@@ -2910,11 +2640,13 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
         self,
         running_index: Optional[int],
         hist_etrace_vals: Tuple[Dict, ...],
-        hid2weight_jac_multi_times: Hid2WeightJacobian,
-        hid2hid_jac_multi_times: Hid2HidJacobian,
+        hid2weight_jac_single_or_multi_times: Hid2WeightJacobian,
+        hid2hid_jac_single_or_multi_times: Hid2HidJacobian,
         weight_vals: Dict[Path, PyTree],
+        input_is_multi_step: bool,
     ) -> Tuple[Dict, ...]:
-        """Update eligibility trace data for the hybrid dimension algorithm.
+        """
+        Update eligibility trace data for the hybrid dimension algorithm.
 
         This method combines the approaches from both IO dimension and parameter dimension
         algorithms to update eligibility traces. It decides which algorithm to use for each
@@ -2934,9 +2666,9 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
                 Historical eligibility trace values as a tuple containing three dictionaries:
                 (etrace_xs, etrace_dfs, etrace_wgrads) for input traces, differential function
                 traces, and weight gradient traces respectively.
-            hid2weight_jac_multi_times: Hid2WeightJacobian
+            hid2weight_jac_single_or_multi_times: Hid2WeightJacobian
                 Jacobians of hidden states with respect to weights at current timestep.
-            hid2hid_jac_multi_times: Hid2HidJacobian
+            hid2hid_jac_single_or_multi_times: Hid2HidJacobian
                 Jacobians of hidden states with respect to previous hidden states.
             weight_vals: Dict[Path, PyTree]
                 Current values of all weights in the model.
@@ -2964,40 +2696,61 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
             else:
                 on_weight_hidden_relations.append(relation)
 
-        # ---- O(n^2) etrace gradients update ---- #
-
         scan_fn_on2 = partial(
             _update_param_dim_etrace_scan_fn,
             weight_path_to_vals=weight_vals,
             hidden_param_op_relations=on2_weight_hidden_relations,
             mode=self.mode,
         )
-        new_bwg = jax.lax.scan(
-            scan_fn_on2,
-            hist_bwg,
-            (
-                hid2weight_jac_multi_times[0],
-                hid2weight_jac_multi_times[1],
-                hid2hid_jac_multi_times,
-            )
-        )[0]
-
-        # ---- O(n) etrace gradients update ---- #
-
         scan_fn_on = partial(
             _update_IO_dim_etrace_scan_fn,
             hid_weight_op_relations=self.graph.hidden_param_op_relations,
             decay=self.decay,
         )
-        new_xs, new_dfs = jax.lax.scan(
-            scan_fn_on,
-            (hist_xs, hist_dfs),
-            (
-                hid2weight_jac_multi_times[0],
-                hid2weight_jac_multi_times[1],
-                hid2hid_jac_multi_times,
-            ),
-        )[0]
+
+        if input_is_multi_step:
+            # ---- O(n^2) etrace gradients update ---- #
+            new_bwg = jax.lax.scan(
+                scan_fn_on2,
+                hist_bwg,
+                (
+                    hid2weight_jac_single_or_multi_times[0],
+                    hid2weight_jac_single_or_multi_times[1],
+                    hid2hid_jac_single_or_multi_times,
+                )
+            )[0]
+
+            # ---- O(n) etrace gradients update ---- #
+            new_xs, new_dfs = jax.lax.scan(
+                scan_fn_on,
+                (hist_xs, hist_dfs),
+                (
+                    hid2weight_jac_single_or_multi_times[0],
+                    hid2weight_jac_single_or_multi_times[1],
+                    hid2hid_jac_single_or_multi_times,
+                ),
+            )[0]
+
+        else:
+            # ---- O(n^2) etrace gradients update ---- #
+            new_bwg = scan_fn_on2(
+                hist_bwg,
+                (
+                    hid2weight_jac_single_or_multi_times[0],
+                    hid2weight_jac_single_or_multi_times[1],
+                    hid2hid_jac_single_or_multi_times,
+                ),
+            )[0]
+
+            # ---- O(n) etrace gradients update ---- #
+            new_xs, new_dfs = scan_fn_on(
+                (hist_xs, hist_dfs),
+                (
+                    hid2weight_jac_single_or_multi_times[0],
+                    hid2weight_jac_single_or_multi_times[1],
+                    hid2hid_jac_single_or_multi_times,
+                ),
+            )[0]
 
         return new_xs, new_dfs, new_bwg
 

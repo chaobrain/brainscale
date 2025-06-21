@@ -276,9 +276,9 @@ def state_traceback(states: Sequence[brainstate.State]):
 
     Parameters
     ----------
-    states : Sequence[bst.State]
+    states : Sequence[brainstate.State]
         A sequence of states from the brain model. Each state should be an
-        instance of `bst.State` and contain source information for traceback.
+        instance of `brainstate.State` and contain source information for traceback.
 
     Returns
     -------

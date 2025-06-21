@@ -72,7 +72,7 @@ class GradExpon(brainstate.nn.Module):
         accumulated gradient at time t, grads is the new gradient, and decay is the decay factor.
 
         Args:
-            grads (bst.typing.PyTree): The new gradients to be incorporated into the accumulated gradients.
+            grads (brainstate.typing.PyTree): The new gradients to be incorporated into the accumulated gradients.
 
         Returns:
             None. The method updates the `self.gradients` attribute in-place.

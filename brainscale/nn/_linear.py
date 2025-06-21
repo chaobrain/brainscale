@@ -285,7 +285,7 @@ class SparseLinear(brainstate.nn.Module):
 
     Attributes
     ----------
-    in_size : bst.typing.Size, optional
+    in_size : brainstate.typing.Size, optional
         The size of the input features. If provided, it must match the first n-1
         dimensions of the output size.
     out_size : int
@@ -306,7 +306,7 @@ class SparseLinear(brainstate.nn.Module):
         The sparse weight matrix to be used in the linear transformation.
     b_init : Optional[Union[Callable, ArrayLike]], optional
         The initializer for the bias. If None, no bias is used.
-    in_size : bst.typing.Size, optional
+    in_size : brainstate.typing.Size, optional
         The size of the input features. If provided, it must match the first n-1
         dimensions of the output size.
     name : Optional[str], optional
@@ -340,7 +340,7 @@ class SparseLinear(brainstate.nn.Module):
             The sparse weight matrix to be used in the linear transformation.
         b_init : Optional[Union[Callable, ArrayLike]], optional
             The initializer for the bias. If None, no bias is used.
-        in_size : bst.typing.Size, optional
+        in_size : brainstate.typing.Size, optional
             The size of the input features. If provided, it must match the
             first n-1 dimensions of the output size.
         name : Optional[str], optional
@@ -410,7 +410,7 @@ class LoRA(brainstate.nn.Module):
 
     Example usage::
 
-        >>> import brainstate as bst
+        >>> import brainstate as brainstate
         >>> import brainscale
         >>> import jax, jax.numpy as jnp
         >>> layer = brainscale.nn.LoRA(3, 2, 4)
@@ -421,7 +421,7 @@ class LoRA(brainstate.nn.Module):
          'lora_b': Array([[-0.8372317 ,  0.21012013, -0.52999765, -0.31939325],
                 [ 0.64234126, -0.42980042,  1.2549229 , -0.47134295]],      dtype=float32)}
         >>> # Wrap around existing layer
-        >>> linear = bst.nn.Linear(3, 4)
+        >>> linear = brainstate.nn.Linear(3, 4)
         >>> wrapper = brainscale.nn.LoRA(3, 2, 4, base_module=linear)
         >>> assert wrapper.base_module == linear
         >>> y = layer(jnp.ones((16, 3)))
@@ -430,11 +430,11 @@ class LoRA(brainstate.nn.Module):
 
     Attributes
     ----------
-    in_features : bst.typing.Size
+    in_features : brainstate.typing.Size
         The number of input features.
     lora_rank : int
         The rank of the LoRA dimension.
-    out_features : bst.typing.Size
+    out_features : brainstate.typing.Size
         The number of output features.
     alpha : float
         A scaling factor for the LoRA operation.
@@ -451,11 +451,11 @@ class LoRA(brainstate.nn.Module):
 
     Parameters
     ----------
-    in_features : bst.typing.Size
+    in_features : brainstate.typing.Size
         The number of input features.
     lora_rank : int
         The rank of the LoRA dimension.
-    out_features : bst.typing.Size
+    out_features : brainstate.typing.Size
         The number of output features.
     alpha : float, optional
         A scaling factor for the LoRA operation, by default 1.
@@ -491,11 +491,11 @@ class LoRA(brainstate.nn.Module):
 
         Parameters
         ----------
-        in_features : bst.typing.Size
+        in_features : brainstate.typing.Size
             The number of input features.
         lora_rank : int
             The rank of the LoRA dimension.
-        out_features : bst.typing.Size
+        out_features : brainstate.typing.Size
             The number of output features.
         alpha : float, optional
             A scaling factor for the LoRA operation, by default 1.

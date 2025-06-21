@@ -178,11 +178,7 @@ class HiddenGroup(NamedTuple):
         Returns:
             The new hidden state values.
         """
-        return jax.core.eval_jaxpr(
-            self.transition_jaxpr,
-            input_vals,
-            *hidden_vals
-        )
+        return jax.core.eval_jaxpr(self.transition_jaxpr, input_vals, *hidden_vals)
 
     def diagonal_jacobian(
         self,

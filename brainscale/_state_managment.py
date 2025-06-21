@@ -34,9 +34,9 @@ def assign_state_values(
 
     Parameters
     -----------
-    states : Sequence[bst.State]
+    states : Sequence[brainstate.State]
         A sequence of state objects to which values will be assigned or restored.
-    state_values : Sequence[bst.typing.PyTree]
+    state_values : Sequence[brainstate.typing.PyTree]
         A sequence of values corresponding to each state in `states`.
     write : bool, optional
         A flag indicating whether to assign (`True`) or restore (`False`) the values.
@@ -68,10 +68,10 @@ def assign_dict_state_values(
 
     Parameters
     -----------
-    states : Dict[Path, bst.State]
+    states : Dict[Path, brainstate.State]
         A dictionary where keys are paths and values are state objects
         to which values will be assigned or restored.
-    state_values : Dict[Path, bst.typing.PyTree]
+    state_values : Dict[Path, brainstate.typing.PyTree]
         A dictionary where keys are paths and values are the values
         corresponding to each state in `states`.
     write : bool, optional
@@ -107,10 +107,10 @@ def assign_state_values_v2(
 
     Parameters
     -----------
-    states : Dict[Hashable, bst.State]
+    states : Dict[Hashable, brainstate.State]
         A dictionary where keys are hashable identifiers and values are state objects
         to which values will be assigned or restored.
-    state_values : Dict[Hashable, bst.typing.PyTree]
+    state_values : Dict[Hashable, brainstate.typing.PyTree]
         A dictionary where keys are hashable identifiers and values are the values
         corresponding to each state in `states`.
     write : bool, optional
@@ -148,12 +148,12 @@ def split_states(
 
     Parameters
     -----------
-    states : Sequence[bst.State]
+    states : Sequence[brainstate.State]
         A sequence of state objects to be split into different categories.
 
     Returns
     --------
-    Tuple[List[bst.ParamState], List[ETraceState], List[bst.State]]
+    Tuple[List[brainstate.ParamState], List[ETraceState], List[brainstate.State]]
         A tuple containing three lists:
         - param_states: The list of weight parameter states.
         - hidden_states: The list of hidden states.
@@ -187,12 +187,12 @@ def split_states_v2(
 
     Parameters
     -----------
-    states : Sequence[bst.State]
+    states : Sequence[brainstate.State]
         A sequence of state objects to be categorized.
 
     Returns
     --------
-    Tuple[List[ETraceParam], List[ETraceState], List[bst.ParamState], List[bst.State]]
+    Tuple[List[ETraceParam], List[ETraceState], List[brainstate.ParamState], List[brainstate.State]]
         A tuple containing four lists:
         - etrace_param_states: The list of etrace parameter states.
         - hidden_states: The list of hidden states.
@@ -249,7 +249,7 @@ def sequence_split_state_values(
 
     Parameters
     -----------
-    states: Sequence[bst.State]
+    states: Sequence[brainstate.State]
       The states of the model.
     state_values: List[PyTree]
       The values of the states.
@@ -302,9 +302,9 @@ def dict_split_state_values(
 
     Parameters
     -----------
-    states : Dict[Path, bst.State]
+    states : Dict[Path, brainstate.State]
         A dictionary where keys are paths and values are state objects to be categorized.
-    state_values : Dict[Path, bst.typing.PyTree]
+    state_values : Dict[Path, brainstate.typing.PyTree]
         A dictionary where keys are paths and values are the values associated with each state.
 
     Returns
@@ -348,12 +348,12 @@ def split_dict_states_v1(
 
     Parameters
     -----------
-    states : Dict[Path, bst.State]
+    states : Dict[Path, brainstate.State]
         A dictionary where keys are paths and values are state objects to be split.
 
     Returns
     --------
-    Tuple[Dict[Path, ETraceState], Dict[Path, bst.ParamState], Dict[Path, bst.State]]
+    Tuple[Dict[Path, ETraceState], Dict[Path, brainstate.ParamState], Dict[Path, brainstate.State]]
         A tuple containing three dictionaries:
         - hidden_states: The hidden states.
         - param_states: The other kinds of parameter states.
@@ -397,12 +397,12 @@ def split_dict_states_v2(
 
     Parameters
     -----------
-    states : Dict[Path, bst.State]
+    states : Dict[Path, brainstate.State]
         A dictionary where keys are paths and values are state objects to be split.
 
     Returns
     --------
-    Tuple[Dict[Path, ETraceParam], Dict[Path, ETraceState], Dict[Path, bst.ParamState], Dict[Path, bst.State]]
+    Tuple[Dict[Path, ETraceParam], Dict[Path, ETraceState], Dict[Path, brainstate.ParamState], Dict[Path, brainstate.State]]
         A tuple containing four dictionaries:
         - etrace_param_states: The etrace parameter states.
         - hidden_states: The hidden states.

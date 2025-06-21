@@ -24,8 +24,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 
-import brainscale
-
 
 class CopyDataset:
     def __init__(self, time_lag: int, batch_size: int):
@@ -112,7 +110,7 @@ class OnlineTrainer(Trainer):
 
         self.vjp_time = vjp_time
 
-    @brainstate.compile.jit(static_argnums=(0,))
+    @brainstate.transform.jit(static_argnums=(0,))
     def batch_train(self, inputs, target):
         weights = self.target.states(brainstate.ParamState)
 
@@ -120,7 +118,7 @@ class OnlineTrainer(Trainer):
         # 此处，我们需要使用 mode 来指定使用数据集是具有 batch 维度的
         model = brainscale.ParamDimVjpAlgorithm(self.target)
 
-        @brainstate.augment.vmap_new_states(state_tag='new', axis_size=inputs.shape[1])
+        @brainstate.transform.vmap_new_states(state_tag='new', axis_size=inputs.shape[1])
         def init():
             # 对于每一个batch的数据，重新初始化模型状态
             brainstate.nn.init_all_states(self.target)
@@ -141,7 +139,7 @@ class OnlineTrainer(Trainer):
         def _etrace_grad(prev_grads, x):
             inp, tar = x
             # 计算当前时刻的梯度
-            f_grad = brainstate.augment.grad(_etrace_loss, weights, has_aux=True, return_value=True)
+            f_grad = brainstate.transform.grad(_etrace_loss, weights, has_aux=True, return_value=True)
             cur_grads, local_loss, out = f_grad(inp, tar)
             # 累计梯度
             next_grads = jax.tree.map(lambda a, b: a + b, prev_grads, cur_grads)
@@ -152,14 +150,14 @@ class OnlineTrainer(Trainer):
             # 初始化梯度
             grads = jax.tree.map(lambda a: jax.numpy.zeros_like(a), {k: v.value for k, v in weights.items()})
             # 沿着时间轴计算和累积梯度
-            grads, (outs, losses) = brainstate.compile.scan(_etrace_grad, grads, (inputs_, target))
+            grads, (outs, losses) = brainstate.transform.scan(_etrace_grad, grads, (inputs_, target))
             # 更新梯度
             self.opt.update(grads)
             return losses.mean()
 
         # 在T时刻之前，模型更新其状态和eligibility trace
         n_sim = self.n_seq + 10
-        brainstate.compile.for_loop(lambda inp: model(inp), inputs[:n_sim])
+        brainstate.transform.for_loop(lambda inp: model(inp), inputs[:n_sim])
 
         # 在T时刻之后，模型开始在线学习
         r = _etrace_train(inputs[n_sim:])
@@ -167,13 +165,13 @@ class OnlineTrainer(Trainer):
 
 
 class BPTTTrainer(Trainer):
-    @brainstate.compile.jit(static_argnums=(0,))
+    @brainstate.transform.jit(static_argnums=(0,))
     def batch_train(self, inputs, targets):
         # 需要求解梯度的参数
         weights = self.target.states(brainstate.ParamState)
 
         # initialize the states
-        @brainstate.augment.vmap_new_states(state_tag='new', axis_size=inputs.shape[1])
+        @brainstate.transform.vmap_new_states(state_tag='new', axis_size=inputs.shape[1])
         def init():
             brainstate.nn.init_all_states(self.target)
 
@@ -188,13 +186,13 @@ class BPTTTrainer(Trainer):
         def _bptt_grad_step():
             # 在T时刻之前，模型更新其状态及其eligibility trace
             n_sim = self.n_seq + 10
-            _ = brainstate.compile.for_loop(model, inputs[:n_sim])
+            _ = brainstate.transform.for_loop(model, inputs[:n_sim])
             # 在T时刻之后，模型开始在线学习
-            outs, losses = brainstate.compile.for_loop(_run_step_train, inputs[n_sim:], targets)
+            outs, losses = brainstate.transform.for_loop(_run_step_train, inputs[n_sim:], targets)
             return losses.mean(), outs
 
         # gradients
-        grads, loss, outs = brainstate.augment.grad(_bptt_grad_step, weights, has_aux=True, return_value=True)()
+        grads, loss, outs = brainstate.transform.grad(_bptt_grad_step, weights, has_aux=True, return_value=True)()
 
         # optimization
         self.opt.update(grads)
