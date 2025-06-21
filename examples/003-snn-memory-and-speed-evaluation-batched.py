@@ -14,7 +14,6 @@
 # ==============================================================================
 
 import argparse
-import functools
 import os
 import time
 from functools import reduce
@@ -413,7 +412,7 @@ class Trainer(object):
 
         # define etrace functions
         if self.args.method != 'bptt':
-            self._compile_etrace_function(jax.ShapeDtypeStruct((32768,), brainstate.environ.dftype()))
+            self._compile_etrace_function(jax.ShapeDtypeStruct((self.args.batch_size, 32768,), brainstate.environ.dftype()))
 
     def _acc(self, out, target):
         return jnp.mean(jnp.equal(target, jnp.argmax(jnp.mean(out, axis=0), axis=1)))
@@ -457,37 +456,32 @@ class Trainer(object):
 
     def _compile_etrace_function(self, input_info):
         if self.args.method == 'expsm_diag':
-            model = brainscale.ES_D_RTRL(self.target, self.args.etrace_decay, )
+            model = brainscale.ES_D_RTRL(self.target, self.args.etrace_decay, mode=brainstate.mixin.Batching())
         elif self.args.method == 'diag':
-            model = brainscale.D_RTRL(self.target, )
+            model = brainscale.D_RTRL(self.target, mode=brainstate.mixin.Batching())
         elif self.args.method == 'hybrid':
-            model = brainscale.HybridDimVjpAlgorithm(self.target, self.args.etrace_decay, )
+            model = brainscale.HybridDimVjpAlgorithm(self.target, self.args.etrace_decay, mode=brainstate.mixin.Batching())
         else:
             raise ValueError(f'Unknown online learning methods: {self.args.method}.')
 
         # initialize the states
-        @brainstate.transform.vmap_new_states(state_tag='new', axis_size=self.args.batch_size)
-        def init():
-            brainstate.nn.init_all_states(self.target)
-            model.compile_graph(input_info)
-
-        init()
-        run_model = brainstate.nn.Vmap(model, vmap_states='new')
+        brainstate.nn.vmap_init_all_states(self.target, axis_size=input_info.shape[0], state_tag='new')
+        model.compile_graph(input_info)
 
         @brainstate.transform.jit
-        @brainstate.transform.vmap(in_states=run_model.states('new'))
+        @brainstate.transform.vmap(in_states=model.states('new'))
         def reset_state():
-            brainstate.nn.reset_all_states(run_model)
+            brainstate.nn.reset_all_states(model)
 
         @brainstate.transform.jit
         def _etrace_single_run(i, batch_inp):
             with brainstate.environ.context(i=i, t=i * brainstate.environ.get_dt()):
-                run_model(batch_inp)
+                model(batch_inp)
 
         def _etrace_grad(i, batch_inp, targets):
             # call the model
             with brainstate.environ.context(i=i, t=i * brainstate.environ.get_dt()):
-                out = run_model(batch_inp)
+                out = model(batch_inp)
             # calculate the loss
             loss = self._loss(out, targets)
             return loss, out
@@ -508,8 +502,6 @@ class Trainer(object):
 
     # @brainstate.transform.jit(static_argnums=0)
     def etrace_train(self, inputs, targets):
-        # mem_before = jax.pure_callback(get_mem_usage, jax.ShapeDtypeStruct((), brainstate.environ.dftype()))
-
         inputs = np.reshape(inputs, (inputs.shape[0], inputs.shape[1], -1))  # [n_steps, n_samples, n_in]
         self._etrace_reset_fun()
 
@@ -519,12 +511,6 @@ class Trainer(object):
         # training
         indices = np.arange(inputs.shape[0])
         n_sim = _format_sim_epoch(self.args.warmup_ratio, inputs.shape[0])
-        # brainstate.transform.for_loop(self._etrace_pred_fun, indices[:n_sim], inputs[:n_sim])
-        # grads, (outs, losses) = brainstate.transform.scan(
-        #     functools.partial(self._etrace_train_fun, targets=targets),
-        #     grads,
-        #     (indices[n_sim:], inputs[n_sim:])
-        # )
         outs, losses = [], []
         for i in indices:
             if i < n_sim:
@@ -547,8 +533,6 @@ class Trainer(object):
 
     @brainstate.transform.jit(static_argnums=(0,))
     def bptt_train(self, inputs, targets):
-        mem_before = jax.pure_callback(get_mem_usage, jax.ShapeDtypeStruct((), brainstate.environ.dftype()))
-
         inputs = u.math.flatten(inputs, start_axis=2)
         indices = np.arange(inputs.shape[0])
 
@@ -625,7 +609,7 @@ class Trainer(object):
                 f'time = {mean_time:.5f} s, '
                 f'memory = {mean_mem:.2f} GB'
             )
-            self.opt.step_epoch()
+            self.opt.lr.step_epoch()
 
             # training accuracy
             if mean_acc > max_acc:
@@ -693,7 +677,7 @@ def network_training():
     brainstate.environ.set(dt=global_args.dt)
 
     # loading the data
-    train_loader, test_loader = _get_gesture_data(global_args,  cache_dir='/mnt/d/codes/projects/brainscale-exp-for-snns/data')
+    train_loader, test_loader = _get_gesture_data(global_args, )
 
     # net
     net = ETraceNet(
