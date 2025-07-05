@@ -23,8 +23,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from utils import MyArgumentParser
-import sys
-sys.path.append('../')
 
 parser = MyArgumentParser()
 
@@ -42,7 +40,7 @@ parser.add_argument("--drop_last", type=int, default=0, help="")
 
 # training parameters
 parser.add_argument("--exp_name", type=str, default='', help="")
-parser.add_argument("--spk_fun", type=str, default='s2nn', help="spike surrogate gradient function.")
+parser.add_argument("--spk_fun", type=str, default='relu', help="spike surrogate gradient function.")
 parser.add_argument("--warmup_ratio", type=float, default=0.0, help="The ratio for network simulation.")
 parser.add_argument("--optimizer", type=str, default='adam', help="")
 parser.add_argument("--filepath", type=str, default='', help="The name for the current experiment.")

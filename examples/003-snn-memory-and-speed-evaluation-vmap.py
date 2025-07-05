@@ -23,8 +23,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from utils import MyArgumentParser
-import sys
-sys.path.append('../')
 
 parser = MyArgumentParser()
 
@@ -242,7 +240,8 @@ class ETraceNet(brainstate.nn.Module):
         for layer_idx in range(n_layer):
             tau_mem = (
                 brainstate.random.normal(args.tau_mem, args.tau_mem_sigma, [n_rec])
-                if args.tau_mem_sigma > 0. else args.tau_mem
+                if args.tau_mem_sigma > 0. else
+                args.tau_mem
             )
             if args.model == 'lif-exp-cu':
                 rec = _LIF_ExpCu_Dense_Layer(
@@ -598,6 +597,7 @@ class Trainer(object):
                 # inputs and targets
                 x_local = np.asarray(x_local)
                 y_local = np.asarray(y_local)
+
                 # training
                 t0 = time.time()
                 if self.args.method == 'bptt':
