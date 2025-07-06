@@ -112,13 +112,17 @@ def _raster_plot(sp_matrix, times):
     return index, times
 
 
+@jax.jit
 def get_mem_usage() -> float:
-    if jax.default_backend() != 'cpu':
-        return jax.devices()[0].memory_stats()['bytes_in_use'] / (1024 ** 3)
-    else:
-        import psutil
-        memory = psutil.virtual_memory()
-        return memory.used / (1024 ** 3)
+    def fn():
+        if jax.default_backend() != 'cpu':
+            return jax.devices()[0].memory_stats()['bytes_in_use'] / (1024 ** 3)
+        else:
+            import psutil
+            memory = psutil.virtual_memory()
+            return memory.used / (1024 ** 3)
+
+    return jax.pure_callback(fn, jax.ShapeDtypeStruct((), brainstate.environ.dftype()))
 
 
 class _LIF_Delta_Dense_Layer(brainstate.nn.Module):
@@ -410,7 +414,8 @@ class Trainer(object):
 
         # define etrace functions
         if self.args.method != 'bptt':
-            self._compile_etrace_function(jax.ShapeDtypeStruct((self.args.batch_size, 32768,), brainstate.environ.dftype()))
+            self._compile_etrace_function(
+                jax.ShapeDtypeStruct((self.args.batch_size, 32768,), brainstate.environ.dftype()))
 
     def _acc(self, out, target):
         return jnp.mean(jnp.equal(target, jnp.argmax(jnp.mean(out, axis=0), axis=1)))
@@ -458,7 +463,8 @@ class Trainer(object):
         elif self.args.method == 'diag':
             model = brainscale.D_RTRL(self.target, mode=brainstate.mixin.Batching())
         elif self.args.method == 'hybrid':
-            model = brainscale.HybridDimVjpAlgorithm(self.target, self.args.etrace_decay, mode=brainstate.mixin.Batching())
+            model = brainscale.HybridDimVjpAlgorithm(self.target, self.args.etrace_decay,
+                                                     mode=brainstate.mixin.Batching())
         else:
             raise ValueError(f'Unknown online learning methods: {self.args.method}.')
 
@@ -526,7 +532,7 @@ class Trainer(object):
         acc = self._acc(jnp.asarray(outs), targets)
 
         # memory
-        mem_after = jax.pure_callback(get_mem_usage, jax.ShapeDtypeStruct((), brainstate.environ.dftype()))
+        mem_after = get_mem_usage()
         return jnp.asarray(losses).mean(), acc, mem_after
 
     @brainstate.transform.jit(static_argnums=(0,))
@@ -568,11 +574,13 @@ class Trainer(object):
         # accuracy
         acc = self._acc(outs, targets)
 
-        mem_after = jax.pure_callback(get_mem_usage, jax.ShapeDtypeStruct((), brainstate.environ.dftype()))
+        mem_after = get_mem_usage()
         return loss, acc, mem_after
 
     def f_train(self, train_loader, test_loader):
         print(self.args)
+
+        mem_before = get_mem_usage()
 
         max_acc = 0.
         for epoch in range(self.args.epochs):
@@ -589,8 +597,13 @@ class Trainer(object):
                     loss, acc, mem = self.etrace_train(x_local, y_local)
                 t = time.time() - t0
                 print(
-                    f'Epoch {epoch:4d}, training batch {batch:4d}, training loss = {float(loss):.8f}, '
-                    f'training acc = {float(acc):.6f}, time = {t:.5f} s, memory = {mem:.2f} GB'
+                    f'Epoch {epoch:4d}, '
+                    f'training batch {batch:4d}, '
+                    f'training loss = {float(loss):.8f}, '
+                    f'training acc = {float(acc):.6f}, '
+                    f'time = {t:.5f} s, '
+                    f'memory before = {mem_before:.2f} GB, '
+                    f'memory after = {mem:.2f} GB'
                 )
                 epoch_acc.append(acc)
                 epoch_loss.append(loss)
@@ -605,6 +618,7 @@ class Trainer(object):
                 f'training loss = {mean_loss:.8f}, '
                 f'training acc = {mean_acc:.6f}, '
                 f'time = {mean_time:.5f} s, '
+                f'memory before = {mem_before:.2f} GB, '
                 f'memory = {mean_mem:.2f} GB'
             )
             self.opt.lr.step_epoch()

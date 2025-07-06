@@ -43,13 +43,37 @@ import jax.numpy as jnp
 import numpy as np
 
 default_setting = brainstate.util.DotDict(
-    method='bptt', lr=0.001, batch_size=128, epochs=1, dt=1.0,
-    loss='cel', n_data_worker=0, data_length=1000, drop_last=1,
-    exp_name='', spk_fun='relu', warmup_ratio=0.0, optimizer='adam',
-    filepath='', spk_reg_factor=0.0, spk_reg_rate=10.0, v_reg_factor=0.0,
-    v_reg_low=-20.0, v_reg_high=1.4, weight_L1=0.0, weight_L2=0.0,
-    model='lif-delta', n_rec=512, n_layer=3, V_th=1.0, tau_mem_sigma=1.0,
-    tau_mem=10.0, tau_syn=10.0, tau_o=10.0, ff_scale=10.0, rec_scale=2.0, spk_reset='soft'
+    method='bptt',
+    lr=0.001,
+    batch_size=16,
+    dt=1.0,
+    loss='cel',
+    n_data_worker=0,
+    data_length=1000,
+    drop_last=1,
+    exp_name='',
+    spk_fun='relu',
+    warmup_ratio=0.0,
+    optimizer='adam',
+    filepath='',
+    spk_reg_factor=0.0,
+    spk_reg_rate=10.0,
+    v_reg_factor=0.0,
+    v_reg_low=-20.0,
+    v_reg_high=1.4,
+    weight_L1=0.0,
+    weight_L2=0.0,
+    model='lif-delta',
+    n_rec=512,
+    n_layer=3,
+    V_th=1.0,
+    tau_mem_sigma=1.0,
+    tau_mem=10.0,
+    tau_syn=10.0,
+    tau_o=10.0,
+    ff_scale=10.0,
+    rec_scale=2.0,
+    spk_reset='soft'
 )
 
 
@@ -496,7 +520,7 @@ def network_training(args):
     # environment setting
     brainstate.environ.set(dt=args.dt)
 
-    # net
+    # net: inputs correspond to 128x128 pixels with 2 channels (e.g., RGB), DVS Gesture dataset
     net = ETraceNet((128 * 128 * 2), args.n_rec, 11, args.n_layer, args=args)
 
     # optimizer
@@ -517,21 +541,29 @@ def network_training(args):
 
 if __name__ == '__main__':
 
-    # BPTT
-    for length in [50, 100, 200, 300, 400, 600, 800, 1000]:
-        setting = default_setting.copy()
-        setting.data_length = length
-        setting.method = 'bptt'
-        try:
-            network_training(setting)
-        except Exception as e:
-            break
+    # # BPTT
+    # for length in [50, 100, 200, 300, 400, 600, 800, 1000]:
+    #     setting = default_setting.copy()
+    #     setting.data_length = length
+    #     setting.method = 'bptt'
+    #     try:
+    #         network_training(setting)
+    #     except Exception as e:
+    #         break
+    #
+    # # ES-D-RTRL
+    # for length in [50, 100, 200, 300, 400, 600, 800, 1000]:
+    #     setting = default_setting.copy()
+    #     setting.method = 'expsm_diag'
+    #     setting.vjp_method = 'single-step'
+    #     setting.data_length = length
+    #     setting.etrace_decay = 0.9
+    #     network_training(setting)
 
-    # ES-D-RTRL
+    # D-RTRL
     for length in [50, 100, 200, 300, 400, 600, 800, 1000]:
         setting = default_setting.copy()
-        setting.method = 'expsm_diag'
+        setting.method = 'diag'
         setting.vjp_method = 'single-step'
         setting.data_length = length
-        setting.etrace_decay = 0.9
         network_training(setting)
