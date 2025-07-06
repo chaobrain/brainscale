@@ -712,9 +712,45 @@ def _update_param_dim_etrace_scan_fn(
             x = None
         else:
             x = etrace_xs_at_t[id(relation.x)]
-        fn_dw = lambda df_: jax.vjp(lambda w: u.get_mantissa(etrace_op.xw_to_y(x, w)), weight_val)[1](df_)[0]
-        if mode.has(brainstate.mixin.Batching):
-            fn_dw = jax.vmap(fn_dw)
+
+        def comp_dw_with_x(x_, df_):
+            """
+            Computes the vector-Jacobian product (VJP) of the output with respect to the weight parameter.
+
+            Args:
+                x_: The input to the weight operation (can be None for element-wise parameters).
+                df_: The cotangent (adjoint) vector for the output, used in the VJP computation.
+
+            Returns:
+                The VJP result, representing the gradient of the output with respect to the weight,
+                contracted with the provided cotangent vector.
+            """
+
+            def to_y(w):
+                # Returns the mantissa (unitless value) of the output of the weight operation.
+                return u.get_mantissa(etrace_op.xw_to_y(x_, w))
+
+            # Compute the VJP of to_y with respect to weight_val, evaluated at df_.
+            return jax.vjp(to_y, weight_val)[1](df_)[0]
+
+        @partial(jax.vmap, in_axes=-1, out_axes=-1)
+        def comp_dw_without_x(df_):
+            """
+            Vectorized version of fn_dw for cases where x is not None.
+
+            If batching is enabled, applies fn_dw over the batch dimension using jax.vmap.
+            Otherwise, applies fn_dw directly.
+
+            Args:
+                df_: The cotangent (adjoint) vector for the output, used in the VJP computation.
+
+            Returns:
+                The VJP result(s) for the provided df_.
+            """
+            if mode.has(brainstate.mixin.Batching):
+                return jax.vmap(comp_dw_with_x)(x, df_)
+            else:
+                return comp_dw_with_x(x, df_)
 
         for group in relation.hidden_groups:
             group: HiddenGroup
@@ -735,7 +771,7 @@ def _update_param_dim_etrace_scan_fn(
             # x: (n_input, ..., )
             # df: (n_hidden, ..., n_state)
             # phg_to_pw: (n_param, ..., n_state)
-            phg_to_pw = jax.vmap(fn_dw, in_axes=-1, out_axes=-1)(df)
+            phg_to_pw = comp_dw_without_x(df)
             phg_to_pw = jax.tree.map(_normalize_vector, phg_to_pw)
             # jax.debug.print('phg_to_pw = {g}', g=jax.tree.map(lambda x: jnp.abs(x).max(), phg_to_pw))
 
