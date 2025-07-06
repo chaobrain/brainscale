@@ -541,24 +541,24 @@ def network_training(args):
 
 if __name__ == '__main__':
 
-    # # BPTT
-    # for length in [50, 100, 200, 300, 400, 600, 800, 1000]:
-    #     setting = default_setting.copy()
-    #     setting.data_length = length
-    #     setting.method = 'bptt'
-    #     try:
-    #         network_training(setting)
-    #     except Exception as e:
-    #         break
-    #
-    # # ES-D-RTRL
-    # for length in [50, 100, 200, 300, 400, 600, 800, 1000]:
-    #     setting = default_setting.copy()
-    #     setting.method = 'expsm_diag'
-    #     setting.vjp_method = 'single-step'
-    #     setting.data_length = length
-    #     setting.etrace_decay = 0.9
-    #     network_training(setting)
+    # BPTT
+    for length in [50, 100, 200, 300, 400, 600, 800, 1000]:
+        setting = default_setting.copy()
+        setting.data_length = length
+        setting.method = 'bptt'
+        try:
+            network_training(setting)
+        except Exception as e:
+            break
+
+    # ES-D-RTRL
+    for length in [50, 100, 200, 300, 400, 600, 800, 1000]:
+        setting = default_setting.copy()
+        setting.method = 'expsm_diag'
+        setting.vjp_method = 'single-step'
+        setting.data_length = length
+        setting.etrace_decay = 0.9
+        network_training(setting)
 
     # D-RTRL
     for length in [50, 100, 200, 300, 400, 600, 800, 1000]:
