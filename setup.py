@@ -38,6 +38,7 @@ with io.open(os.path.join(here, 'README.md'), 'r', encoding='utf-8') as f:
 packages = find_packages(
     exclude=[
         "docs*",
+        "temp*",
         "tests*",
         "examples*",
         "build*",

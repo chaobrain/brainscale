@@ -26,6 +26,11 @@ __all__ = [
 ]
 
 
+# IF = brainstate.nn.IF
+# LIF = brainstate.nn.LIF
+# ALIF = brainstate.nn.ALIF
+
+
 class IF(brainstate.nn.IF):
     __module__ = 'brainscale.nn'
     __doc__ = brainstate.nn.IF.__doc__

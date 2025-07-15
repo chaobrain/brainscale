@@ -13,28 +13,12 @@
 # limitations under the License.
 # ==============================================================================
 
-# -*- coding: utf-8 -*-
-# Copyright 2024 BDP Ecosystem Limited. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ==============================================================================
 
 import argparse
 import time
 from functools import reduce
 from typing import Callable, Union
 
-import brainscale
 import brainstate
 import braintools
 import brainunit as u
@@ -42,10 +26,12 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+import brainscale
+
 default_setting = brainstate.util.DotDict(
     method='bptt',
     lr=0.001,
-    batch_size=16,
+    batch_size=128,
     dt=1.0,
     loss='cel',
     n_data_worker=0,
@@ -293,10 +279,6 @@ class ETraceNet(brainstate.nn.Module):
 
 
 class Trainer(object):
-    """
-    The training class with only loss.
-    """
-
     def __init__(
         self,
         target: ETraceNet,
@@ -411,8 +393,19 @@ class Trainer(object):
             next_grads = jax.tree.map(lambda a, b: a + b, prev_grads, cur_grads)
             return next_grads, (out, local_loss)
 
+        @brainstate.transform.jit
+        def _update_and_acc(grads, outs, targets):
+            # gradient updates
+            grads = brainstate.functional.clip_grad_norm(grads, 1.)
+            self.opt.update(grads)
+
+            # accuracy
+            acc = self._acc(jnp.asarray(outs), targets)
+            return acc
+
         self._etrace_reset_fun = reset_state
         self._etrace_pred_fun = _etrace_single_run
+        self._update_and_acc = _update_and_acc
         self._etrace_train_fun = _etrace_step
 
     # @brainstate.transform.jit(static_argnums=0)
@@ -435,14 +428,7 @@ class Trainer(object):
                 outs.append(out)
                 losses.append(loss)
 
-        # gradient updates
-        grads = brainstate.functional.clip_grad_norm(grads, 1.)
-        self.opt.update(grads)
-
-        # accuracy
-        acc = self._acc(jnp.asarray(outs), targets)
-
-        # memory
+        acc = self._update_and_acc(grads, jnp.asarray(outs), targets)
         mem_after = get_mem_usage()
         return jnp.asarray(losses).mean(), acc, mem_after
 
@@ -496,6 +482,7 @@ class Trainer(object):
         mem_before = get_mem_usage()
 
         # training
+        losses, acces, mems, times = [], [], [], []
         for i_batch in range(10):
             t0 = time.time()
             if self.args.method == 'bptt':
@@ -511,6 +498,17 @@ class Trainer(object):
                 f'memory before = {mem_before:.2f} GB, '
                 f'memory after = {mem:.2f} GB'
             )
+            times.append(t)
+            losses.append(loss)
+            acces.append(acc)
+            mems.append(mem)
+        print(
+            f'training loss = {float(np.mean(losses[2:])):.8f}, '
+            f'training acc = {float(np.mean(acces[2:])):.6f}, '
+            f'time = {np.mean(times[2:]):.5f} s, '
+            f'memory before = {mem_before:.2f} GB, '
+            f'memory after = {np.mean(mems[2:]):.2f} GB'
+        )
 
 
 def network_training(args):
