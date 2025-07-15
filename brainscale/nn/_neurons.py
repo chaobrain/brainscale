@@ -25,27 +25,7 @@ __all__ = [
     'IF', 'LIF', 'ALIF',
 ]
 
+IF = brainstate.nn.IF
+LIF = brainstate.nn.LIF
+ALIF = brainstate.nn.ALIF
 
-class IF(brainstate.nn.IF):
-    __module__ = 'brainscale.nn'
-    __doc__ = brainstate.nn.IF.__doc__
-
-    def init_state(self, batch_size: int = None, **kwargs):
-        self.V = ETraceState(init.param(self.V_initializer, self.varshape, batch_size))
-
-
-class LIF(brainstate.nn.LIF):
-    __module__ = 'brainscale.nn'
-    __doc__ = brainstate.nn.LIF.__doc__
-
-    def init_state(self, batch_size: int = None, **kwargs):
-        self.V = ETraceState(init.param(self.V_initializer, self.varshape, batch_size))
-
-
-class ALIF(brainstate.nn.ALIF):
-    __doc__ = brainstate.nn.ALIF.__doc__
-    __module__ = 'brainscale.nn'
-
-    def init_state(self, batch_size: int = None, **kwargs):
-        self.V = ETraceState(init.param(self.V_initializer, self.varshape, batch_size))
-        self.a = ETraceState(init.param(self.a_initializer, self.varshape, batch_size))

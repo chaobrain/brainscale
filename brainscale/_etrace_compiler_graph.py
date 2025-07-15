@@ -149,7 +149,7 @@ context = CONTEXT()
 
 
 @contextmanager
-def compiler_context(name: str) -> None:
+def compiler_context(name: str):
     """
     Provides a context manager for managing the eligibility trace compiler context.
 
