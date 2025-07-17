@@ -17,7 +17,7 @@
 
 
 [``brainscale``](https://github.com/chaobrain/brainscale) provides online learning algorithms for biological neural networks. 
-It has been integrated into our establishing [Brain Modeling ecosystem](https://brainmodeling.readthedocs.io/). 
+It has been integrated into our establishing [brain modeling ecosystem](https://brainmodeling.readthedocs.io/). 
 
 
 ## Installation

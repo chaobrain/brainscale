@@ -18,16 +18,16 @@ Here we show how easy it is to use `brainscale` to build and train a simple SNN/
 .. code-block::
 
    import brainscale
-   import brainstate as bst
+   import brainstate
 
    # define models as usual
-   model = bst.nn.Sequential(
-       bst.nn.GRU(2, 2),
-       bst.nn.GRU(2, 1),
+   model = brainstate.nn.Sequential(
+       brainstate.nn.GRU(2, 2),
+       brainstate.nn.GRU(2, 1),
    )
 
    # initialize the model
-   bst.nn.init_all_states(model)
+   brainstate.nn.init_all_states(model)
 
    # the only thing you need to do just two lines of code
    model = brainscale.DiagParamDimAlgorithm(model)
@@ -70,7 +70,8 @@ See also the BDP ecosystem
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 
-We are building the `Brain Dynamics Programming ecosystem <https://ecosystem-for-brain-dynamics.readthedocs.io/>`_.
+We are building the `brain modeling ecosystem <https://ecosystem-for-brain-dynamics.readthedocs.io/>`_.
+
 
 ----
 

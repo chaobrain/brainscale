@@ -728,10 +728,7 @@ class SpMVOp(ETraceOp):
         assert hidden_dim_arr.ndim == 1, (
             f'The hidden_dim_arr must be a 1D array. But got the shape {hidden_dim_arr.shape}'
         )
-        weight_like = self.sparse_mat.yw_to_w(
-            u.math.expand_dims(hidden_dim_arr, axis=0),
-            weight_like
-        )
+        weight_like = self.sparse_mat.yw_to_w(hidden_dim_arr, weight_like, transpose=True)
         if bias_like is not None:
             assert bias_like.ndim == 1, (
                 f'The bias must be a 1D array when hidden_dim_arr is 1D. '

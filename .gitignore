@@ -198,3 +198,4 @@ cython_debug/
 /.VSCodeCounter/
 /docs/_static/model-dynamics-supported.pptx
 /dev/
+/temp/
