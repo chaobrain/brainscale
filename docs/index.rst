@@ -99,6 +99,10 @@ We are building the `brain modeling ecosystem <https://ecosystem-for-brain-dynam
    tutorial/show_graph-zh.ipynb
    tutorial/etraceop-en.ipynb
    tutorial/etraceop-zh.ipynb
+   tutorial/batching-en.ipynb
+   tutorial/batching-zh.ipynb
+   tutorial/etraceparam-en.ipynb
+   tutorial/etraceparam-zh.ipynb
 
 
 .. toctree::
@@ -108,6 +112,8 @@ We are building the `brain modeling ecosystem <https://ecosystem-for-brain-dynam
 
    advanced/limitations-en.ipynb
    advanced/limitations-zh.ipynb
+   advanced/IR_analysis-en.ipynb
+   advanced/IR_analysis-zh.ipynb
 
 
 
