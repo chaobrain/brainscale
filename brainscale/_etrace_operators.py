@@ -516,6 +516,7 @@ class ConvOp(ETraceOp):
         self,
         window_strides: Sequence[int],
         padding: str | Sequence[tuple[int, int]],
+        xinfo: jax.ShapeDtypeStruct,
         lhs_dilation: Sequence[int] | None = None,
         rhs_dilation: Sequence[int] | None = None,
         feature_group_count: int = 1,
@@ -547,7 +548,8 @@ class ConvOp(ETraceOp):
         assert callable(weight_fn), f'The weight_fn must be callable. But got {type(weight_fn)}'
         self.weight_fn = weight_fn
 
-        self.xinfo = None
+        # input info
+        self.xinfo = xinfo
 
     def _check_weight(self, w: Dict[str, brainstate.typing.ArrayLike]):
         if not isinstance(w, dict):
@@ -590,7 +592,6 @@ class ConvOp(ETraceOp):
         inputs: X,
         weights: W,
     ) -> Y:
-        self.xinfo = shaped_abstractify(inputs)
         # weight processing
         weights = {k: v for k, v in weights.items()}
         if self.weight_mask is not None:
@@ -618,10 +619,12 @@ class ConvOp(ETraceOp):
             The updated weight dimensional tree.
         """
         self._check_weight(weight_dim_tree)
-        if self.xinfo is None:
-            raise ValueError('The xinfo is None. Please call the xw_to_y function first.')
-        w_like = general_y2w(self._pure_convolution_without_batch,
-                             self.xinfo, hidden_dim_arr, weight_dim_tree)
+        w_like = general_y2w(
+            self._pure_convolution_without_batch,
+            self.xinfo,
+            hidden_dim_arr,
+            weight_dim_tree,
+        )
         return jax.tree.map(u.math.multiply, weight_dim_tree, w_like)
 
 

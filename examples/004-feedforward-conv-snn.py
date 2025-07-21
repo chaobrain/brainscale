@@ -16,6 +16,9 @@
 
 from typing import Callable, Iterable
 
+import sys
+sys.path.append('../')
+
 import brainstate
 import braintools
 import brainunit as u
@@ -93,6 +96,29 @@ class ConvSNN(brainstate.nn.Module):
 
 
 class Trainer(object):
+    """
+    Base class for training spiking neural network models.
+
+    This class provides the core training and evaluation loop logic for SNN models,
+    including accuracy calculation, batch evaluation, and epoch-wise training/testing.
+    Subclasses should implement the `batch_train` method for specific training algorithms.
+
+    Args:
+        target (brainstate.nn.Module): The neural network model to be trained.
+        opt (brainstate.optim.Optimizer): Optimizer for updating model parameters.
+        train_loader (Iterable): DataLoader for training data.
+        test_loader (Iterable): DataLoader for test data.
+        x_fun (Callable): Function to preprocess input data batches.
+        n_epoch (int, optional): Number of training epochs. Default is 30.
+
+    Attributes:
+        train_loader (Iterable): Training data loader.
+        test_loader (Iterable): Test data loader.
+        x_fun (Callable): Input preprocessing function.
+        target (brainstate.nn.Module): The model being trained.
+        opt (brainstate.optim.Optimizer): Optimizer instance.
+        n_epoch (int): Number of epochs to train.
+    """
     def __init__(
         self,
         target: brainstate.nn.Module,
@@ -185,7 +211,7 @@ class Trainer(object):
                 np.asarray(test_accs))
 
 
-class OnlineTrainer(Trainer):
+class OnlineVmapTrainer(Trainer):
     def __init__(self, *args, decay_or_rank=0.99, **kwargs):
         super().__init__(*args, **kwargs)
         self.decay_or_rank = decay_or_rank
@@ -195,7 +221,8 @@ class OnlineTrainer(Trainer):
         # inputs: [n_step, n_batch, ...]
         # targets: [n_batch, n_out]
 
-        model = brainscale.IODimVjpAlgorithm(self.target, self.decay_or_rank)
+        # model = brainscale.ES_D_RTRL(self.target, self.decay_or_rank)
+        model = brainscale.D_RTRL(self.target)
 
         @brainstate.transform.vmap_new_states(
             state_tag='new',
@@ -206,9 +233,58 @@ class OnlineTrainer(Trainer):
             # initialize the online learning model
             with brainstate.environ.context(fit=True):
                 model.compile_graph(inputs[0, 0])
+                model.show_graph()
 
         init()
         model = brainstate.nn.Vmap(model, vmap_states='new')
+
+        # weights
+        weights = self.target.states().subset(brainstate.ParamState)
+
+        def _etrace_grad(inp):
+            with brainstate.environ.context(fit=True):
+                # call the model
+                out = model(inp)
+                # calculate the loss
+                loss = braintools.metric.softmax_cross_entropy_with_integer_labels(out, targets).mean()
+                return loss, out
+
+        def _etrace_step(prev_grads, x):
+            # no need to return weights and states, since they are generated then no longer needed
+            f_grad = brainstate.transform.grad(_etrace_grad, weights, has_aux=True, return_value=True)
+            cur_grads, local_loss, out = f_grad(x)
+            next_grads = jax.tree.map(lambda a, b: a + b, prev_grads, cur_grads)
+            return next_grads, (out, local_loss)
+
+        # forward propagation
+        grads = jax.tree.map(u.math.zeros_like, weights.to_dict_values())
+        grads, (outs, losses) = brainstate.transform.scan(_etrace_step, grads, inputs)
+
+        # gradient updates
+        # grads = brainstate.functional.clip_grad_norm(grads, 1.)
+        self.opt.update(grads)
+        loss, outs = losses.mean(), outs
+        return loss, self._acc(outs, targets)
+
+
+class OnlineBatchTrainer(Trainer):
+    def __init__(self, *args, decay_or_rank=0.99, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.decay_or_rank = decay_or_rank
+
+    @brainstate.transform.jit(static_argnums=(0,))
+    def batch_train(self, inputs, targets):
+        # inputs: [n_step, n_batch, ...]
+        # targets: [n_batch, n_out]
+
+        # model = brainscale.ES_D_RTRL(self.target, self.decay_or_rank, model=brainstate.mixin.Batching())
+        model = brainscale.D_RTRL(self.target, self.decay_or_rank, model=brainstate.mixin.Batching())
+
+        # initialize the online learning model
+        brainstate.nn.init_all_states(self.target, batch_size=inputs.shape[1])
+        with brainstate.environ.context(fit=True):
+            model.compile_graph(inputs[0])
+            model.show_graph()
 
         # weights
         weights = self.target.states().subset(brainstate.ParamState)
@@ -367,13 +443,23 @@ if __name__ == '__main__':
         net = ConvSNN(data.in_shape, data.out_shape)
 
         # Online Trainer
-        r = OnlineTrainer(
+        r = OnlineVmapTrainer(
             target=net,
             opt=brainstate.optim.Adam(lr=1e-3),
             train_loader=data.train_loader,
             test_loader=data.test_loader,
             x_fun=data_processing,
-            n_epoch=30
+            n_epoch=1
+        ).f_train()
+
+        # Online Trainer
+        r = OnlineVmapTrainer(
+            target=net,
+            opt=brainstate.optim.Adam(lr=1e-3),
+            train_loader=data.train_loader,
+            test_loader=data.test_loader,
+            x_fun=data_processing,
+            n_epoch=1
         ).f_train()
 
         # Offline Trainer
