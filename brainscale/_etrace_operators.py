@@ -245,9 +245,6 @@ class ETraceOp(brainstate.util.PrettyObject):
             y = jax.lax.stop_gradient(y)
         return y
 
-    def __repr__(self) -> str:
-        return f'{self.__class__.__name__}(is_diagonal={self.is_diagonal})'
-
     def xw_to_y(
         self,
         inputs: X,
@@ -916,8 +913,10 @@ class ElemWiseOp(ETraceOp):
         super().__init__(is_diagonal=True, name=_etrace_op_name_elemwise)
 
     def __pretty_repr_item__(self, k, v):
-        if k in ['_raw_fn', '_jitted_call']:
-            return None, None
+        if k == '_jitted_call':
+            return None
+        if k == '_raw_fn':
+            return 'fn', v
         return k, v
 
     def _define_call(self):
