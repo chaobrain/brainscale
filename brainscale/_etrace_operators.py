@@ -21,7 +21,6 @@ import brainstate
 import brainunit as u
 import jax
 import numpy as np
-from jax.api_util import shaped_abstractify
 
 __all__ = [
     'ETraceOp',  # base class
@@ -335,8 +334,16 @@ class MatMulOp(ETraceOp):
 
     This operator is used to compute the output of the operator, mathematically:
 
+    If ``apply_weight_fn_before_mask`` is ``False``:
+
     $$
     y = x @ f(w * m) + b
+    $$
+
+    If ``apply_weight_fn_before_mask`` is ``True``:
+
+    $$
+    y = x @ (f(w) * m) + b
     $$
 
     $b$ is the bias term, which can be optional, $m$ is the weight mask,
@@ -514,9 +521,9 @@ class ConvOp(ETraceOp):
 
     def __init__(
         self,
+        xinfo: jax.ShapeDtypeStruct,
         window_strides: Sequence[int],
         padding: str | Sequence[tuple[int, int]],
-        xinfo: jax.ShapeDtypeStruct,
         lhs_dilation: Sequence[int] | None = None,
         rhs_dilation: Sequence[int] | None = None,
         feature_group_count: int = 1,
@@ -564,7 +571,15 @@ class ConvOp(ETraceOp):
         weights: W,
     ) -> Y:
         self._check_weight(weights)
-        inputs = u.math.expand_dims(inputs, axis=0)
+        if inputs.ndim == self.xinfo.ndim:
+            inputs = u.math.expand_dims(inputs, axis=0)
+        elif inputs.ndim == self.xinfo.ndim + 1:
+            inputs = inputs  # already has batch dimension
+        else:
+            raise ValueError(
+                f'The inputs must have the same number of dimensions as xinfo. '
+                f'Got {inputs.ndim} and {self.xinfo.ndim}'
+            )
         inputs, input_unit = u.split_mantissa_unit(inputs)
         weight, weight_unit = u.split_mantissa_unit(weights['weight'])
 
@@ -596,6 +611,7 @@ class ConvOp(ETraceOp):
         weights = {k: v for k, v in weights.items()}
         if self.weight_mask is not None:
             weights['weight'] = weights['weight'] * self.weight_mask
+        weights['weight'] = self.weight_fn(weights['weight'])
         # convolution
         return self._pure_convolution_without_batch(inputs, weights)
 
