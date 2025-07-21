@@ -2185,7 +2185,9 @@ class ParamDimVjpAlgorithm(ETraceVjpAlgorithm):
             self.mode = brainstate.environ.get('mode', brainstate.mixin.Mode())
         else:
             self.mode = mode
-        assert isinstance(self.mode, brainstate.mixin.Mode), 'The mode should be an instance of brainstate.mixin.Mode.'
+        assert isinstance(self.mode, brainstate.mixin.Mode), (
+            f'The mode should be an instance of brainstate.mixin.Mode. But we got {self.mode}.'
+        )
 
     def init_etrace_state(self, *args, **kwargs):
         """

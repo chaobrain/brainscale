@@ -516,6 +516,7 @@ class ConvOp(ETraceOp):
         self,
         window_strides: Sequence[int],
         padding: str | Sequence[tuple[int, int]],
+        xinfo: jax.ShapeDtypeStruct,
         lhs_dilation: Sequence[int] | None = None,
         rhs_dilation: Sequence[int] | None = None,
         feature_group_count: int = 1,
@@ -547,7 +548,8 @@ class ConvOp(ETraceOp):
         assert callable(weight_fn), f'The weight_fn must be callable. But got {type(weight_fn)}'
         self.weight_fn = weight_fn
 
-        self.xinfo = None
+        # input info
+        self.xinfo = xinfo
 
     def _check_weight(self, w: Dict[str, brainstate.typing.ArrayLike]):
         if not isinstance(w, dict):
@@ -590,7 +592,6 @@ class ConvOp(ETraceOp):
         inputs: X,
         weights: W,
     ) -> Y:
-        self.xinfo = shaped_abstractify(inputs)
         # weight processing
         weights = {k: v for k, v in weights.items()}
         if self.weight_mask is not None:
@@ -618,10 +619,12 @@ class ConvOp(ETraceOp):
             The updated weight dimensional tree.
         """
         self._check_weight(weight_dim_tree)
-        if self.xinfo is None:
-            raise ValueError('The xinfo is None. Please call the xw_to_y function first.')
-        w_like = general_y2w(self._pure_convolution_without_batch,
-                             self.xinfo, hidden_dim_arr, weight_dim_tree)
+        w_like = general_y2w(
+            self._pure_convolution_without_batch,
+            self.xinfo,
+            hidden_dim_arr,
+            weight_dim_tree,
+        )
         return jax.tree.map(u.math.multiply, weight_dim_tree, w_like)
 
 
@@ -728,10 +731,7 @@ class SpMVOp(ETraceOp):
         assert hidden_dim_arr.ndim == 1, (
             f'The hidden_dim_arr must be a 1D array. But got the shape {hidden_dim_arr.shape}'
         )
-        weight_like = self.sparse_mat.yw_to_w(
-            u.math.expand_dims(hidden_dim_arr, axis=0),
-            weight_like
-        )
+        weight_like = self.sparse_mat.yw_to_w_transposed(hidden_dim_arr, weight_like)
         if bias_like is not None:
             assert bias_like.ndim == 1, (
                 f'The bias must be a 1D array when hidden_dim_arr is 1D. '

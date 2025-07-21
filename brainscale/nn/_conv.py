@@ -157,6 +157,8 @@ class _Conv(brainstate.nn.Module):
             params['bias'] = bias
 
         # --- operation --- #
+        xinfo = jax.ShapeDtypeStruct(self.in_size, params['weight'].dtype)
+
         op = ConvOp(
             window_strides=self.stride,
             padding=self.padding,
@@ -168,7 +170,6 @@ class _Conv(brainstate.nn.Module):
         )
 
         # --- Evaluate the output shape --- #
-        xinfo = jax.ShapeDtypeStruct(self.in_size, params['weight'].dtype)
         abstract_y = jax.eval_shape(op, xinfo, params)
         self.out_size = abstract_y.shape
 
