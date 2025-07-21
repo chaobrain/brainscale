@@ -22,15 +22,15 @@ Here we show how easy it is to use `brainscale` to build and train a simple SNN/
 
    # define models as usual
    model = brainstate.nn.Sequential(
-       brainstate.nn.GRU(2, 2),
-       brainstate.nn.GRU(2, 1),
+       brainscale.nn.GRU(2, 2),
+       brainscale.nn.GRU(2, 1),
    )
 
    # initialize the model
    brainstate.nn.init_all_states(model)
 
    # the only thing you need to do just two lines of code
-   model = brainscale.DiagParamDimAlgorithm(model)
+   model = brainscale.ParamDimVjpAlgorithm(model)
    model.compile_graph(your_inputs)
 
    # train your model as usual
@@ -60,7 +60,7 @@ Installation
 
        .. code-block:: bash
 
-          pip install -U brainscale[tpu] -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
+          pip install -U brainscale[tpu]
 
 
 ----
@@ -88,6 +88,17 @@ We are building the `brain modeling ecosystem <https://ecosystem-for-brain-dynam
    quickstart/rnn_online_learning-en.ipynb
    quickstart/rnn_online_learning-zh.ipynb
 
+
+
+.. toctree::
+   :hidden:
+   :maxdepth: 2
+   :caption: Tutorial
+
+   tutorial/show_graph-en.ipynb
+   tutorial/show_graph-zh.ipynb
+   tutorial/etraceop-en.ipynb
+   tutorial/etraceop-zh.ipynb
 
 
 .. toctree::

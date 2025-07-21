@@ -160,6 +160,7 @@ class _Conv(brainstate.nn.Module):
         xinfo = jax.ShapeDtypeStruct(self.in_size, params['weight'].dtype)
 
         op = ConvOp(
+            xinfo=xinfo,
             window_strides=self.stride,
             padding=self.padding,
             lhs_dilation=self.lhs_dilation,
