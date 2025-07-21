@@ -69,7 +69,7 @@ from brainscale._etrace_operators import (
     MatMulOp,
     LoraOp,
     ConvOp,
-    SpMVOp,
+    SpMatMulOp,
     stop_param_gradients,
 )
 from brainscale._etrace_vjp_algorithms import (

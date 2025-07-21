@@ -27,7 +27,7 @@ __all__ = [
     'MatMulOp',  # x @ f(w * m) + b
     'ElemWiseOp',  # element-wise operation
     'ConvOp',  # x [convolution] f(w * m) + bias
-    'SpMVOp',  # x @ f(sparse_weight) + b
+    'SpMatMulOp',  # x @ f(sparse_weight) + b
     'LoraOp',  # low-rank approximation
 
     'general_y2w',
@@ -644,7 +644,7 @@ class ConvOp(ETraceOp):
         return jax.tree.map(u.math.multiply, weight_dim_tree, w_like)
 
 
-class SpMVOp(ETraceOp):
+class SpMatMulOp(ETraceOp):
     """
     The sparse matrix-vector multiplication operator for eligibility trace-based gradient learning.
 

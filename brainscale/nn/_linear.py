@@ -22,7 +22,7 @@ import brainunit as u
 from brainstate import init
 
 from brainscale._etrace_concepts import ETraceParam
-from brainscale._etrace_operators import MatMulOp, LoraOp, SpMVOp
+from brainscale._etrace_operators import MatMulOp, LoraOp, SpMatMulOp
 from brainscale._typing import ArrayLike
 
 __all__ = [
@@ -371,7 +371,7 @@ class SparseLinear(brainstate.nn.Module):
         params = dict(weight=sparse_mat.data)
         if b_init is not None:
             params['bias'] = init.param(b_init, self.out_size[-1], allow_none=False)
-        op = SpMVOp(sparse_mat=sparse_mat)  # x @ sparse matrix
+        op = SpMatMulOp(sparse_mat=sparse_mat)  # x @ sparse matrix
         self.weight_op = param_type(params, op=op)
 
     def update(self, x):
