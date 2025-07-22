@@ -101,8 +101,8 @@ We are building the `brain modeling ecosystem <https://ecosystem-for-brain-dynam
    tutorial/etraceop-zh.ipynb
    tutorial/batching-en.ipynb
    tutorial/batching-zh.ipynb
-   tutorial/etraceparam-en.ipynb
-   tutorial/etraceparam-zh.ipynb
+   tutorial/etracestate-en.ipynb
+   tutorial/etracestate-zh.ipynb
 
 
 .. toctree::
