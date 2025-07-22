@@ -110,10 +110,12 @@ We are building the `brain modeling ecosystem <https://brainmodeling.readthedocs
    :maxdepth: 2
    :caption: Advanced Tutorial
 
-   advanced/limitations-en.ipynb
-   advanced/limitations-zh.ipynb
    advanced/IR_analysis-en.ipynb
    advanced/IR_analysis-zh.ipynb
+   advanced/limitations-en.ipynb
+   advanced/limitations-zh.ipynb
+   advanced/online_algorithm_customization-en.ipynb
+   advanced/online_algorithm_customization-zh.ipynb
 
 
 

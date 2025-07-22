@@ -29,14 +29,17 @@ from brainscale._etrace_compiler_graph import (
 )
 from brainscale._etrace_compiler_hid_param_op import (
     HiddenParamOpRelation,
+    find_hidden_param_op_relations_from_minfo,
     find_hidden_param_op_relations_from_module,
 )
 from brainscale._etrace_compiler_hidden_group import (
     HiddenGroup,
+    find_hidden_groups_from_minfo,
     find_hidden_groups_from_module,
 )
 from brainscale._etrace_compiler_hidden_pertubation import (
     HiddenPerturbation,
+    add_hidden_perturbation_from_minfo,
     add_hidden_perturbation_in_module,
 )
 from brainscale._etrace_compiler_module_info import (
