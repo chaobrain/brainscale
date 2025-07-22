@@ -66,11 +66,11 @@ Installation
 ----
 
 
-See also the BDP ecosystem
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+See also the brain modeling ecosystem
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 
-We are building the `brain modeling ecosystem <https://ecosystem-for-brain-dynamics.readthedocs.io/>`_.
+We are building the `brain modeling ecosystem <https://brainmodeling.readthedocs.io/>`_.
 
 
 ----
