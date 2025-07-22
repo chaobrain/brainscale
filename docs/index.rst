@@ -99,10 +99,10 @@ We are building the `brain modeling ecosystem <https://ecosystem-for-brain-dynam
    tutorial/show_graph-zh.ipynb
    tutorial/etraceop-en.ipynb
    tutorial/etraceop-zh.ipynb
-   tutorial/batching-en.ipynb
-   tutorial/batching-zh.ipynb
    tutorial/etracestate-en.ipynb
    tutorial/etracestate-zh.ipynb
+   tutorial/batching-en.ipynb
+   tutorial/batching-zh.ipynb
 
 
 .. toctree::
