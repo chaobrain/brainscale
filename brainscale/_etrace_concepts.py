@@ -31,7 +31,7 @@
 # -*- coding: utf-8 -*-
 
 from enum import Enum
-from typing import Callable, Optional, Dict, Tuple, Sequence
+from typing import Callable, Optional, Dict, Tuple, Sequence, Union
 
 import brainstate
 import brainunit as u
@@ -108,7 +108,7 @@ class ETraceState(brainstate.HiddenState):
 
     def __init__(
         self,
-        value: brainstate.typing.PyTree,
+        value: brainstate.typing.ArrayLike,
         name: Optional[str] = None
     ):
         self._check_value(value)
@@ -197,7 +197,7 @@ class ETraceGroupState(ETraceState):
 
     def __init__(
         self,
-        value: brainstate.typing.PyTree,
+        value: brainstate.typing.ArrayLike,
     ):
         value, name2index = self._check_value(value)
         self.name2index = name2index

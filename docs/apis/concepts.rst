@@ -90,7 +90,7 @@ to the outputs.
     MatMulOp
     ElemWiseOp
     ConvOp
-    SpMVOp
+    SpMatMulOp
     LoraOp
 
 

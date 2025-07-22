@@ -21,14 +21,13 @@ import brainstate
 import brainunit as u
 import jax
 import numpy as np
-from jax.api_util import shaped_abstractify
 
 __all__ = [
     'ETraceOp',  # base class
     'MatMulOp',  # x @ f(w * m) + b
     'ElemWiseOp',  # element-wise operation
     'ConvOp',  # x [convolution] f(w * m) + bias
-    'SpMVOp',  # x @ f(sparse_weight) + b
+    'SpMatMulOp',  # x @ f(sparse_weight) + b
     'LoraOp',  # low-rank approximation
 
     'general_y2w',
@@ -246,9 +245,6 @@ class ETraceOp(brainstate.util.PrettyObject):
             y = jax.lax.stop_gradient(y)
         return y
 
-    def __repr__(self) -> str:
-        return f'{self.__class__.__name__}(is_diagonal={self.is_diagonal})'
-
     def xw_to_y(
         self,
         inputs: X,
@@ -335,8 +331,16 @@ class MatMulOp(ETraceOp):
 
     This operator is used to compute the output of the operator, mathematically:
 
+    If ``apply_weight_fn_before_mask`` is ``False``:
+
     $$
     y = x @ f(w * m) + b
+    $$
+
+    If ``apply_weight_fn_before_mask`` is ``True``:
+
+    $$
+    y = x @ (f(w) * m) + b
     $$
 
     $b$ is the bias term, which can be optional, $m$ is the weight mask,
@@ -514,9 +518,9 @@ class ConvOp(ETraceOp):
 
     def __init__(
         self,
+        xinfo: jax.ShapeDtypeStruct,
         window_strides: Sequence[int],
         padding: str | Sequence[tuple[int, int]],
-        xinfo: jax.ShapeDtypeStruct,
         lhs_dilation: Sequence[int] | None = None,
         rhs_dilation: Sequence[int] | None = None,
         feature_group_count: int = 1,
@@ -564,7 +568,15 @@ class ConvOp(ETraceOp):
         weights: W,
     ) -> Y:
         self._check_weight(weights)
-        inputs = u.math.expand_dims(inputs, axis=0)
+        if inputs.ndim == self.xinfo.ndim:
+            inputs = u.math.expand_dims(inputs, axis=0)
+        elif inputs.ndim == self.xinfo.ndim + 1:
+            inputs = inputs  # already has batch dimension
+        else:
+            raise ValueError(
+                f'The inputs must have the same number of dimensions as xinfo. '
+                f'Got {inputs.ndim} and {self.xinfo.ndim}'
+            )
         inputs, input_unit = u.split_mantissa_unit(inputs)
         weight, weight_unit = u.split_mantissa_unit(weights['weight'])
 
@@ -596,6 +608,7 @@ class ConvOp(ETraceOp):
         weights = {k: v for k, v in weights.items()}
         if self.weight_mask is not None:
             weights['weight'] = weights['weight'] * self.weight_mask
+        weights['weight'] = self.weight_fn(weights['weight'])
         # convolution
         return self._pure_convolution_without_batch(inputs, weights)
 
@@ -628,7 +641,7 @@ class ConvOp(ETraceOp):
         return jax.tree.map(u.math.multiply, weight_dim_tree, w_like)
 
 
-class SpMVOp(ETraceOp):
+class SpMatMulOp(ETraceOp):
     """
     The sparse matrix-vector multiplication operator for eligibility trace-based gradient learning.
 
@@ -900,8 +913,10 @@ class ElemWiseOp(ETraceOp):
         super().__init__(is_diagonal=True, name=_etrace_op_name_elemwise)
 
     def __pretty_repr_item__(self, k, v):
-        if k in ['_raw_fn', '_jitted_call']:
-            return None, None
+        if k == '_jitted_call':
+            return None
+        if k == '_raw_fn':
+            return 'fn', v
         return k, v
 
     def _define_call(self):

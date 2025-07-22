@@ -22,15 +22,15 @@ Here we show how easy it is to use `brainscale` to build and train a simple SNN/
 
    # define models as usual
    model = brainstate.nn.Sequential(
-       brainstate.nn.GRU(2, 2),
-       brainstate.nn.GRU(2, 1),
+       brainscale.nn.GRU(2, 2),
+       brainscale.nn.GRU(2, 1),
    )
 
    # initialize the model
    brainstate.nn.init_all_states(model)
 
    # the only thing you need to do just two lines of code
-   model = brainscale.DiagParamDimAlgorithm(model)
+   model = brainscale.ParamDimVjpAlgorithm(model)
    model.compile_graph(your_inputs)
 
    # train your model as usual
@@ -60,17 +60,17 @@ Installation
 
        .. code-block:: bash
 
-          pip install -U brainscale[tpu] -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
+          pip install -U brainscale[tpu]
 
 
 ----
 
 
-See also the BDP ecosystem
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+See also the brain modeling ecosystem
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 
-We are building the `brain modeling ecosystem <https://ecosystem-for-brain-dynamics.readthedocs.io/>`_.
+We are building the `brain modeling ecosystem <https://brainmodeling.readthedocs.io/>`_.
 
 
 ----
@@ -93,10 +93,29 @@ We are building the `brain modeling ecosystem <https://ecosystem-for-brain-dynam
 .. toctree::
    :hidden:
    :maxdepth: 2
+   :caption: Tutorial
+
+   tutorial/show_graph-en.ipynb
+   tutorial/show_graph-zh.ipynb
+   tutorial/etraceop-en.ipynb
+   tutorial/etraceop-zh.ipynb
+   tutorial/etracestate-en.ipynb
+   tutorial/etracestate-zh.ipynb
+   tutorial/batching-en.ipynb
+   tutorial/batching-zh.ipynb
+
+
+.. toctree::
+   :hidden:
+   :maxdepth: 2
    :caption: Advanced Tutorial
 
+   advanced/IR_analysis-en.ipynb
+   advanced/IR_analysis-zh.ipynb
    advanced/limitations-en.ipynb
    advanced/limitations-zh.ipynb
+   advanced/online_algorithm_customization-en.ipynb
+   advanced/online_algorithm_customization-zh.ipynb
 
 
 
