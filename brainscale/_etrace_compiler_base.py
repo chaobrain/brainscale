@@ -18,6 +18,10 @@ from typing import Dict, Sequence, Set, List
 from ._compatible_imports import (
     Var,
     JaxprEqn,
+    is_jit_primitive,
+    is_scan_primitive,
+    is_while_primitive,
+    is_cond_primitive,
 )
 from ._etrace_operators import (
     is_etrace_op,
@@ -162,13 +166,13 @@ class JaxprEvaluation(object):
             # However, for the long-term maintenance and development, we need to consider them,
             # since users usually create crazy models.
 
-            if eqn.primitive.name == 'pjit':
+            if is_jit_primitive(eqn):
                 self._eval_pjit(eqn)
-            elif eqn.primitive.name == 'scan':
+            elif is_scan_primitive(eqn):
                 self._eval_scan(eqn)
-            elif eqn.primitive.name == 'while':
+            elif is_while_primitive(eqn):
                 self._eval_while(eqn)
-            elif eqn.primitive.name == 'cond':
+            elif is_cond_primitive(eqn):
                 self._eval_cond(eqn)
             else:
                 self._eval_eqn(eqn)

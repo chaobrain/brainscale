@@ -23,6 +23,10 @@ __all__ = [
     'ClosedJaxpr',
     'Literal',
     'new_var',
+    'is_jit_primitive',
+    'is_scan_primitive',
+    'is_while_primitive',
+    'is_cond_primitive',
 ]
 
 if jax.__version_info__ < (0, 4, 38):
@@ -37,3 +41,22 @@ def new_var(suffix, aval):
         return Var(suffix, aval)
     else:
         return Var(aval)
+
+
+def is_jit_primitive(eqn: JaxprEqn) -> bool:
+    if jax.__version_info__ < (0, 7, 0):
+        return eqn.primitive.name == 'pjit'
+    else:
+        return eqn.primitive.name == 'jit'
+
+
+def is_scan_primitive(eqn: JaxprEqn) -> bool:
+    return eqn.primitive.name == 'scan'
+
+
+def is_while_primitive(eqn: JaxprEqn) -> bool:
+    return eqn.primitive.name == 'while'
+
+
+def is_cond_primitive(eqn: JaxprEqn) -> bool:
+    return eqn.primitive.name == 'cond'
