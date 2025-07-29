@@ -53,9 +53,10 @@ def is_jit_primitive(eqn: JaxprEqn) -> bool:
 def is_scan_primitive(eqn: JaxprEqn) -> bool:
     return eqn.primitive.name == 'scan'
 
+
 def is_while_primitive(eqn: JaxprEqn) -> bool:
     return eqn.primitive.name == 'while'
 
+
 def is_cond_primitive(eqn: JaxprEqn) -> bool:
     return eqn.primitive.name == 'cond'
-
