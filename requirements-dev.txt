@@ -1,3 +1,4 @@
 -r requirements.txt
 braintools
 pytest
+numba  # for brainevent cpu operator
