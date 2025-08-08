@@ -375,6 +375,11 @@ class MatMulOp(ETraceOp):
         assert isinstance(apply_weight_fn_before_mask, bool), 'apply_weight_fn_before_mask must be a boolean.'
         self.apply_weight_fn_before_mask = apply_weight_fn_before_mask
 
+    def _vjp_weight_fn(self, w, dw):
+        _, f_vjp = jax.vjp(self.weight_fn, w)
+        dw, = f_vjp(dw)
+        return dw
+
     def _check_weight(self, w: Dict[str, brainstate.typing.ArrayLike]):
         if not isinstance(w, dict):
             raise TypeError(f'{self.__class__.__name__} only supports '
@@ -451,6 +456,7 @@ class MatMulOp(ETraceOp):
         self._check_weight(weight_dim_tree)
 
         weight_like = weight_dim_tree['weight']
+        old_weight = weight_like
         if 'bias' in weight_dim_tree:
             bias_like = weight_dim_tree['bias']
         else:
@@ -463,6 +469,10 @@ class MatMulOp(ETraceOp):
             if self.weight_mask is None:
                 weight_like = weight_like * u.math.expand_dims(hidden_dim_arr, axis=0)
             else:
+                raise NotImplementedError(
+                    'please apply weight_mask using weight_fn. For example: \n\n'
+                    'weight_fn = lambda w: w * mask'
+                )
                 weight_like = (
                     weight_like *
                     self.weight_mask *
@@ -483,6 +493,10 @@ class MatMulOp(ETraceOp):
             if self.weight_mask is None:
                 weight_like = weight_like * u.math.expand_dims(hidden_dim_arr, axis=1)
             else:
+                raise NotImplementedError(
+                    'please apply weight_mask using weight_fn. For example: \n\n'
+                    'weight_fn = lambda w: w * mask'
+                )
                 weight_like = (
                     weight_like *
                     u.math.expand_dims(self.weight_mask, axis=0) *
@@ -496,6 +510,8 @@ class MatMulOp(ETraceOp):
                 bias_like = bias_like * hidden_dim_arr
         else:
             raise ValueError(f'The hidden_dim_arr must be a 1D or 2D array. But got the shape {hidden_dim_arr.shape}')
+
+        weight_like = self._vjp_weight_fn(old_weight, weight_like)
         if bias_like is None:
             return {'weight': weight_like}
         else:
@@ -561,6 +577,11 @@ class ConvOp(ETraceOp):
                             f'the dictionary weight. But got {type(w)}')
         if 'weight' not in w:
             raise ValueError(f'The weight must contain the key "weight".')
+
+    def _vjp_weight_fn(self, w, dw):
+        _, f_vjp = jax.vjp(self.weight_fn, w)
+        dw, = f_vjp(dw)
+        return dw
 
     def _pure_convolution_without_batch(
         self,
@@ -638,7 +659,10 @@ class ConvOp(ETraceOp):
             hidden_dim_arr,
             weight_dim_tree,
         )
-        return jax.tree.map(u.math.multiply, weight_dim_tree, w_like)
+        old_weight = weight_dim_tree['weight']
+        new_weight = jax.tree.map(u.math.multiply, weight_dim_tree, w_like)
+        new_weight['weight'] = self._vjp_weight_fn(old_weight, new_weight['weight'])
+        return new_weight
 
 
 class SpMatMulOp(ETraceOp):
@@ -696,6 +720,11 @@ class SpMatMulOp(ETraceOp):
             raise ValueError(f'The unit of the weight must be the same as the sparse matrix data. '
                              f'Got {u.get_unit(w["weight"])} and {u.get_unit(self.sparse_mat.data)}.')
 
+    def _vjp_weight_fn(self, w, dw):
+        _, f_vjp = jax.vjp(self.weight_fn, w)
+        dw, = f_vjp(dw)
+        return dw
+
     def xw_to_y(
         self,
         x: brainstate.typing.ArrayLike,
@@ -737,6 +766,7 @@ class SpMatMulOp(ETraceOp):
         """
         self._check_weight(weight_dim_tree, check_shape=False)
         weight_like: brainstate.typing.ArrayLike = weight_dim_tree['weight']
+        old_weight = weight_like
         if 'bias' in weight_dim_tree:
             bias_like = weight_dim_tree['bias']
         else:
@@ -751,6 +781,7 @@ class SpMatMulOp(ETraceOp):
                 f'But got the shape {bias_like.shape}'
             )
             bias_like = bias_like * hidden_dim_arr
+        weight_like = self._vjp_weight_fn(old_weight, weight_like)
         if bias_like is None:
             return {'weight': weight_like}
         else:
