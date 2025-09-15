@@ -22,7 +22,8 @@ import brainstate
 import brainunit as u
 import jax
 
-if brainstate.__version__ >= '0.1.3':
+version = tuple(map(int, brainstate.__version__.split('.')))
+if version >= (0, 1, 3):
     from brainstate.nn._normalizations import _BatchNorm
 else:
     from brainstate.nn._interaction._normalizations import _BatchNorm
