@@ -247,6 +247,7 @@ def _init_IO_dim_state(
     etrace_xs_to_weights: defaultdict[ETraceX_Key, List[Path]],
     state_id_to_path: Dict[int, Path],
     relation: HiddenParamOpRelation,
+    mode: brainstate.mixin.Mode
 ):
     """
     Initialize the eligibility trace states for input-output dimensions.
@@ -299,10 +300,20 @@ def _init_IO_dim_state(
     y_dtype = relation.y.aval.dtype
     for group in relation.hidden_groups:
         group: HiddenGroup
-        assert y_shape == group.varshape, (
-            f'The shape of the hidden states should be the same as the shape of the hidden group. '
-            f'While we got {y_shape} != {group.varshape}. '
-        )
+        if y_shape != group.varshape:
+            if isinstance(relation.weight, ElemWiseParam):
+                if not (mode.is_a(brainstate.mixin.Batching) and y_shape == group.varshape[1:]):
+                    raise ValueError(
+                        f'The shape of the hidden states should be the '
+                        f'same as the shape of the hidden group. '
+                        f'While we got {y_shape} != {group.varshape}. '
+                    )
+            else:
+                raise ValueError(
+                    f'The shape of the hidden states should be the '
+                    f'same as the shape of the hidden group. '
+                    f'While we got {y_shape} != {group.varshape}. '
+                )
         key = etrace_df_key(relation.y, group.index)
         if key in etrace_dfs:  # relation.y is a unique output of the weight operation
             raise ValueError(f'The relation {key} has been added. ')
@@ -316,7 +327,7 @@ def _init_IO_dim_state(
         #
         #   [∂A^t-1/∂θ1, ∂B^t-1/∂θ1, ...]
         #
-        shape = y_shape + (group.num_state,)
+        shape = group.varshape + (group.num_state,)
         etrace_dfs[key] = EligibilityTrace(u.math.zeros(shape, y_dtype))
 
 
@@ -461,6 +472,7 @@ def _solve_IO_dim_weight_gradients(
     weight_vals: Dict[Path, WeightVals],
     running_index: int,
     decay: float,
+    mode: brainstate.mixin.Mode,
 ):
     """
     Compute and update the weight gradients for input-output dimensions using eligibility trace data.
@@ -527,11 +539,13 @@ def _solve_IO_dim_weight_gradients(
             #    dw = df(dx, dy)
             #
             fn_vmap = jax.vmap(
-                lambda df: weight_op.xy_to_dw(x, df, weight_vals[weight_path]),
-                in_axes=-1,
-                out_axes=-1,
+                lambda df: weight_op.xy_to_dw(x, df, weight_vals[weight_path]), in_axes=-1, out_axes=-1,
             )
-            dg_weight = _sum_last_dim(fn_vmap(df_hid))
+            if isinstance(relation.weight, ElemWiseParam) and mode.is_a(brainstate.mixin.Batching):
+                fn_vmap = jax.vmap(fn_vmap)
+                dg_weight = _sum_dim(_sum_dim(fn_vmap(df_hid), axis=-1), axis=0)
+            else:
+                dg_weight = _sum_dim(fn_vmap(df_hid))
 
             # update the weight gradients
             _update_dict(dG_weights, weight_path, dg_weight)  # update the weight gradients
@@ -788,24 +802,17 @@ def _update_param_dim_etrace_scan_fn(
             w_key = etrace_param_key(weight_path, relation.y, group.index)
             diag = normalized_hid_group_jacobians[group.index]
 
-            # def max_diag(diag):
-            #     indices = list(range(diag.ndim))
-            #     max_index= jnp.argmax(jnp.abs(diag).sum(axis=indices[1:]))
-            #     return diag[max_index]
-            #
-            # jax.debug.print('diag = {g}', g=diag[0])
-            # jax.debug.print('max diag = {g}', g=jax.tree.map(lambda x: jnp.abs(x).max(), diag))
-            # jax.debug.print('max diag = {g}', g=jax.tree.map(max_diag, diag))
-
             #
             # vmap over j, over the different hidden states \partial h_i^t / \partial h_j^t
             #
             # d: (n_hidden, ..., [n_state])
             # old_bwg: (n_param, ..., [n_state])
             old_bwg = hist_etrace_vals[w_key]
-            fn_bwg_pre = lambda d: _sum_last_dim(
-                jax.vmap(etrace_op.yw_to_w, in_axes=-1, out_axes=-1)(d, old_bwg)
+            fn_bwg_pre = lambda d: _sum_dim(
+                jax.vmap(etrace_op.yw_to_w, in_axes=-1, out_axes=-1)(d, old_bwg), axis=-1
             )
+            if isinstance(relation.weight, ElemWiseParam) and mode.is_a(brainstate.mixin.Batching):
+                raise NotImplementedError
 
             #
             # vmap over i, over the different hidden states \partial h_i^t / \partial h_j^t
@@ -814,8 +821,6 @@ def _update_param_dim_etrace_scan_fn(
             # old_bwg: (n_param, ..., n_state)
             # new_bwg_pre: (n_param, ..., n_state)
             new_bwg_pre = jax.vmap(fn_bwg_pre, in_axes=-2, out_axes=-1)(diag)
-            # jax.debug.print('old_bwg = {g}', g=jax.tree.map(lambda x: jnp.abs(x).max(), old_bwg))
-            # jax.debug.print('new_bwg_pre = {g}\n', g=jax.tree.map(lambda x: jnp.abs(x).max(), new_bwg_pre))
 
             #
             # Step 4:
@@ -899,7 +904,7 @@ def _solve_param_dim_weight_gradients(
             # dg_hidden:   [n_batch, n_hidden, ..., n_state]
             #               or,
             #              [n_hidden, ..., n_state]
-            dg_weight = _sum_last_dim(
+            dg_weight = _sum_dim(
                 jax.vmap(yw_to_w, in_axes=-1, out_axes=-1)(dg_hidden, etrace_data)
             )
             # unit restoration
@@ -956,7 +961,7 @@ def _remove_units(xs_maybe_quantity: brainstate.typing.PyTree):
     return jax.tree.unflatten(treedef, new_leaves), restore_units
 
 
-def _sum_last_dim(xs: jax.Array):
+def _sum_dim(xs: jax.Array, axis: int = -1):
     """
     Sums the elements along the last dimension of each array in a PyTree.
 
@@ -972,7 +977,7 @@ def _sum_last_dim(xs: jax.Array):
         jax.Array: A PyTree with the same structure as the input, where each array
                    has been reduced by summing over its last dimension.
     """
-    return jax.tree.map(lambda x: u.math.sum(x, axis=-1), xs)
+    return jax.tree.map(lambda x: u.math.sum(x, axis=axis), xs)
 
 
 def _zeros_like_batch_or_not(
@@ -1846,6 +1851,7 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
                 self.etrace_xs_to_weights,
                 self.graph_executor.state_id_to_path,
                 relation,
+                self.mode,
             )
 
     def reset_state(self, batch_size: int = None, **kwargs):
@@ -2110,6 +2116,7 @@ class IODimVjpAlgorithm(ETraceVjpAlgorithm):
             weight_vals,
             running_index,
             self.decay,
+            self.mode,
         )
 
         # update the non-etrace parameters
@@ -2521,6 +2528,7 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
                     self.etrace_xs_to_weights,
                     self.graph_executor.state_id_to_path,
                     relation,
+                    self.mode,
                 )
 
     def reset_state(self, batch_size: int = None, **kwargs):
@@ -2852,6 +2860,7 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
             weight_vals,
             running_index,
             self.decay,
+            self.mode,
         )
 
         # --- update the etrace weight gradients by the O(n^2) algorithm --- #
