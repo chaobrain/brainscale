@@ -2,10 +2,8 @@
 <h2 align="center">Scalable Online Learning for Brain Dynamics</h2>
 
 <p align="center">
-  	<img alt="Header image of brainscale." src="https://raw.githubusercontent.com/chaobrain/brainscale/main/docs/_static/brainscale.jpg" width=40%>
-</p> 
-
-
+  	<img alt="Header image of brainscale." src="https://raw.githubusercontent.com/chaobrain/brainscale/main/docs/_static/brainscale.png" width=40%>
+</p>
 
 <p align="center">
 	<a href="https://pypi.org/project/brainscale/"><img alt="Supported Python Version" src="https://img.shields.io/pypi/pyversions/brainscale"></a>
@@ -15,10 +13,8 @@
     <a href="https://github.com/chaobrain/brainscale/actions/workflows/CI.yml"><img alt="Continuous Integration" src="https://github.com/chaobrain/brainscale/actions/workflows/CI.yml/badge.svg"></a>
 </p>
 
-
-[``brainscale``](https://github.com/chaobrain/brainscale) provides online learning algorithms for biological neural networks. 
-It has been integrated into our establishing [brain modeling ecosystem](https://brainmodeling.readthedocs.io/). 
-
+[``brainscale``](https://github.com/chaobrain/brainscale) provides online learning algorithms for biological neural networks.
+It has been integrated into our establishing [brain modeling ecosystem](https://brainmodeling.readthedocs.io/).
 
 ## Installation
 
@@ -34,11 +30,9 @@ Alternatively, you can install `BrainX`, which bundles `brainscale` with other c
 pip install BrainX -U
 ```
 
-
 ## Documentation
 
 The official documentation is hosted on Read the Docs: [https://brainscale.readthedocs.io](https://brainscale.readthedocs.io)
-
 
 ## Citation
 
@@ -58,13 +52,6 @@ If you use this package in your research, please cite:
 }
 ```
 
-
-
-
 ## See also the ecosystem
 
 ``brainscale`` is one part of our brain simulation ecosystem: https://brainmodeling.readthedocs.io/
-
-
-
-
