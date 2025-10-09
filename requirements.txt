@@ -3,4 +3,5 @@ numpy
 brainstate
 brainunit
 brainpy
+braintools
 
