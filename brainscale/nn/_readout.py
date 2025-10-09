@@ -1,4 +1,4 @@
-# Copyright 2024 BDP Ecosystem Limited. All Rights Reserved.
+# Copyright 2024 BrainX Ecosystem Limited. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -124,7 +124,7 @@ class LeakyRateReadout(brainstate.nn.Module):
         batch_size : int, optional
             The size of the batch for which the state is initialized. If not provided,
             the default behavior is used.
-        **kwargs : dict
+        **kwargs
             Additional keyword arguments that may be used for state initialization.
         """
         self.r = ETraceState(braintools.init.param(self.r_initializer, self.out_size, batch_size))
@@ -141,7 +141,7 @@ class LeakyRateReadout(brainstate.nn.Module):
         batch_size : int, optional
             The size of the batch for which the state is reset. If not provided,
             the default behavior is used.
-        **kwargs : dict
+        **kwargs
             Additional keyword arguments that may be used for state resetting.
 
         """
@@ -272,7 +272,7 @@ class LeakySpikeReadout(brainpy.Neuron):
         ----------
         batch_size : int
             The size of the batch for which the state is initialized.
-        **kwargs : dict
+        **kwargs
             Additional keyword arguments that may be used for state initialization.
         """
         self.V = ETraceState(braintools.init.param(self.V_initializer, self.varshape, batch_size))
@@ -289,7 +289,7 @@ class LeakySpikeReadout(brainpy.Neuron):
         ----------
         batch_size : int
             The size of the batch for which the state is reset.
-        **kwargs : dict
+        **kwargs
             Additional keyword arguments that may be used for state resetting.
 
         """

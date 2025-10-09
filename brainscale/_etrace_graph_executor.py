@@ -1,4 +1,4 @@
-# Copyright 2024 BDP Ecosystem Limited. All Rights Reserved.
+# Copyright 2024 BrainX Ecosystem Limited. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -150,7 +150,7 @@ class ETraceGraphExecutor:
 
         Parameters
         ----------
-        *args : tuple
+        *args
             Positional arguments for the model, which may include inputs, parameters, or
             other necessary data required for graph compilation.
 
@@ -265,7 +265,7 @@ class ETraceGraphExecutor:
 
         Parameters
         ----------
-        *args : tuple
+        *args
             Positional arguments for the model, which may include inputs, parameters, or other necessary
             data required for the computation of the Jacobians.
 
@@ -304,7 +304,7 @@ class ETraceGraphExecutor:
 
         Parameters
         ----------
-        *args : tuple
+        *args
             Positional arguments for the model, which may include inputs, parameters, or other necessary
             data required for the computation of the Jacobians and gradients.
 

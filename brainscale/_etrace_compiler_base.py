@@ -1,4 +1,4 @@
-# Copyright 2025 BDP Ecosystem Limited. All Rights Reserved.
+# Copyright 2025 BrainX Ecosystem Limited. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -259,11 +259,32 @@ class JaxprEvaluation(object):
     def _eval_cond(self, eqn: JaxprEqn) -> None:
         """
         Evaluating the cond primitive.
+
+        Parameters
+        ----------
+        eqn : JaxprEqn
+            The JAX equation to evaluate.
         """
         check_unsupported_op(self, eqn, 'cond')
         self._eval_eqn(eqn)
 
     def _eval_eqn(self, eqn):
+        """
+        Evaluate a single JAX equation.
+
+        This method must be implemented by subclasses to define specific
+        evaluation behavior for equations.
+
+        Parameters
+        ----------
+        eqn : JaxprEqn
+            The JAX equation to evaluate.
+
+        Raises
+        ------
+        NotImplementedError
+            This method must be implemented in subclasses.
+        """
         raise NotImplementedError(
             'The method "_eval_eqn" should be implemented in the subclass.'
         )
