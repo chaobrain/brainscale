@@ -36,6 +36,9 @@ import sys
 sys.path.insert(0, os.path.abspath('../'))
 
 import brainscale
+import shutil
+
+shutil.copy('../changelog.md', './changelog.md')
 
 # -- Project information -----------------------------------------------------
 
