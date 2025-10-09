@@ -1,4 +1,4 @@
-# Copyright 2024 BDP Ecosystem Limited. All Rights Reserved.
+# Copyright 2024 BrainX Ecosystem Limited. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@
 # -*- coding: utf-8 -*-
 
 
-__version_info__ = (0, 0, 10)
-__version__ = "0.0.10"
+__version_info__ = (0, 0, 11)
+__version__ = "0.0.11"
 
 
 from brainscale._etrace_algorithms import (

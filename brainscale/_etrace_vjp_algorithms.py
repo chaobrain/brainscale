@@ -1,4 +1,4 @@
-# Copyright 2024 BDP Ecosystem Limited. All Rights Reserved.
+# Copyright 2024 BrainX Ecosystem Limited. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -2545,7 +2545,7 @@ class HybridDimVjpAlgorithm(ETraceVjpAlgorithm):
             The size of the batch for which the state is being reset. If not provided,
             the default behavior is to reset the state without considering batch size.
         
-        **kwargs : dict
+        **kwargs
             Additional keyword arguments that may be used for resetting the state.
             These are not explicitly used in this function but can be passed for
             compatibility with other functions or methods that require them.

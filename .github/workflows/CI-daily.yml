@@ -15,8 +15,8 @@ on:
   # For example, run on pushes and pull requests to the main branch:
   # push:
   #   branches: [ main ]
-  # pull_request:
-  #   branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
   # OPTIONAL: Allow manual triggering from the Actions tab
   workflow_dispatch:
@@ -37,8 +37,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
-        jax-version: ["0.4.38", "0.5.2", "0.6.0", ""]
+        python-version: [ "3.13" ]
+        jax-version: [ "0.6.0", "0.7.0" ]
         # Optional: Exclude incompatible combinations if needed
         # exclude:
         #   - python-version: "3.13"

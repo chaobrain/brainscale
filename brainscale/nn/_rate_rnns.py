@@ -1,4 +1,4 @@
-# Copyright 2024 BDP Ecosystem Limited. All Rights Reserved.
+# Copyright 2024 BrainX Ecosystem Limited. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 from typing import Callable, Union
 
+import braintools
 import brainstate
 import brainunit as u
 
@@ -89,10 +90,10 @@ class ValinaRNNCell(brainstate.nn.RNNCell):
         )
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.h = ETraceState(brainstate.init.param(self._state_initializer, self.out_size, batch_size))
+        self.h = ETraceState(braintools.init.param(self._state_initializer, self.out_size, batch_size))
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        self.h.value = brainstate.init.param(self._state_initializer, self.out_size, batch_size)
+        self.h.value = braintools.init.param(self._state_initializer, self.out_size, batch_size)
 
     def update(self, x):
         xh = u.math.concatenate([x, self.h.value], axis=-1)
@@ -149,16 +150,16 @@ class GRUCell(brainstate.nn.RNNCell):
         self.Wh = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], **params)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.h = ETraceState(brainstate.init.param(self._state_initializer, self.out_size, batch_size))
+        self.h = ETraceState(braintools.init.param(self._state_initializer, self.out_size, batch_size))
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        self.h.value = brainstate.init.param(self._state_initializer, self.out_size, batch_size)
+        self.h.value = braintools.init.param(self._state_initializer, self.out_size, batch_size)
 
     def update(self, x):
         old_h = self.h.value
         xh = u.math.concatenate([x, old_h], axis=-1)
-        z = brainstate.functional.sigmoid(self.Wz(xh))
-        r = brainstate.functional.sigmoid(self.Wr(xh))
+        z = brainstate.nn.sigmoid(self.Wz(xh))
+        r = brainstate.nn.sigmoid(self.Wr(xh))
         rh = r * old_h
         h = self.activation(self.Wh(u.math.concatenate([x, rh], axis=-1)))
         h = (1 - z) * old_h + z * h
@@ -214,16 +215,16 @@ class CFNCell(brainstate.nn.RNNCell):
         self.Wh = Linear(self.out_size[-1], self.out_size[-1], **params)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.h = ETraceState(brainstate.init.param(self._state_initializer, self.out_size, batch_size))
+        self.h = ETraceState(braintools.init.param(self._state_initializer, self.out_size, batch_size))
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        self.h.value = brainstate.init.param(self._state_initializer, self.out_size, batch_size)
+        self.h.value = braintools.init.param(self._state_initializer, self.out_size, batch_size)
 
     def update(self, x):
         old_h = self.h.value
         xh = u.math.concatenate([x, old_h], axis=-1)
-        f = brainstate.functional.sigmoid(self.Wf(xh))
-        i = brainstate.functional.sigmoid(self.Wi(xh))
+        f = brainstate.nn.sigmoid(self.Wf(xh))
+        i = brainstate.nn.sigmoid(self.Wi(xh))
         h = f * self.activation(old_h) + i * self.activation(self.Wh(x))
         self.h.value = h
         return h
@@ -292,15 +293,15 @@ class MGUCell(brainstate.nn.RNNCell):
         self.Wh = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], **params)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.h = ETraceState(brainstate.init.param(self._state_initializer, self.out_size, batch_size))
+        self.h = ETraceState(braintools.init.param(self._state_initializer, self.out_size, batch_size))
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        self.h.value = brainstate.init.param(self._state_initializer, self.out_size, batch_size)
+        self.h.value = braintools.init.param(self._state_initializer, self.out_size, batch_size)
 
     def update(self, x):
         old_h = self.h.value
         xh = u.math.concatenate([x, old_h], axis=-1)
-        f = brainstate.functional.sigmoid(self.Wf(xh))
+        f = brainstate.nn.sigmoid(self.Wf(xh))
         fh = f * old_h
         h = self.activation(self.Wh(u.math.concatenate([x, fh], axis=-1)))
         self.h.value = (1 - f) * self.h.value + f * h
@@ -399,12 +400,12 @@ class LSTMCell(brainstate.nn.RNNCell):
         self.Wo = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], **params)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.c = ETraceState(brainstate.init.param(self._state_initializer, self.out_size, batch_size))
-        self.h = ETraceState(brainstate.init.param(self._state_initializer, self.out_size, batch_size))
+        self.c = ETraceState(braintools.init.param(self._state_initializer, self.out_size, batch_size))
+        self.h = ETraceState(braintools.init.param(self._state_initializer, self.out_size, batch_size))
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        self.c.value = brainstate.init.param(self._state_initializer, self.out_size, batch_size)
-        self.h.value = brainstate.init.param(self._state_initializer, self.out_size, batch_size)
+        self.c.value = braintools.init.param(self._state_initializer, self.out_size, batch_size)
+        self.h.value = braintools.init.param(self._state_initializer, self.out_size, batch_size)
 
     def update(self, x):
         h, c = self.h.value, self.c.value
@@ -413,8 +414,8 @@ class LSTMCell(brainstate.nn.RNNCell):
         g = self.Wg(xh)
         f = self.Wf(xh)
         o = self.Wo(xh)
-        c = brainstate.functional.sigmoid(f + 1.) * c + brainstate.functional.sigmoid(i) * self.activation(g)
-        h = brainstate.functional.sigmoid(o) * self.activation(c)
+        c = brainstate.nn.sigmoid(f + 1.) * c + brainstate.nn.sigmoid(i) * self.activation(g)
+        h = brainstate.nn.sigmoid(o) * self.activation(c)
         self.h.value = h
         self.c.value = c
         return h
@@ -462,12 +463,12 @@ class URLSTMCell(brainstate.nn.RNNCell):
         return -u.math.log(1 / u - 1)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.c = ETraceState(brainstate.init.param(self._state_initializer, self.out_size, batch_size))
-        self.h = ETraceState(brainstate.init.param(self._state_initializer, self.out_size, batch_size))
+        self.c = ETraceState(braintools.init.param(self._state_initializer, self.out_size, batch_size))
+        self.h = ETraceState(braintools.init.param(self._state_initializer, self.out_size, batch_size))
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        self.c.value = brainstate.init.param(self._state_initializer, self.out_size, batch_size)
-        self.h.value = brainstate.init.param(self._state_initializer, self.out_size, batch_size)
+        self.c.value = braintools.init.param(self._state_initializer, self.out_size, batch_size)
+        self.h.value = braintools.init.param(self._state_initializer, self.out_size, batch_size)
 
     def update(self, x: ArrayLike) -> ArrayLike:
         h, c = self.h.value, self.c.value
@@ -476,11 +477,11 @@ class URLSTMCell(brainstate.nn.RNNCell):
         r = self.Wr(xh)
         u_ = self.Wu(xh)
         o = self.Wo(xh)
-        f_ = brainstate.functional.sigmoid(self.bias.execute(f))
-        r_ = brainstate.functional.sigmoid(-self.bias.execute(-r))
+        f_ = brainstate.nn.sigmoid(self.bias.execute(f))
+        r_ = brainstate.nn.sigmoid(-self.bias.execute(-r))
         g = 2 * r_ * f_ + (1 - 2 * r_) * f_ ** 2
         next_cell = g * c + (1 - g) * self.activation(u_)
-        next_hidden = brainstate.functional.sigmoid(o) * self.activation(next_cell)
+        next_hidden = brainstate.nn.sigmoid(o) * self.activation(next_cell)
         self.h.value = next_hidden
         self.c.value = next_cell
         return next_hidden
@@ -557,14 +558,14 @@ class MinimalRNNCell(brainstate.nn.RNNCell):
         self.W_u = Linear(self.out_size[-1] * 2, self.out_size[-1], **params)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.h = ETraceState(brainstate.init.param(self._state_initializer, self.out_size, batch_size))
+        self.h = ETraceState(braintools.init.param(self._state_initializer, self.out_size, batch_size))
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        self.h.value = brainstate.init.param(self._state_initializer, self.out_size, batch_size)
+        self.h.value = braintools.init.param(self._state_initializer, self.out_size, batch_size)
 
     def update(self, x):
         z = self.phi(x)
-        f = brainstate.functional.sigmoid(self.W_u(u.math.concatenate([z, self.h.value], axis=-1)))
+        f = brainstate.nn.sigmoid(self.W_u(u.math.concatenate([z, self.h.value], axis=-1)))
         self.h.value = f * self.h.value + (1 - f) * z
         return self.h.value
 
@@ -635,13 +636,13 @@ class MiniGRU(brainstate.nn.RNNCell):
         self.W_z = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], **params)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.h = ETraceState(brainstate.init.param(self._state_initializer, self.out_size, batch_size))
+        self.h = ETraceState(braintools.init.param(self._state_initializer, self.out_size, batch_size))
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        self.h.value = brainstate.init.param(self._state_initializer, self.out_size, batch_size)
+        self.h.value = braintools.init.param(self._state_initializer, self.out_size, batch_size)
 
     def update(self, x):
-        z = brainstate.functional.sigmoid(self.W_z(u.math.concatenate([x, self.h.value], axis=-1)))
+        z = brainstate.nn.sigmoid(self.W_z(u.math.concatenate([x, self.h.value], axis=-1)))
         self.h.value = (1 - z) * self.h.value + z * self.W_x(x)
         return self.h.value
 
@@ -713,15 +714,15 @@ class MiniLSTM(brainstate.nn.RNNCell):
         self.W_i = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], **params)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.h = ETraceState(brainstate.init.param(self._state_initializer, self.out_size, batch_size))
+        self.h = ETraceState(braintools.init.param(self._state_initializer, self.out_size, batch_size))
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        self.h.value = brainstate.init.param(self._state_initializer, self.out_size, batch_size)
+        self.h.value = braintools.init.param(self._state_initializer, self.out_size, batch_size)
 
     def update(self, x):
         xh = u.math.concatenate([x, self.h.value], axis=-1)
-        f = brainstate.functional.sigmoid(self.W_f(xh))
-        i = brainstate.functional.sigmoid(self.W_i(xh))
+        f = brainstate.nn.sigmoid(self.W_f(xh))
+        i = brainstate.nn.sigmoid(self.W_i(xh))
         self.h.value = f * self.h.value + i * self.W_x(x)
         return self.h.value
 
@@ -806,12 +807,12 @@ class LRUCell(brainstate.nn.Module):
         self.D = ElemWiseParam(brainstate.random.randn(d_model))
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.h_re = ETraceState(brainstate.init.param(brainstate.init.ZeroInit(), self.d_hidden, batch_size))
-        self.h_im = ETraceState(brainstate.init.param(brainstate.init.ZeroInit(), self.d_hidden, batch_size))
+        self.h_re = ETraceState(braintools.init.param(brainstate.init.ZeroInit(), self.d_hidden, batch_size))
+        self.h_im = ETraceState(braintools.init.param(brainstate.init.ZeroInit(), self.d_hidden, batch_size))
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        self.h_re.value = brainstate.init.param(brainstate.init.ZeroInit(), self.d_hidden, batch_size)
-        self.h_im.value = brainstate.init.param(brainstate.init.ZeroInit(), self.d_hidden, batch_size)
+        self.h_re.value = braintools.init.param(brainstate.init.ZeroInit(), self.d_hidden, batch_size)
+        self.h_im.value = braintools.init.param(brainstate.init.ZeroInit(), self.d_hidden, batch_size)
 
     def update(self, inputs):
         a = u.math.exp(-u.math.exp(self.nu_log.execute()))

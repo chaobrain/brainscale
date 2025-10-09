@@ -1,4 +1,4 @@
-# Copyright 2025 BDP Ecosystem Limited. All Rights Reserved.
+# Copyright 2025 BrainX Ecosystem Limited. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -136,7 +136,7 @@ def abstractify_model(
         **model_kwargs: Keyword arguments to be passed to the model during compilation.
 
     Returns:
-        Tuple[brainstate.compile.StatefulFunction, Dict[Path, brainstate.State]]:
+        Tuple[brainstate.transform.StatefulFunction, Dict[Path, brainstate.State]]:
             - A stateful function representing the compiled model.
             - A dictionary of the model's retrieved states with their paths.
     """
@@ -153,8 +153,9 @@ def abstractify_model(
     # Please always use ``functools.partial`` to fix the static arguments.
     #
     # wrap the model so that we can track the iteration number
-    stateful_model = brainstate.compile.StatefulFunction(
-        functools.partial(_model_that_not_allow_param_assign, model)
+    stateful_model = brainstate.transform.StatefulFunction(
+        functools.partial(_model_that_not_allow_param_assign, model),
+        return_only_write=False
     )
 
     # -- compile the model -- #
@@ -166,8 +167,7 @@ def abstractify_model(
     stateful_model.make_jaxpr(*model_args, **model_kwargs)
 
     # -- states -- #
-    cache_key = stateful_model.get_arg_cache_key(*model_args, **model_kwargs)
-    compiled_states = stateful_model.get_states(cache_key)
+    compiled_states = stateful_model.get_states(*model_args, **model_kwargs, compile_if_miss=True)
 
     # check the consistency between the model and the compiler
     _check_consistent_states_between_model_and_compiler(
@@ -229,7 +229,7 @@ class ModuleInfo(NamedTuple):
 
     """
     # stateful model
-    stateful_model: brainstate.compile.StatefulFunction
+    stateful_model: brainstate.transform.StatefulFunction
 
     # jaxpr
     closed_jaxpr: ClosedJaxpr
@@ -313,7 +313,7 @@ class ModuleInfo(NamedTuple):
 
     def jaxpr_call(
         self,
-        args: Inputs,
+        *args: Inputs,
         old_state_vals: Optional[Sequence[jax.Array]] = None,
     ) -> Tuple[
         Outputs,
@@ -339,23 +339,20 @@ class ModuleInfo(NamedTuple):
         if old_state_vals is None:
             old_state_vals = [st.value for st in self.compiled_model_states]
 
-        # parameters
-        args = jax.tree.leaves((args, old_state_vals))
-
         # calling the function
+        a = len(self.closed_jaxpr.jaxpr.invars)
+        b = len(jax.tree.leaves((args, old_state_vals)))
+        print(a, b)
+        print()
         jaxpr_outs = jax.core.eval_jaxpr(
             self.closed_jaxpr.jaxpr,
             self.closed_jaxpr.consts,
-            *args
+            *jax.tree.leaves((args, old_state_vals))
         )
 
-        return self._process(args, jaxpr_outs)
+        return self._process(*args, jaxpr_outs=jaxpr_outs)
 
-    def _process(
-        self,
-        args: Inputs,
-        jaxpr_outs: Sequence[jax.Array],
-    ):
+    def _process(self, *args, jaxpr_outs: Sequence[jax.Array]):
 
         # intermediate values contain three parts:
         #
@@ -378,10 +375,10 @@ class ModuleInfo(NamedTuple):
         #
         # recovery outputs of ``stateful_model``
         #
-        cache_key = self.stateful_model.get_arg_cache_key(*args)
+        cache_key = self.stateful_model.get_arg_cache_key(*args, compile_if_miss=True)
         i_start = self.num_var_out
         i_end = i_start + self.num_var_state
-        out, new_state_vals = self.stateful_model.get_out_treedef(cache_key).unflatten(jaxpr_outs[:i_end])
+        out, new_state_vals = self.stateful_model.get_out_treedef_by_cache(cache_key).unflatten(jaxpr_outs[:i_end])
 
         #
         # check state value
@@ -442,7 +439,7 @@ def extract_module_info(
 
     # state information
     cache_key = stateful_model.get_arg_cache_key(*model_args, **model_kwargs)
-    compiled_states = stateful_model.get_states(cache_key)
+    compiled_states = stateful_model.get_states_by_cache(cache_key)
     compiled_states = brainstate.util.PrettyList(compiled_states)
 
     state_id_to_path: Dict[StateID, Path] = {
@@ -451,11 +448,11 @@ def extract_module_info(
     }
     state_id_to_path = brainstate.util.PrettyDict(state_id_to_path)
 
-    closed_jaxpr = stateful_model.get_jaxpr(cache_key)
+    closed_jaxpr = stateful_model.get_jaxpr_by_cache(cache_key)
     jaxpr = closed_jaxpr.jaxpr
 
     # out information
-    out_shapes = stateful_model.get_out_shapes(cache_key)[0]
+    out_shapes = stateful_model.get_out_shapes_by_cache(cache_key)[0]
     state_vals = [state.value for state in compiled_states]
     in_avals, _ = jax.tree.flatten((model_args, model_kwargs))
     out_avals, _ = jax.tree.flatten(out_shapes)

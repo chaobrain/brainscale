@@ -1,4 +1,7 @@
 -r requirements.txt
-braintools
+
+matplotlib
+
+
 pytest
 numba  # for brainevent cpu operator

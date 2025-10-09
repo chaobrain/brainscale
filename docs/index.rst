@@ -66,11 +66,11 @@ Installation
 ----
 
 
-See also the brain modeling ecosystem
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+See also the ecosystem
+^^^^^^^^^^^^^^^^^^^^^^
 
 
-We are building the `brain modeling ecosystem <https://brainmodeling.readthedocs.io/>`_.
+``brainscale`` is of part of our `brain simulation ecosystem <https://brainmodeling.readthedocs.io/>`_.
 
 
 ----

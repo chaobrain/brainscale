@@ -1,4 +1,4 @@
-# Copyright 2024 BDP Ecosystem Limited. All Rights Reserved.
+# Copyright 2024 BrainX Ecosystem Limited. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ from typing import Callable, Tuple, Union, Sequence, Optional, TypeVar
 
 import brainstate
 import jax
-from brainstate import init
+from braintools import init
 
 from brainscale._etrace_concepts import ETraceParam
 from brainscale._etrace_operators import ConvOp

@@ -18,6 +18,10 @@ exclude = [
 ]
 
 
+[tool.setuptools.dynamic]
+version = { attr = "brainscale.__version__" }
+
+
 [tool.distutils.bdist_wheel]
 universal = true
 
@@ -25,45 +29,52 @@ universal = true
 [project]
 name = "brainscale"
 description = "Enabling Scalable Online Learning for Brain Dynamics."
-readme = 'README.md'
-license = { text = 'Apache-2.0 license' }
-requires-python = '>=3.10'
-authors = [{ name = 'BrainScale Developers', email = 'chao.brain@qq.com' }]
+readme = "README.md"
+license = { text = "Apache-2.0 license" }
+requires-python = ">=3.10"
+authors = [{ name = "BrainScale Developers", email = "chao.brain@qq.com" }]
+keywords = [
+    "computational neuroscience",
+    "brain-inspired computing",
+    "brain modeling",
+    "online learning",
+]
 classifiers = [
-    'Natural Language :: English',
-    'Operating System :: OS Independent',
-    'Development Status :: 4 - Beta',
-    'Intended Audience :: Developers',
-    'Intended Audience :: Science/Research',
-    'Programming Language :: Python :: 3',
-    'Programming Language :: Python :: 3.10',
-    'Programming Language :: Python :: 3.11',
-    'Programming Language :: Python :: 3.12',
-    'Programming Language :: Python :: 3.13',
-    'License :: OSI Approved :: Apache Software License',
-    'Programming Language :: Python',
-    'Topic :: Scientific/Engineering :: Bio-Informatics',
-    'Topic :: Scientific/Engineering :: Mathematics',
-    'Topic :: Scientific/Engineering :: Artificial Intelligence',
-    'Topic :: Software Development :: Libraries',
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries",
 ]
-
-
-keywords = ["brain simulation", "brain-inspired computing"]
-
 dependencies = [
-    'brainstate>=0.1.0',
-    'brainunit',
+    "brainstate>=0.1.0",
+    "brainunit",
+    "brainstate",
+    "brainpy",
+    "braintools",
 ]
-
-dynamic = ['version']
+dynamic = ["version"]
 
 
 [project.urls]
-homepage = 'http://github.com/chaobrain/brainscale'
-repository = 'http://github.com/chaobrain/brainscale'
+"Homepage" = "https://github.com/chaobrain/brainscale"
+"Bug Tracker" = "https://github.com/chaobrain/brainscale/issues"
+"Documentation" = "https://brainscale.readthedocs.io/"
+"Source Code" = "https://github.com/chaobrain/brainscale"
+
 
 [project.optional-dependencies]
-testing = [
-    'pytest',
-]
+cpu = ["jax[cpu]", "brainunit", "brainstate", "brainpy", "braintools"]
+cuda12 = ["jax[cuda12]", "brainunit", "brainstate", "brainpy", "braintools"]
+cuda13 = ["jax[cuda13]", "brainunit", "brainstate", "brainpy", "braintools"]
+tpu = ["jax[tpu]", "brainunit", "brainstate", "brainpy", "braintools"]
+testing = ["pytest", "jax[cpu]", "brainunit", "brainstate", "brainpy", "braintools"]

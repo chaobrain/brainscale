@@ -1,4 +1,4 @@
-# Copyright 2024 BDP Ecosystem Limited. All Rights Reserved.
+# Copyright 2024 BrainX Ecosystem Limited. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@
 #   [2024-12-09] small updates, related to the key items in "CompiledVjpGraph"
 #   [2025-02-06]
 #       - [x] unify model retrieved states (brainstate.graph.states)
-#             and compiled states (brainstate.compile.StatefulFunction)
+#             and compiled states (brainstate.transform.StatefulFunction)
 #       - [x] add the support for the "ETraceGroupState" and "ETraceTreeState"
 #       - [x] add the support for the "ElemWiseParam"
 #       - [x] split into "_etrace_compiler.py", "_etrace_vjp_compiler_graph.py", and "_etrace_compiler_hidden_group.py",

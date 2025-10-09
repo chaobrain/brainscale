@@ -1,4 +1,4 @@
-# Copyright 2024 BDP Ecosystem Limited. All Rights Reserved.
+# Copyright 2024 BrainX Ecosystem Limited. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,11 +18,12 @@
 import numbers
 from typing import Callable, Optional
 
+import brainpy
 import brainstate
+import braintools
 import brainunit as u
 import jax
 import jax.numpy as jnp
-from brainstate import init, surrogate, nn
 
 from brainscale._etrace_concepts import ETraceParam, ETraceState
 from brainscale._etrace_operators import MatMulOp
@@ -34,7 +35,7 @@ __all__ = [
 ]
 
 
-class LeakyRateReadout(nn.Module):
+class LeakyRateReadout(brainstate.nn.Module):
     """
     Leaky dynamics for the read-out module used in the Real-Time Recurrent Learning.
 
@@ -70,8 +71,8 @@ class LeakyRateReadout(nn.Module):
         in_size: Size,
         out_size: Size,
         tau: ArrayLike = 5. * u.ms,
-        w_init: Callable = init.KaimingNormal(),
-        r_initializer: Callable = init.ZeroInit(),
+        w_init: Callable = braintools.init.KaimingNormal(),
+        r_initializer: Callable = braintools.init.ZeroInit(),
         name: Optional[str] = None,
     ):
         """
@@ -103,12 +104,12 @@ class LeakyRateReadout(nn.Module):
         # parameters
         self.in_size = (in_size,) if isinstance(in_size, numbers.Integral) else tuple(in_size)
         self.out_size = (out_size,) if isinstance(out_size, numbers.Integral) else tuple(out_size)
-        self.tau = init.param(tau, self.in_size)
+        self.tau = braintools.init.param(tau, self.in_size)
         self.decay = jnp.exp(-brainstate.environ.get_dt() / self.tau)
         self.r_initializer = r_initializer
 
         # weights
-        weight = init.param(w_init, (self.in_size[0], self.out_size[0]))
+        weight = braintools.init.param(w_init, (self.in_size[0], self.out_size[0]))
         self.weight_op = ETraceParam({'weight': weight}, op=MatMulOp())
 
     def init_state(self, batch_size=None, **kwargs):
@@ -123,10 +124,10 @@ class LeakyRateReadout(nn.Module):
         batch_size : int, optional
             The size of the batch for which the state is initialized. If not provided,
             the default behavior is used.
-        **kwargs : dict
+        **kwargs
             Additional keyword arguments that may be used for state initialization.
         """
-        self.r = ETraceState(init.param(self.r_initializer, self.out_size, batch_size))
+        self.r = ETraceState(braintools.init.param(self.r_initializer, self.out_size, batch_size))
 
     def reset_state(self, batch_size=None, **kwargs):
         """
@@ -140,11 +141,11 @@ class LeakyRateReadout(nn.Module):
         batch_size : int, optional
             The size of the batch for which the state is reset. If not provided,
             the default behavior is used.
-        **kwargs : dict
+        **kwargs
             Additional keyword arguments that may be used for state resetting.
 
         """
-        self.r.value = init.param(self.r_initializer, self.out_size, batch_size)
+        self.r.value = braintools.init.param(self.r_initializer, self.out_size, batch_size)
 
     def update(self, x):
         """
@@ -170,7 +171,7 @@ class LeakyRateReadout(nn.Module):
         return r
 
 
-class LeakySpikeReadout(nn.Module):
+class LeakySpikeReadout(brainpy.Neuron):
     """
     Integrate-and-fire neuron model for spike-based readout.
 
@@ -214,9 +215,9 @@ class LeakySpikeReadout(nn.Module):
         out_size: Size,
         tau: ArrayLike = 5. * u.ms,
         V_th: ArrayLike = 1. * u.mV,
-        w_init: Callable = init.KaimingNormal(unit=u.mV),
-        V_initializer: Callable = init.ZeroInit(unit=u.mV),
-        spk_fun: Callable = surrogate.ReluGrad(),
+        w_init: Callable = braintools.init.KaimingNormal(unit=u.mV),
+        V_initializer: Callable = braintools.init.ZeroInit(unit=u.mV),
+        spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
         name: str = None,
     ):
@@ -248,14 +249,15 @@ class LeakySpikeReadout(nn.Module):
             An optional name for the module. Default is None.
         """
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
+        self.out_size = out_size
 
         # parameters
-        self.tau = init.param(tau, self.varshape)
-        self.V_th = init.param(V_th, self.varshape)
+        self.tau = braintools.init.param(tau, self.varshape)
+        self.V_th = braintools.init.param(V_th, self.varshape)
         self.V_initializer = V_initializer
 
         # weights
-        weight = init.param(w_init, (self.in_size[0], self.out_size[0]))
+        weight = braintools.init.param(w_init, (self.in_size[0], self.out_size[0]))
         self.weight_op = ETraceParam({'weight': weight}, op=MatMulOp())
 
     def init_state(self, batch_size, **kwargs):
@@ -270,10 +272,10 @@ class LeakySpikeReadout(nn.Module):
         ----------
         batch_size : int
             The size of the batch for which the state is initialized.
-        **kwargs : dict
+        **kwargs
             Additional keyword arguments that may be used for state initialization.
         """
-        self.V = ETraceState(init.param(self.V_initializer, self.varshape, batch_size))
+        self.V = ETraceState(braintools.init.param(self.V_initializer, self.varshape, batch_size))
 
     def reset_state(self, batch_size, **kwargs):
         """
@@ -287,11 +289,11 @@ class LeakySpikeReadout(nn.Module):
         ----------
         batch_size : int
             The size of the batch for which the state is reset.
-        **kwargs : dict
+        **kwargs
             Additional keyword arguments that may be used for state resetting.
 
         """
-        self.V.value = init.param(self.V_initializer, self.varshape, batch_size)
+        self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
 
     @property
     def spike(self):
@@ -353,7 +355,7 @@ class LeakySpikeReadout(nn.Module):
         V = last_V - V_th * last_spike
         # membrane potential
         dv = lambda v, x: (-v + self.sum_current_inputs(x, v)) / self.tau
-        V = nn.exp_euler_step(dv, V, self.weight_op.execute(spike))
+        V = brainstate.nn.exp_euler_step(dv, V, self.weight_op.execute(spike))
         V = self.sum_delta_inputs(V)
         self.V.value = V
         return self.get_spike(V)

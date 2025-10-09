@@ -1,4 +1,4 @@
-# Copyright 2024 BDP Ecosystem Limited. All Rights Reserved.
+# Copyright 2024 BrainX Ecosystem Limited. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -378,7 +378,7 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
                 _etrace_state_vals,
                 _oth_state_vals,
                 temps
-            ) = self.graph.module_info.jaxpr_call(args_)
+            ) = self.graph.module_info.jaxpr_call(*args_)
 
             # compute the hidden-to-weight Jacobian
             hid2weight_jac = self._compute_hid2weight_jacobian(temps)
@@ -535,10 +535,7 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
                 )
 
                 (
-                    out,
-                    _etrace_state_vals,
-                    _oth_state_vals,
-                    temps
+                    out, _etrace_state_vals, _oth_state_vals, temps
                 ) = self.graph.call_hidden_perturb(
                     inputs,
                     perturb_vals_,
@@ -552,11 +549,8 @@ class ETraceVjpGraphExecutor(ETraceGraphExecutor):
                 )
 
                 (
-                    out,
-                    _etrace_state_vals,
-                    _oth_state_vals,
-                    temps
-                ) = self.graph.module_info.jaxpr_call(inputs, old_state_vals)
+                    out, _etrace_state_vals, _oth_state_vals, temps
+                ) = self.graph.module_info.jaxpr_call(*inputs, old_state_vals=old_state_vals)
 
             # --- compute the hidden-to-weight Jacobian --- #
             hid2weight_jac = self._compute_hid2weight_jacobian(temps)

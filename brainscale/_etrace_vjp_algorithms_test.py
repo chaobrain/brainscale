@@ -1,4 +1,4 @@
-# Copyright 2024 BDP Ecosystem Limited. All Rights Reserved.
+# Copyright 2024 BrainX Ecosystem Limited. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -54,12 +54,12 @@ class TestDiagOn:
         algorithm = brainscale.IODimVjpAlgorithm(model, decay_or_rank=0.9)
         algorithm.compile_graph(inputs[0])
 
-        outs = brainstate.compile.for_loop(algorithm, inputs)
+        outs = brainstate.transform.for_loop(algorithm, inputs)
         print(outs.shape)
 
-        @brainstate.compile.jit
+        @brainstate.transform.jit
         def grad_single_step_vjp(inp):
-            return brainstate.augment.grad(
+            return brainstate.transform.grad(
                 lambda inp: algorithm(inp).sum(),
                 model.states(brainstate.ParamState)
             )(inp)
@@ -92,9 +92,9 @@ class TestDiagOn:
         outs = algorithm(brainscale.MultiStepData(inputs))
         print(outs.shape)
 
-        @brainstate.compile.jit
+        @brainstate.transform.jit
         def grad_single_step_vjp(inp):
-            return brainstate.augment.grad(
+            return brainstate.transform.grad(
                 lambda inp: algorithm(brainscale.MultiStepData(inp)).sum(),
                 model.states(brainstate.ParamState)
             )(inp)
@@ -132,12 +132,12 @@ class TestDiagOn:
             algorithm = brainscale.IODimVjpAlgorithm(model, decay_or_rank=0.9)
             algorithm.compile_graph(inputs[0])
 
-            outs = brainstate.compile.for_loop(algorithm, inputs)
+            outs = brainstate.transform.for_loop(algorithm, inputs)
             print(outs.shape)
 
-            @brainstate.compile.jit
+            @brainstate.transform.jit
             def grad_single_step_vjp(inp):
-                return brainstate.augment.grad(
+                return brainstate.transform.grad(
                     lambda inp: algorithm(inp).sum(),
                     model.states(brainstate.ParamState)
                 )(inp)
@@ -178,9 +178,9 @@ class TestDiagOn:
             outs = algorithm(brainscale.MultiStepData(inputs))
             print(outs.shape)
 
-            @brainstate.compile.jit
+            @brainstate.transform.jit
             def grad_single_step_vjp(inp):
-                return brainstate.augment.grad(
+                return brainstate.transform.grad(
                     lambda inp: algorithm(brainscale.MultiStepData(inp)).sum(),
                     model.states(brainstate.ParamState)
                 )(inp)
@@ -214,12 +214,12 @@ class TestDiagOn2:
         algorithm = brainscale.ParamDimVjpAlgorithm(model)
         algorithm.compile_graph(inputs[0])
 
-        outs = brainstate.compile.for_loop(algorithm, inputs)
+        outs = brainstate.transform.for_loop(algorithm, inputs)
         print(outs.shape)
 
-        @brainstate.compile.jit
+        @brainstate.transform.jit
         def grad_single_step_vjp(inp):
-            return brainstate.augment.grad(
+            return brainstate.transform.grad(
                 lambda inp: algorithm(inp).sum(),
                 model.states(brainstate.ParamState)
             )(inp)
@@ -252,9 +252,9 @@ class TestDiagOn2:
         outs = algorithm(brainscale.MultiStepData(inputs))
         print(outs.shape)
 
-        @brainstate.compile.jit
+        @brainstate.transform.jit
         def grad_single_step_vjp(inp):
-            return brainstate.augment.grad(
+            return brainstate.transform.grad(
                 lambda inp: algorithm(brainscale.MultiStepData(inp)).sum(),
                 model.states(brainstate.ParamState)
             )(inp)
@@ -296,12 +296,12 @@ class TestDiagOn2:
             algorithm = brainscale.ParamDimVjpAlgorithm(model)
             algorithm.compile_graph(inputs[0])
 
-            outs = brainstate.compile.for_loop(algorithm, inputs)
+            outs = brainstate.transform.for_loop(algorithm, inputs)
             print(outs.shape)
 
-            @brainstate.compile.jit
+            @brainstate.transform.jit
             def grad_single_step_vjp(inp):
-                return brainstate.augment.grad(
+                return brainstate.transform.grad(
                     lambda inp: algorithm(inp).sum(),
                     model.states(brainstate.ParamState)
                 )(inp)
@@ -347,9 +347,9 @@ class TestDiagOn2:
             outs = algorithm(brainscale.MultiStepData(inputs))
             print(outs.shape)
 
-            @brainstate.compile.jit
+            @brainstate.transform.jit
             def grad_single_step_vjp(inp):
-                return brainstate.augment.grad(
+                return brainstate.transform.grad(
                     lambda inp: algorithm(brainscale.MultiStepData(inp)).sum(),
                     model.states(brainstate.ParamState)
                 )(inp)

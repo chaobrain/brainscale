@@ -1,4 +1,4 @@
-# Copyright 2025 BDP Ecosystem Limited. All Rights Reserved.
+# Copyright 2025 BrainX Ecosystem Limited. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -118,7 +118,7 @@ class ETraceGraph(NamedTuple):
             perturb_data,
         )
 
-        return self.module_info._process(args, jaxpr_outs)
+        return self.module_info._process(*args, jaxpr_outs=jaxpr_outs)
 
     def dict(self) -> Dict:
         return self._asdict()

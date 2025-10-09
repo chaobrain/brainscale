@@ -1,4 +1,4 @@
-# Copyright 2025 BDP Ecosystem Limited. All Rights Reserved.
+# Copyright 2025 BrainX Ecosystem Limited. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -37,9 +37,17 @@ def find_matched_vars(
     """
     Checking whether the invars are matched with the invar_needed_in_oth_eqns.
 
-    Args:
-        invars: The input variables of the equation.
-        invar_needed_in_oth_eqns: The variables needed in the other equations.
+    Parameters
+    ----------
+    invars : Sequence[Var]
+        The input variables of the equation.
+    invar_needed_in_oth_eqns : Set[Var]
+        The variables needed in the other equations.
+
+    Returns
+    -------
+    List[Var]
+        The list of matched variables.
     """
     matched = []
     for invar in invars:
@@ -55,9 +63,17 @@ def find_element_exist_in_the_set(
     """
     Checking whether the jaxpr vars contain the weight variables.
 
-    Args:
-        elements: The input variables of the equation.
-        the_set: The set of the weight variables.
+    Parameters
+    ----------
+    elements : Sequence[Var]
+        The input variables of the equation.
+    the_set : Set[Var]
+        The set of the weight variables.
+
+    Returns
+    -------
+    Var | None
+        The first element found in the set, or None if no element is found.
     """
     for invar in elements:
         if isinstance(invar, Var) and invar in the_set:
@@ -77,14 +93,20 @@ def check_unsupported_op(
     in a manner that is currently unsupported. If such usage is detected, a `NotImplementedError` is raised
     with a detailed message.
 
-    Args:
-        self: The instance of the class containing this method.
-        eqn (JaxprEqn): The JAX equation to be checked.
-        op_name (str): The name of the operation being checked (e.g., 'pjit', 'scan', 'while', 'cond').
+    Parameters
+    ----------
+    self : JaxprEvaluation
+        The instance of the class containing this method.
+    eqn : JaxprEqn
+        The JAX equation to be checked.
+    op_name : str
+        The name of the operation being checked (e.g., 'pjit', 'scan', 'while', 'cond').
 
-    Raises:
-        NotImplementedError: If the equation uses weight variables or computes hidden state variables
-                             in an unsupported manner.
+    Raises
+    ------
+    NotImplementedError
+        If the equation uses weight variables or computes hidden state variables
+        in an unsupported manner.
     """
     # checking whether the weight variables are used in the equation
     invar = find_element_exist_in_the_set(eqn.invars, self.weight_invars)
@@ -120,19 +142,31 @@ class JaxprEvaluation(object):
     The class handles special JAX primitives such as pjit, scan, while, and cond operations,
     providing appropriate handling or restrictions for eligibility trace compilation.
 
-    Args:
-        weight_invars (Set[Var]): Input variables representing weight parameters in the computational graph.
-        hidden_invars (Set[Var]): Input variables representing hidden states in the computational graph.
-        hidden_outvars (Set[Var]): Output variables representing hidden states in the computational graph.
-        invar_to_hidden_path (Dict[Var, Path]): Mapping from input variables to their paths in the hidden state hierarchy.
-        outvar_to_hidden_path (Dict[Var, Path]): Mapping from output variables to their paths in the hidden state hierarchy.
+    Parameters
+    ----------
+    weight_invars : Set[Var]
+        Input variables representing weight parameters in the computational graph.
+    hidden_invars : Set[Var]
+        Input variables representing hidden states in the computational graph.
+    hidden_outvars : Set[Var]
+        Output variables representing hidden states in the computational graph.
+    invar_to_hidden_path : Dict[Var, Path]
+        Mapping from input variables to their paths in the hidden state hierarchy.
+    outvar_to_hidden_path : Dict[Var, Path]
+        Mapping from output variables to their paths in the hidden state hierarchy.
 
-    Attributes:
-        weight_invars: Stored input weight variables.
-        hidden_invars: Stored input hidden state variables.
-        hidden_outvars: Stored output hidden state variables.
-        invar_to_hidden_path: Stored mapping from input variables to hidden paths.
-        outvar_to_hidden_path: Stored mapping from output variables to hidden paths.
+    Attributes
+    ----------
+    weight_invars : Set[Var]
+        Stored input weight variables.
+    hidden_invars : Set[Var]
+        Stored input hidden state variables.
+    hidden_outvars : Set[Var]
+        Stored output hidden state variables.
+    invar_to_hidden_path : Dict[Var, Path]
+        Stored mapping from input variables to hidden paths.
+    outvar_to_hidden_path : Dict[Var, Path]
+        Stored mapping from output variables to hidden paths.
     """
     __module__ = 'brainscale'
 
@@ -154,8 +188,10 @@ class JaxprEvaluation(object):
         """
         Evaluating the jaxpr for extracting the etrace relationships.
 
-        Args:
-          jaxpr: The jaxpr for the model.
+        Parameters
+        ----------
+        jaxpr : Jaxpr
+            The jaxpr for the model.
         """
 
         for eqn in jaxpr.eqns:
@@ -180,6 +216,11 @@ class JaxprEvaluation(object):
     def _eval_pjit(self, eqn: JaxprEqn) -> None:
         """
         Evaluating the pjit primitive.
+
+        Parameters
+        ----------
+        eqn : JaxprEqn
+            The JAX equation to evaluate.
         """
         if is_etrace_op(eqn.params['name']):
             if is_etrace_op_enable_gradient(eqn.params['name']):
@@ -194,6 +235,11 @@ class JaxprEvaluation(object):
     def _eval_scan(self, eqn: JaxprEqn) -> None:
         """
         Evaluating the scan primitive.
+
+        Parameters
+        ----------
+        eqn : JaxprEqn
+            The JAX equation to evaluate.
         """
         check_unsupported_op(self, eqn, 'while')
         self._eval_eqn(eqn)
@@ -201,6 +247,11 @@ class JaxprEvaluation(object):
     def _eval_while(self, eqn: JaxprEqn) -> None:
         """
         Evaluating the while primitive.
+
+        Parameters
+        ----------
+        eqn : JaxprEqn
+            The JAX equation to evaluate.
         """
         check_unsupported_op(self, eqn, 'scan')
         self._eval_eqn(eqn)
@@ -208,11 +259,32 @@ class JaxprEvaluation(object):
     def _eval_cond(self, eqn: JaxprEqn) -> None:
         """
         Evaluating the cond primitive.
+
+        Parameters
+        ----------
+        eqn : JaxprEqn
+            The JAX equation to evaluate.
         """
         check_unsupported_op(self, eqn, 'cond')
         self._eval_eqn(eqn)
 
     def _eval_eqn(self, eqn):
+        """
+        Evaluate a single JAX equation.
+
+        This method must be implemented by subclasses to define specific
+        evaluation behavior for equations.
+
+        Parameters
+        ----------
+        eqn : JaxprEqn
+            The JAX equation to evaluate.
+
+        Raises
+        ------
+        NotImplementedError
+            This method must be implemented in subclasses.
+        """
         raise NotImplementedError(
             'The method "_eval_eqn" should be implemented in the subclass.'
         )

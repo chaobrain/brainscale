@@ -61,9 +61,9 @@ If you use this package in your research, please cite:
 
 
 
-## See also the brain modeling ecosystem
+## See also the ecosystem
 
-We are building the brain modeling ecosystem: https://brainmodeling.readthedocs.io/
+``brainscale`` is one part of our brain simulation ecosystem: https://brainmodeling.readthedocs.io/
 
 
 

@@ -1,4 +1,4 @@
-# Copyright 2024 BDP Ecosystem Limited. All Rights Reserved.
+# Copyright 2024 BrainX Ecosystem Limited. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 # -*- coding: utf-8 -*-
 
 import brainstate
-
+import brainpy
 from brainscale._etrace_concepts import ETraceState
 
 __all__ = [
@@ -25,16 +25,16 @@ __all__ = [
 ]
 
 
-class Expon(brainstate.nn.Expon):
-    __doc__ = brainstate.nn.Expon.__doc__
+class Expon(brainpy.Expon):
+    __doc__ = brainpy.Expon.__doc__
     __module__ = 'brainscale.nn'
 
     def init_state(self, batch_size: int = None, **kwargs):
         self.g = ETraceState(brainstate.init.param(self.g_initializer, self.varshape, batch_size))
 
 
-class Alpha(brainstate.nn.Alpha):
-    __doc__ = brainstate.nn.Alpha.__doc__
+class Alpha(brainpy.Alpha):
+    __doc__ = brainpy.Alpha.__doc__
     __module__ = 'brainscale.nn'
 
     def init_state(self, batch_size: int = None, **kwargs):
@@ -42,8 +42,8 @@ class Alpha(brainstate.nn.Alpha):
         self.h = ETraceState(brainstate.init.param(self.g_initializer, self.varshape, batch_size))
 
 
-class DualExpon(brainstate.nn.DualExpon):
-    __doc__ = brainstate.nn.DualExpon.__doc__
+class DualExpon(brainpy.DualExpon):
+    __doc__ = brainpy.DualExpon.__doc__
     __module__ = 'brainscale.nn'
 
     def init_state(self, batch_size: int = None, **kwargs):
@@ -51,8 +51,8 @@ class DualExpon(brainstate.nn.DualExpon):
         self.g_decay = ETraceState(brainstate.init.param(self.g_initializer, self.varshape, batch_size))
 
 
-class STP(brainstate.nn.STP):
-    __doc__ = brainstate.nn.STP.__doc__
+class STP(brainpy.STP):
+    __doc__ = brainpy.STP.__doc__
     __module__ = 'brainscale.nn'
 
     def init_state(self, batch_size: int = None, **kwargs):
@@ -60,8 +60,8 @@ class STP(brainstate.nn.STP):
         self.u = ETraceState(brainstate.init.param(brainstate.init.Constant(self.U), self.varshape, batch_size))
 
 
-class STD(brainstate.nn.STD):
-    __doc__ = brainstate.nn.STD.__doc__
+class STD(brainpy.STD):
+    __doc__ = brainpy.STD.__doc__
     __module__ = 'brainscale.nn'
 
     def init_state(self, batch_size: int = None, **kwargs):
