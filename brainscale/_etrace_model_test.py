@@ -14,22 +14,25 @@
 # ==============================================================================
 
 
+import braintools
 import brainstate
 import brainunit as u
 import jax.numpy as jnp
-
+import brainpy
 import brainscale
 
 
 class IF_Delta_Dense_Layer(brainstate.nn.Module):
     def __init__(
         self, n_in, n_rec, tau_mem=5. * u.ms, V_th=1. * u.mV, spk_reset: str = 'soft',
-        rec_init=brainstate.init.KaimingNormal(), ff_init=brainstate.init.KaimingNormal()
+        rec_init=braintools.init.KaimingNormal(), 
+        ff_init=braintools.init.KaimingNormal()
     ):
         super().__init__()
         self.neu = brainscale.nn.IF(n_rec, tau=tau_mem, spk_reset=spk_reset, V_th=V_th)
         w_init = u.math.concatenate([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0)
-        self.syn = brainscale.nn.Linear(n_in + n_rec, n_rec, w_init=w_init * u.mA, b_init=brainstate.init.ZeroInit(unit=u.mA))
+        self.syn = brainscale.nn.Linear(n_in + n_rec, n_rec, w_init=w_init * u.mA, 
+                                        b_init=braintools.init.ZeroInit(unit=u.mA))
 
     def update(self, spk):
         spk = u.math.concatenate([spk, self.neu.get_spike()], axis=-1)
@@ -48,8 +51,8 @@ class _ExpCo_Dense_Layer(brainstate.nn.Module):
         n_rec: int,
         input_ei_sep=False,
         tau_syn=10. * u.ms,
-        rec_init=brainstate.init.KaimingNormal(),
-        ff_init=brainstate.init.KaimingNormal()
+        rec_init=braintools.init.KaimingNormal(),
+        ff_init=braintools.init.KaimingNormal()
     ):
         super().__init__()
 
@@ -65,44 +68,44 @@ class _ExpCo_Dense_Layer(brainstate.nn.Module):
 
             weight = jnp.concat([ff_init([self.n_exc_in, n_rec]), rec_init([self.n_exc_rec, n_rec])], axis=0)
             weight = weight * u.mS
-            self.exe_syn = brainstate.nn.AlignPostProj(
+            self.exe_syn = brainpy.AlignPostProj(
                 comm=brainscale.nn.SignedWLinear(self.n_exc_in + self.n_exc_rec, n_rec, w_init=weight),
                 syn=brainscale.nn.Expon.desc(n_rec, tau=tau_syn),
-                out=brainstate.nn.COBA.desc(E=3.5 * u.volt),
+                out=brainpy.COBA.desc(E=3.5 * u.volt),
                 post=self.neu
             )
 
             weight = jnp.concat([4 * ff_init([self.n_inh_in, n_rec]), 4 * rec_init([self.n_inh_rec, n_rec])], axis=0)
             weight = weight * u.mS
-            self.inh_syn = brainstate.nn.AlignPostProj(
+            self.inh_syn = brainpy.AlignPostProj(
                 comm=brainscale.nn.SignedWLinear(self.n_inh_in + self.n_inh_rec, n_rec, w_init=weight),
                 syn=brainscale.nn.Expon.desc(n_rec, tau=tau_syn),
-                out=brainstate.nn.COBA.desc(E=-0.5 * u.volt),
+                out=brainpy.COBA.desc(E=-0.5 * u.volt),
                 post=self.neu
             )
         else:
-            b_init = brainstate.init.ZeroInit(unit=u.mS)
+            b_init = braintools.init.ZeroInit(unit=u.mS)
 
-            self.inp_syn = brainstate.nn.AlignPostProj(
+            self.inp_syn = brainpy.AlignPostProj(
                 comm=brainscale.nn.Linear(n_in, n_rec, w_init=ff_init([n_in, n_rec]) * u.mS, b_init=b_init),
                 syn=brainscale.nn.Expon.desc(n_rec, tau=tau_syn),
-                out=brainstate.nn.CUBA.desc(),
+                out=brainpy.CUBA.desc(),
                 post=self.neu
             )
 
-            self.exe_syn = brainstate.nn.AlignPostProj(
+            self.exe_syn = brainpy.AlignPostProj(
                 comm=brainscale.nn.SignedWLinear(
                     self.n_exc_rec, n_rec, w_init=rec_init([self.n_exc_rec, n_rec]) * u.mS),
                 syn=brainscale.nn.Expon.desc(n_rec, tau=tau_syn),
-                out=brainstate.nn.COBA.desc(E=1.5 * u.volt),
+                out=brainpy.COBA.desc(E=1.5 * u.volt),
                 post=self.neu
             )
 
-            self.inh_syn = brainstate.nn.AlignPostProj(
+            self.inh_syn = brainpy.AlignPostProj(
                 comm=brainscale.nn.SignedWLinear(
                     self.n_inh_rec, n_rec, w_init=4 * rec_init([self.n_inh_rec, n_rec]) * u.mS),
                 syn=brainscale.nn.Expon.desc(n_rec, tau=tau_syn),
-                out=brainstate.nn.COBA.desc(E=-0.5 * u.volt),
+                out=brainpy.COBA.desc(E=-0.5 * u.volt),
                 post=self.neu
             )
 
@@ -130,8 +133,10 @@ class LIF_ExpCo_Dense_Layer(_ExpCo_Dense_Layer):
 
     def __init__(
         self, n_in, n_rec, input_ei_sep=False, tau_mem=5. * u.ms, tau_syn=10. * u.ms, V_th=1. * u.mV,
-        spk_fun=brainstate.surrogate.ReluGrad(), spk_reset: str = 'soft',
-        rec_init=brainstate.init.KaimingNormal(), ff_init=brainstate.init.KaimingNormal()
+        spk_fun=braintools.surrogate.ReluGrad(), 
+        spk_reset: str = 'soft',
+        rec_init=braintools.init.KaimingNormal(), 
+        ff_init=braintools.init.KaimingNormal()
     ):
         neu = brainscale.nn.LIF(n_rec, tau=tau_mem, spk_fun=spk_fun, spk_reset=spk_reset, V_th=V_th)
         super().__init__(n_in=n_in, n_rec=n_rec, input_ei_sep=input_ei_sep, tau_syn=tau_syn,
@@ -146,8 +151,8 @@ class ALIF_ExpCo_Dense_Layer(_ExpCo_Dense_Layer):
     def __init__(
         self, n_in, n_rec, input_ei_sep=False,
         tau_a=100. * u.ms, beta=0.1 * u.mV, tau_mem=5. * u.ms, tau_syn=10. * u.ms, V_th=1. * u.mV,
-        spk_fun=brainstate.surrogate.ReluGrad(), spk_reset: str = 'soft',
-        rec_init=brainstate.init.KaimingNormal(), ff_init=brainstate.init.KaimingNormal()
+        spk_fun=braintools.surrogate.ReluGrad(), spk_reset: str = 'soft',
+        rec_init=braintools.init.KaimingNormal(), ff_init=braintools.init.KaimingNormal()
     ):
         neu = brainscale.nn.ALIF(
             n_rec, tau=tau_mem, tau_a=tau_a, beta=beta,
@@ -167,21 +172,21 @@ class LIF_ExpCu_Dense_Layer(brainstate.nn.Module):
 
     def __init__(
         self, n_in, n_rec, tau_mem=5. * u.ms, tau_syn=10. * u.ms, V_th=1. * u.mV,
-        spk_fun=brainstate.surrogate.ReluGrad(),
+        spk_fun=braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
-        rec_init=brainstate.init.KaimingNormal(),
-        ff_init=brainstate.init.KaimingNormal()
+        rec_init=braintools.init.KaimingNormal(),
+        ff_init=braintools.init.KaimingNormal()
     ):
         super().__init__()
         self.neu = brainscale.nn.LIF(n_rec, tau=tau_mem, spk_fun=spk_fun, spk_reset=spk_reset, V_th=V_th)
-        self.syn = brainstate.nn.AlignPostProj(
+        self.syn = brainpy.AlignPostProj(
             comm=brainscale.nn.Linear(
                 n_in + n_rec, n_rec,
                 jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0) * u.mS,
-                b_init=brainstate.init.ZeroInit(unit=u.mS)
+                b_init=braintools.init.ZeroInit(unit=u.mS)
             ),
             syn=brainscale.nn.Expon.desc(n_rec, tau=tau_syn),
-            out=brainstate.nn.CUBA.desc(),
+            out=brainpy.CUBA.desc(),
             post=self.neu
         )
 
@@ -200,10 +205,10 @@ class LIF_STDExpCu_Dense_Layer(brainstate.nn.Module):
         self, n_in, n_rec, inp_std=False,
         tau_mem=5. * u.ms, tau_syn=10. * u.ms,
         V_th=1. * u.mV, tau_std=500. * u.ms,
-        spk_fun=brainstate.surrogate.ReluGrad(),
+        spk_fun=braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
-        rec_init=brainstate.init.KaimingNormal(),
-        ff_init=brainstate.init.KaimingNormal()
+        rec_init=braintools.init.KaimingNormal(),
+        ff_init=braintools.init.KaimingNormal()
     ):
         super().__init__()
         self.neu = brainscale.nn.LIF(n_rec, tau=tau_mem, spk_fun=spk_fun, spk_reset=spk_reset, V_th=V_th)
@@ -213,14 +218,14 @@ class LIF_STDExpCu_Dense_Layer(brainstate.nn.Module):
         else:
             self.std_inp = None
 
-        self.syn = brainstate.nn.AlignPostProj(
+        self.syn = brainpy.AlignPostProj(
             comm=brainscale.nn.Linear(
                 n_in + n_rec, n_rec,
                 jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0) * u.mS,
-                b_init=brainstate.init.ZeroInit(unit=u.mS)
+                b_init=braintools.init.ZeroInit(unit=u.mS)
             ),
             syn=brainscale.nn.Expon.desc(n_rec, tau=tau_syn),
-            out=brainstate.nn.CUBA.desc(),
+            out=brainpy.CUBA.desc(),
             post=self.neu
         )
 
@@ -239,10 +244,10 @@ class LIF_STPExpCu_Dense_Layer(brainstate.nn.Module):
         self,
         n_in, n_rec, inp_stp=False,
         tau_mem=5. * u.ms, tau_syn=10. * u.ms, V_th=1. * u.mV, tau_f=500. * u.ms, tau_d=100. * u.ms,
-        spk_fun=brainstate.surrogate.ReluGrad(),
+        spk_fun=braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
-        rec_init=brainstate.init.KaimingNormal(),
-        ff_init=brainstate.init.KaimingNormal()
+        rec_init=braintools.init.KaimingNormal(),
+        ff_init=braintools.init.KaimingNormal()
     ):
         super().__init__()
         self.inp_stp = inp_stp
@@ -251,14 +256,14 @@ class LIF_STPExpCu_Dense_Layer(brainstate.nn.Module):
         if inp_stp:
             self.stp_inp = brainscale.nn.STP(n_in, tau_f=tau_f, tau_d=tau_d)
 
-        self.syn = brainstate.nn.AlignPostProj(
+        self.syn = brainpy.AlignPostProj(
             comm=brainscale.nn.Linear(
                 n_in + n_rec, n_rec,
                 jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])]) * u.mS,
-                b_init=brainstate.init.ZeroInit(unit=u.mS)
+                b_init=braintools.init.ZeroInit(unit=u.mS)
             ),
             syn=brainscale.nn.Expon.desc(n_rec, tau=tau_syn),
-            out=brainstate.nn.CUBA.desc(),
+            out=brainpy.CUBA.desc(),
             post=self.neu
         )
 
@@ -281,10 +286,10 @@ class ALIF_ExpCu_Dense_Layer(brainstate.nn.Module):
         self, n_in, n_rec,
         tau_mem=5. * u.ms, tau_syn=10. * u.ms,
         V_th=1. * u.mV, tau_a=100. * u.ms, beta=0.1 * u.mV,
-        spk_fun=brainstate.surrogate.ReluGrad(),
+        spk_fun=braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
-        rec_init=brainstate.init.KaimingNormal(),
-        ff_init=brainstate.init.KaimingNormal()
+        rec_init=braintools.init.KaimingNormal(),
+        ff_init=braintools.init.KaimingNormal()
     ):
         super().__init__()
         self.neu = brainscale.nn.ALIF(
@@ -292,14 +297,14 @@ class ALIF_ExpCu_Dense_Layer(brainstate.nn.Module):
             spk_fun=spk_fun, spk_reset=spk_reset,
             V_th=V_th
         )
-        self.syn = brainstate.nn.AlignPostProj(
+        self.syn = brainpy.AlignPostProj(
             comm=brainscale.nn.Linear(
                 n_in + n_rec, n_rec,
                 jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0) * u.mS,
-                b_init=brainstate.init.ZeroInit(unit=u.mS)
+                b_init=braintools.init.ZeroInit(unit=u.mS)
             ),
             syn=brainscale.nn.Expon.desc(n_rec, tau=tau_syn),
-            out=brainstate.nn.CUBA.desc(),
+            out=brainpy.CUBA.desc(),
             post=self.neu
         )
 
@@ -317,10 +322,10 @@ class ALIF_Delta_Dense_Layer(brainstate.nn.Module):
     def __init__(
         self,
         n_in, n_rec, tau_mem=5. * u.ms, tau_a=100. * u.ms, V_th=1. * u.mV, beta=0.1 * u.mV,
-        spk_fun=brainstate.surrogate.ReluGrad(),
+        spk_fun=braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
-        rec_init=brainstate.init.KaimingNormal(),
-        ff_init=brainstate.init.KaimingNormal()
+        rec_init=braintools.init.KaimingNormal(),
+        ff_init=braintools.init.KaimingNormal()
     ):
         super().__init__()
         self.neu = brainscale.nn.ALIF(
@@ -329,7 +334,7 @@ class ALIF_Delta_Dense_Layer(brainstate.nn.Module):
         )
         w_init = jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0)
         self.syn = brainstate.nn.DeltaProj(
-            comm=brainscale.nn.Linear(n_in + n_rec, n_rec, w_init=w_init * u.mV, b_init=brainstate.init.ZeroInit(unit=u.mV)),
+            comm=brainscale.nn.Linear(n_in + n_rec, n_rec, w_init=w_init * u.mV, b_init=braintools.init.ZeroInit(unit=u.mV)),
             post=self.neu
         )
 
@@ -349,10 +354,10 @@ class ALIF_STDExpCu_Dense_Layer(brainstate.nn.Module):
         self, n_in, n_rec, inp_std=False,
         tau_mem=5. * u.ms, tau_syn=10. * u.ms,
         V_th=1. * u.mV, tau_std=500. * u.ms, beta=0.1 * u.mV,
-        spk_fun=brainstate.surrogate.ReluGrad(),
+        spk_fun=braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
-        rec_init=brainstate.init.KaimingNormal(),
-        ff_init=brainstate.init.KaimingNormal()
+        rec_init=braintools.init.KaimingNormal(),
+        ff_init=braintools.init.KaimingNormal()
     ):
         super().__init__()
         self.neu = brainscale.nn.ALIF(n_rec, tau=tau_mem, spk_fun=spk_fun, spk_reset=spk_reset, V_th=V_th, beta=beta)
@@ -362,14 +367,14 @@ class ALIF_STDExpCu_Dense_Layer(brainstate.nn.Module):
         else:
             self.std_inp = None
 
-        self.syn = brainstate.nn.AlignPostProj(
+        self.syn = brainpy.AlignPostProj(
             comm=brainscale.nn.Linear(
                 n_in + n_rec, n_rec,
                 jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0) * u.mS,
-                b_init=brainstate.init.ZeroInit(unit=u.mS)
+                b_init=braintools.init.ZeroInit(unit=u.mS)
             ),
             syn=brainscale.nn.Expon.desc(n_rec, tau=tau_syn),
-            out=brainstate.nn.CUBA.desc(),
+            out=brainpy.CUBA.desc(),
             post=self.neu
         )
 
@@ -389,10 +394,10 @@ class ALIF_STPExpCu_Dense_Layer(brainstate.nn.Module):
         n_in, n_rec, inp_stp=False,
         tau_mem=5. * u.ms, tau_syn=10. * u.ms, V_th=1. * u.mV, beta=0.1 * u.mV,
         tau_f=500. * u.ms, tau_d=100. * u.ms, tau_a=100. * u.ms,
-        spk_fun=brainstate.surrogate.ReluGrad(),
+        spk_fun=braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
-        rec_init=brainstate.init.KaimingNormal(),
-        ff_init=brainstate.init.KaimingNormal()
+        rec_init=braintools.init.KaimingNormal(),
+        ff_init=braintools.init.KaimingNormal()
     ):
         super().__init__()
         self.inp_stp = inp_stp
@@ -409,14 +414,14 @@ class ALIF_STPExpCu_Dense_Layer(brainstate.nn.Module):
         if inp_stp:
             self.stp_inp = brainscale.nn.STP(n_in, tau_f=tau_f, tau_d=tau_d)
 
-        self.syn = brainstate.nn.AlignPostProj(
+        self.syn = brainpy.AlignPostProj(
             comm=brainscale.nn.Linear(
                 n_in + n_rec, n_rec,
                 jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])]) * u.mS,
-                b_init=brainstate.init.ZeroInit(unit=u.mS)
+                b_init=braintools.init.ZeroInit(unit=u.mS)
             ),
             syn=brainscale.nn.Expon.desc(n_rec, tau=tau_syn),
-            out=brainstate.nn.CUBA.desc(),
+            out=brainpy.CUBA.desc(),
             post=self.neu
         )
 

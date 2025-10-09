@@ -118,7 +118,7 @@ class ETraceGraph(NamedTuple):
             perturb_data,
         )
 
-        return self.module_info._process(args, jaxpr_outs)
+        return self.module_info._process(*args, jaxpr_outs=jaxpr_outs)
 
     def dict(self) -> Dict:
         return self._asdict()

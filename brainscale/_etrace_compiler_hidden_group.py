@@ -35,7 +35,7 @@
 #   [2024-12-09] small updates, related to the key items in "CompiledVjpGraph"
 #   [2025-02-06]
 #       - [x] unify model retrieved states (brainstate.graph.states)
-#             and compiled states (brainstate.compile.StatefulFunction)
+#             and compiled states (brainstate.transform.StatefulFunction)
 #       - [x] add the support for the "ETraceGroupState" and "ETraceTreeState"
 #       - [x] add the support for the "ElemWiseParam"
 #       - [x] split into "_etrace_compiler.py", "_etrace_vjp_compiler_graph.py", and "_etrace_compiler_hidden_group.py",

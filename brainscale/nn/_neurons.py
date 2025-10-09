@@ -15,8 +15,8 @@
 
 # -*- coding: utf-8 -*-
 
-import brainstate
-from brainstate import init
+import brainpy
+from braintools import init
 
 from brainscale._etrace_concepts import ETraceState
 
@@ -26,29 +26,29 @@ __all__ = [
 ]
 
 
-# IF = brainstate.nn.IF
-# LIF = brainstate.nn.LIF
-# ALIF = brainstate.nn.ALIF
+# IF = brainpy.IF
+# LIF = brainpy.LIF
+# ALIF = brainpy.ALIF
 
 
-class IF(brainstate.nn.IF):
+class IF(brainpy.IF):
     __module__ = 'brainscale.nn'
-    __doc__ = brainstate.nn.IF.__doc__
+    __doc__ = brainpy.IF.__doc__
 
     def init_state(self, batch_size: int = None, **kwargs):
         self.V = ETraceState(init.param(self.V_initializer, self.varshape, batch_size))
 
 
-class LIF(brainstate.nn.LIF):
+class LIF(brainpy.LIF):
     __module__ = 'brainscale.nn'
-    __doc__ = brainstate.nn.LIF.__doc__
+    __doc__ = brainpy.LIF.__doc__
 
     def init_state(self, batch_size: int = None, **kwargs):
         self.V = ETraceState(init.param(self.V_initializer, self.varshape, batch_size))
 
 
-class ALIF(brainstate.nn.ALIF):
-    __doc__ = brainstate.nn.ALIF.__doc__
+class ALIF(brainpy.ALIF):
+    __doc__ = brainpy.ALIF.__doc__
     __module__ = 'brainscale.nn'
 
     def init_state(self, batch_size: int = None, **kwargs):

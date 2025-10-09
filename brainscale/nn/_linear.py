@@ -19,7 +19,7 @@ from typing import Callable, Union, Sequence, Optional
 
 import brainstate
 import brainunit as u
-from brainstate import init
+from braintools import init
 
 from brainscale._etrace_concepts import ETraceParam
 from brainscale._etrace_operators import MatMulOp, LoraOp, SpMatMulOp

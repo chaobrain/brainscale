@@ -20,7 +20,7 @@ from typing import Callable, Tuple, Union, Sequence, Optional, TypeVar
 
 import brainstate
 import jax
-from brainstate import init
+from braintools import init
 
 from brainscale._etrace_concepts import ETraceParam
 from brainscale._etrace_operators import ConvOp

@@ -39,13 +39,14 @@ class EligibilityTrace(brainstate.ShortTermState):
     The state for storing the eligibility trace during the computation of
     online learning algorithms.
 
-    For example, when you are using :class:`brainscale.IODimVjpAlgorithm`, you can get
-    the eligibility trace of the weight by calling
+    Examples
+    --------
+    When you are using :class:`brainscale.IODimVjpAlgorithm`, you can get
+    the eligibility trace of the weight by calling:
 
     .. code-block:: python
 
-        etrace = etrace_algorithm.etrace_of(weight)
-
+        >>> etrace = etrace_algorithm.etrace_of(weight)
 
     """
     __module__ = 'brainscale'
@@ -56,25 +57,25 @@ class ETraceAlgorithm(brainstate.nn.Module):
     The base class for the eligibility trace algorithm.
 
     Parameters
-    -----------
-    model: brainstate.nn.Module
+    ----------
+    model : brainstate.nn.Module
         The model function, which receives the input arguments and returns the model output.
-    name: str, optional
+    name : str, optional
         The name of the etrace algorithm.
 
     Attributes
-    -----------
-    graph: ETraceGraphExecutor
+    ----------
+    graph : ETraceGraphExecutor
         The etrace graph.
-    param_states: Dict[Hashable, brainstate.ParamState]
+    param_states : Dict[Hashable, brainstate.ParamState]
         The weight states.
-    hidden_states: Dict[Hashable, ETraceState]
+    hidden_states : Dict[Hashable, ETraceState]
         The hidden states.
-    other_states: Dict[Hashable, brainstate.State]
+    other_states : Dict[Hashable, brainstate.State]
         The other states.
-    is_compiled: bool
+    is_compiled : bool
         Whether the etrace algorithm has been compiled.
-    running_index: brainstate.ParamState[int]
+    running_index : brainstate.ParamState[int]
         The running index.
     """
     __module__ = 'brainscale'
@@ -118,6 +119,11 @@ class ETraceAlgorithm(brainstate.nn.Module):
     def graph(self) -> ETraceGraph:
         """
         Get the etrace graph.
+
+        Returns
+        -------
+        ETraceGraph
+            The etrace graph.
         """
         return self.graph_executor.graph
 
@@ -125,6 +131,11 @@ class ETraceAlgorithm(brainstate.nn.Module):
     def executor(self) -> ETraceGraphExecutor:
         """
         Get the etrace graph executor.
+
+        Returns
+        -------
+        ETraceGraphExecutor
+            The etrace graph executor.
         """
         return self.graph_executor
 
@@ -132,6 +143,11 @@ class ETraceAlgorithm(brainstate.nn.Module):
     def param_states(self) -> brainstate.util.FlattedDict[Path, brainstate.ParamState]:
         """
         Get the parameter weight states.
+
+        Returns
+        -------
+        brainstate.util.FlattedDict[Path, brainstate.ParamState]
+            The parameter weight states.
         """
         if self._param_states is None:
             self._split_state()
@@ -141,6 +157,11 @@ class ETraceAlgorithm(brainstate.nn.Module):
     def hidden_states(self) -> brainstate.util.FlattedDict[Path, ETraceState]:
         """
         Get the hidden states.
+
+        Returns
+        -------
+        brainstate.util.FlattedDict[Path, ETraceState]
+            The hidden states.
         """
         if self._hidden_states is None:
             self._split_state()
@@ -150,6 +171,11 @@ class ETraceAlgorithm(brainstate.nn.Module):
     def other_states(self) -> brainstate.util.FlattedDict[Path, brainstate.State]:
         """
         Get the other states.
+
+        Returns
+        -------
+        brainstate.util.FlattedDict[Path, brainstate.State]
+            The other states.
         """
         if self._other_states is None:
             self._split_state()
@@ -178,12 +204,15 @@ class ETraceAlgorithm(brainstate.nn.Module):
         Compile the eligibility trace graph of the relationship between etrace weights, states and operators.
 
         The compilation process includes:
+
         - building the etrace graph
         - separating the states
         - initializing the etrace states
 
-        Args:
-            *args: the input arguments.
+        Parameters
+        ----------
+        *args
+            The input arguments.
         """
 
         if not self.is_compiled:
@@ -200,6 +229,11 @@ class ETraceAlgorithm(brainstate.nn.Module):
     def path_to_states(self) -> brainstate.util.FlattedDict[Path, brainstate.State]:
         """
         Get the path to the states.
+
+        Returns
+        -------
+        brainstate.util.FlattedDict[Path, brainstate.State]
+            The mapping from path to states.
         """
         return self.graph_executor.path_to_states
 
@@ -207,6 +241,11 @@ class ETraceAlgorithm(brainstate.nn.Module):
     def state_id_to_path(self) -> Dict[int, Path]:
         """
         Get the state ID to the path.
+
+        Returns
+        -------
+        Dict[int, Path]
+            The mapping from state ID to path.
         """
         return self.graph_executor.state_id_to_path
 
@@ -219,6 +258,16 @@ class ETraceAlgorithm(brainstate.nn.Module):
     def __call__(self, *args) -> Any:
         """
         Update the model and the eligibility trace states.
+
+        Parameters
+        ----------
+        *args
+            The input arguments.
+
+        Returns
+        -------
+        Any
+            The output of the update method.
         """
         return self.update(*args)
 
@@ -226,8 +275,20 @@ class ETraceAlgorithm(brainstate.nn.Module):
         """
         Update the model and the eligibility trace states.
 
-        Args:
-            *args: the input arguments.
+        Parameters
+        ----------
+        *args
+            The input arguments.
+
+        Returns
+        -------
+        Any
+            The model output.
+
+        Raises
+        ------
+        NotImplementedError
+            This method must be implemented by subclasses.
         """
         raise NotImplementedError
 
@@ -236,6 +297,18 @@ class ETraceAlgorithm(brainstate.nn.Module):
         Initialize the eligibility trace states of the etrace algorithm.
 
         This method is needed after compiling the etrace graph. See `.compile_graph()` for the details.
+
+        Parameters
+        ----------
+        *args
+            The positional arguments.
+        **kwargs
+            The keyword arguments.
+
+        Raises
+        ------
+        NotImplementedError
+            This method must be implemented by subclasses.
         """
         raise NotImplementedError
 
@@ -245,12 +318,17 @@ class ETraceAlgorithm(brainstate.nn.Module):
 
         Parameters
         ----------
-        weight: brainstate.ParamState, int
-          The parameter weight.
+        weight : brainstate.ParamState | Path
+            The parameter weight or path to the weight.
 
         Returns
         -------
-        out: Any
-          The eligibility trace.
+        Any
+            The eligibility trace.
+
+        Raises
+        ------
+        NotImplementedError
+            This method must be implemented by subclasses.
         """
         raise NotImplementedError
