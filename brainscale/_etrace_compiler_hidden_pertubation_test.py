@@ -52,7 +52,7 @@ class TestFindHiddenGroupsFromModule:
 
         gru = cls(n_in, n_out)
         brainstate.nn.init_all_states(gru)
-        states = brainstate.graph.states(gru, brainscale.ETraceState)
+        states = brainstate.graph.states(gru, brainstate.HiddenState)
 
         input = brainstate.random.rand(n_in)
         hidden_perturb = add_hidden_perturbation_in_module(gru, input)
@@ -86,7 +86,7 @@ class TestFindHiddenGroupsFromModule:
         with brainstate.environ.context(dt=0.1 * u.ms):
             layer = cls(n_in, n_out)
             brainstate.nn.init_all_states(layer)
-            states = brainstate.graph.states(layer, brainscale.ETraceState)
+            states = brainstate.graph.states(layer, brainstate.HiddenState)
             hidden_perturb = add_hidden_perturbation_in_module(layer, input)
 
         print()
@@ -119,7 +119,7 @@ class TestFindHiddenGroupsFromModule:
         with brainstate.environ.context(dt=0.1 * u.ms):
             layer = brainstate.nn.Sequential(cls(n_in, n_out), cls(n_out, n_out))
             brainstate.nn.init_all_states(layer)
-            states = brainstate.graph.states(layer, brainscale.ETraceState)
+            states = brainstate.graph.states(layer, brainstate.HiddenState)
             hidden_perturb = add_hidden_perturbation_in_module(layer, input)
 
         perturb = hidden_perturb.init_perturb_data()

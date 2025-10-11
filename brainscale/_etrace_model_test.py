@@ -14,24 +14,25 @@
 # ==============================================================================
 
 
-import braintools
+import brainpy
 import brainstate
+import braintools
 import brainunit as u
 import jax.numpy as jnp
-import brainpy
+
 import brainscale
 
 
 class IF_Delta_Dense_Layer(brainstate.nn.Module):
     def __init__(
         self, n_in, n_rec, tau_mem=5. * u.ms, V_th=1. * u.mV, spk_reset: str = 'soft',
-        rec_init=braintools.init.KaimingNormal(), 
+        rec_init=braintools.init.KaimingNormal(),
         ff_init=braintools.init.KaimingNormal()
     ):
         super().__init__()
         self.neu = brainscale.nn.IF(n_rec, tau=tau_mem, spk_reset=spk_reset, V_th=V_th)
         w_init = u.math.concatenate([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0)
-        self.syn = brainscale.nn.Linear(n_in + n_rec, n_rec, w_init=w_init * u.mA, 
+        self.syn = brainscale.nn.Linear(n_in + n_rec, n_rec, w_init=w_init * u.mA,
                                         b_init=braintools.init.ZeroInit(unit=u.mA))
 
     def update(self, spk):
@@ -133,9 +134,9 @@ class LIF_ExpCo_Dense_Layer(_ExpCo_Dense_Layer):
 
     def __init__(
         self, n_in, n_rec, input_ei_sep=False, tau_mem=5. * u.ms, tau_syn=10. * u.ms, V_th=1. * u.mV,
-        spk_fun=braintools.surrogate.ReluGrad(), 
+        spk_fun=braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
-        rec_init=braintools.init.KaimingNormal(), 
+        rec_init=braintools.init.KaimingNormal(),
         ff_init=braintools.init.KaimingNormal()
     ):
         neu = brainscale.nn.LIF(n_rec, tau=tau_mem, spk_fun=spk_fun, spk_reset=spk_reset, V_th=V_th)
@@ -334,7 +335,8 @@ class ALIF_Delta_Dense_Layer(brainstate.nn.Module):
         )
         w_init = jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0)
         self.syn = brainstate.nn.DeltaProj(
-            comm=brainscale.nn.Linear(n_in + n_rec, n_rec, w_init=w_init * u.mV, b_init=braintools.init.ZeroInit(unit=u.mV)),
+            comm=brainscale.nn.Linear(n_in + n_rec, n_rec, w_init=w_init * u.mV,
+                                      b_init=braintools.init.ZeroInit(unit=u.mV)),
             post=self.neu
         )
 

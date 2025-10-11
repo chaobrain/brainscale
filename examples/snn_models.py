@@ -63,8 +63,8 @@ class GIF(brainstate.nn.Neuron):
 
     def init_state(self):
         # 将模型用于在线学习，需要初始化状态变量
-        self.V = brainscale.ETraceState(brainstate.init.param(self._V_initializer, self.varshape))
-        self.I2 = brainscale.ETraceState(brainstate.init.param(self._I2_initializer, self.varshape))
+        self.V = brainstate.HiddenState(brainstate.init.param(self._V_initializer, self.varshape))
+        self.I2 = brainstate.HiddenState(brainstate.init.param(self._I2_initializer, self.varshape))
 
     def update(self, x=0.):
         # 如果前一时刻发放了脉冲，则将膜电位和适应性电流进行重置

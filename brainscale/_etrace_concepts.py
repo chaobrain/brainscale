@@ -31,7 +31,7 @@
 # -*- coding: utf-8 -*-
 
 from enum import Enum
-from typing import Callable, Optional, Dict, Tuple, Sequence, Union
+from typing import Callable, Optional, Dict, Tuple, Sequence
 
 import brainstate
 import brainunit as u
@@ -83,73 +83,23 @@ class ETraceGrad(BaseEnum):
     adaptive = 'adaptive'
 
 
-class ETraceState(brainstate.HiddenState):
-    """
-    The Hidden State for Eligibility Trace-based Learning.
+ETraceState = brainstate.HiddenState
+"""
+The Hidden State for Eligibility Trace-based Learning.
 
-    .. note::
+.. note::
 
-        Currently, the hidden state only supports `jax.Array` or `brainunit.Quantity`.
-        This means that each instance of :py:class:`ETraceState` should define
-        single hidden variable.
+    Currently, the hidden state only supports `jax.Array` or `brainunit.Quantity`.
+    This means that each instance of :py:class:`ETraceState` should define
+    single hidden variable.
 
-        If you want to define multiple hidden variables within a single instance of
-        :py:class:`ETraceState`, you can try :py:class:`ETraceGroupState` or
-        :py:class:`ETraceTreeState` instead.
-
-    Args:
-        value: The value of the hidden state.
-               Currently only support a `jax.Array` or `brainunit.Quantity`.
-        name: The name of the hidden state.
-    """
-    __module__ = 'brainscale'
-
-    value: brainstate.typing.ArrayLike
-
-    def __init__(
-        self,
-        value: brainstate.typing.ArrayLike,
-        name: Optional[str] = None
-    ):
-        self._check_value(value)
-        super().__init__(value, name=name)
-
-    @property
-    def varshape(self) -> Tuple[int, ...]:
-        """
-        Get the shape of the hidden state variable.
-
-        This property returns the shape of the hidden state variable stored in the instance.
-        It provides the dimensions of the array representing the hidden state.
-
-        Returns:
-            Tuple[int, ...]: A tuple representing the shape of the hidden state variable.
-        """
-        return self.value.shape
-
-    @property
-    def num_state(self) -> int:
-        """
-        Get the number of hidden states.
-
-        This property returns the number of hidden states represented by the instance.
-        For the `ETraceState` class, this is always 1, as it represents a single hidden state.
-
-        Returns:
-            int: The number of hidden states, which is 1 for this class.
-        """
-        return 1
-
-    def _check_value(self, value: brainstate.typing.ArrayLike):
-        if not isinstance(value, (np.ndarray, jax.Array, u.Quantity)):
-            raise TypeError(
-                f'Currently, {ETraceState.__name__} only supports '
-                f'numpy.ndarray, jax.Array or brainunit.Quantity. '
-                f'But we got {type(value)}.'
-            )
+    If you want to define multiple hidden variables within a single instance of
+    :py:class:`ETraceState`, you can try :py:class:`ETraceGroupState` or
+    :py:class:`ETraceTreeState` instead.
+"""
 
 
-class ETraceGroupState(ETraceState):
+class ETraceGroupState(brainstate.HiddenState):
     """
     A group of multiple hidden states for eligibility trace-based learning.
 
@@ -299,8 +249,10 @@ class ETraceGroupState(ETraceState):
                 f'But we got {type(item)}.'
             )
 
-    def set_value(self,
-                  val: Dict[int | str, brainstate.typing.ArrayLike] | Sequence[brainstate.typing.ArrayLike]) -> None:
+    def set_value(
+        self,
+        val: Dict[int | str, brainstate.typing.ArrayLike] | Sequence[brainstate.typing.ArrayLike]
+    ) -> None:
         """
         Set the value of the hidden state with the specified item.
 
@@ -320,17 +272,23 @@ class ETraceGroupState(ETraceState):
         """
         if isinstance(val, (tuple, list)):
             val = {i: v for i, v in enumerate(val)}
-        assert isinstance(val, dict), (f'Currently, {self.__class__.__name__}.set_value() only supports '
-                                       f'dictionary of hidden states. But we got {type(val)}.')
+        assert isinstance(val, dict), (
+            f'Currently, {self.__class__.__name__}.set_value() only supports '
+            f'dictionary of hidden states. But we got {type(val)}.'
+        )
         indices = []
         values = []
         for k, v in val.items():
             if isinstance(k, str):
                 k = self.name2index[k]
-            assert isinstance(k, int), (f'Key {k} should be int or str. '
-                                        f'But we got {type(k)}.')
-            assert v.shape == self.varshape, (f'The shape of the hidden state should be {self.varshape}. '
-                                              f'But we got {v.shape}.')
+            assert isinstance(k, int), (
+                f'Key {k} should be int or str. '
+                f'But we got {type(k)}.'
+            )
+            assert v.shape == self.varshape, (
+                f'The shape of the hidden state should be {self.varshape}. '
+                f'But we got {v.shape}.'
+            )
             indices.append(k)
             values.append(v)
         values = u.math.stack(values, axis=-1)

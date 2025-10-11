@@ -57,10 +57,10 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
-    "brainstate>=0.1.0",
+    "brainstate>=0.2.2",
     "brainunit",
     "brainstate",
-    "brainpy",
+    "brainpy>=2.7.0",
     "braintools",
 ]
 dynamic = ["version"]

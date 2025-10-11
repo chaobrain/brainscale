@@ -16,41 +16,12 @@
 # -*- coding: utf-8 -*-
 
 import brainpy
-from braintools import init
-
-from brainscale._etrace_concepts import ETraceState
 
 __all__ = [
     # neuron models
     'IF', 'LIF', 'ALIF',
 ]
 
-
-# IF = brainpy.IF
-# LIF = brainpy.LIF
-# ALIF = brainpy.ALIF
-
-
-class IF(brainpy.IF):
-    __module__ = 'brainscale.nn'
-    __doc__ = brainpy.IF.__doc__
-
-    def init_state(self, batch_size: int = None, **kwargs):
-        self.V = ETraceState(init.param(self.V_initializer, self.varshape, batch_size))
-
-
-class LIF(brainpy.LIF):
-    __module__ = 'brainscale.nn'
-    __doc__ = brainpy.LIF.__doc__
-
-    def init_state(self, batch_size: int = None, **kwargs):
-        self.V = ETraceState(init.param(self.V_initializer, self.varshape, batch_size))
-
-
-class ALIF(brainpy.ALIF):
-    __doc__ = brainpy.ALIF.__doc__
-    __module__ = 'brainscale.nn'
-
-    def init_state(self, batch_size: int = None, **kwargs):
-        self.V = ETraceState(init.param(self.V_initializer, self.varshape, batch_size))
-        self.a = ETraceState(init.param(self.a_initializer, self.varshape, batch_size))
+IF = brainpy.state.IF
+LIF = brainpy.state.LIF
+ALIF = brainpy.state.ALIF

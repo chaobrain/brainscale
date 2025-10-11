@@ -25,7 +25,7 @@ import brainunit as u
 import jax
 import jax.numpy as jnp
 
-from brainscale._etrace_concepts import ETraceParam, ETraceState
+from brainscale._etrace_concepts import ETraceParam
 from brainscale._etrace_operators import MatMulOp
 from brainscale._typing import Size, ArrayLike, Spike
 
@@ -127,7 +127,8 @@ class LeakyRateReadout(brainstate.nn.Module):
         **kwargs
             Additional keyword arguments that may be used for state initialization.
         """
-        self.r = ETraceState(braintools.init.param(self.r_initializer, self.out_size, batch_size))
+        self.r = brainstate.HiddenState(
+            braintools.init.param(self.r_initializer, self.out_size, batch_size))
 
     def reset_state(self, batch_size=None, **kwargs):
         """
@@ -171,7 +172,7 @@ class LeakyRateReadout(brainstate.nn.Module):
         return r
 
 
-class LeakySpikeReadout(brainpy.Neuron):
+class LeakySpikeReadout(brainpy.state.Neuron):
     """
     Integrate-and-fire neuron model for spike-based readout.
 
@@ -275,7 +276,8 @@ class LeakySpikeReadout(brainpy.Neuron):
         **kwargs
             Additional keyword arguments that may be used for state initialization.
         """
-        self.V = ETraceState(braintools.init.param(self.V_initializer, self.varshape, batch_size))
+        self.V = brainstate.HiddenState(
+            braintools.init.param(self.V_initializer, self.varshape, batch_size))
 
     def reset_state(self, batch_size, **kwargs):
         """

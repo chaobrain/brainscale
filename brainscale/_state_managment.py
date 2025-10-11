@@ -17,7 +17,7 @@ from typing import Sequence, Tuple, List, Hashable, Dict
 
 import brainstate
 
-from ._etrace_concepts import ETraceState, ETraceParam
+from ._etrace_concepts import ETraceParam
 from ._typing import Path, WeightVals, HiddenVals, StateVals
 
 
@@ -138,7 +138,7 @@ def assign_state_values_v2(
 
 def split_states(
     states: Sequence[brainstate.State]
-) -> Tuple[List[brainstate.ParamState], List[ETraceState], List[brainstate.State]]:
+) -> Tuple[List[brainstate.ParamState], List[brainstate.HiddenState], List[brainstate.State]]:
     """
     Split the states into weight states, hidden states, and other states.
 
@@ -153,7 +153,7 @@ def split_states(
 
     Returns
     --------
-    Tuple[List[brainstate.ParamState], List[ETraceState], List[brainstate.State]]
+    Tuple[List[brainstate.ParamState], List[brainstate.HiddenState], List[brainstate.State]]
         A tuple containing three lists:
         - param_states: The list of weight parameter states.
         - hidden_states: The list of hidden states.
@@ -161,7 +161,7 @@ def split_states(
     """
     param_states, hidden_states, other_states = [], [], []
     for st in states:
-        if isinstance(st, ETraceState):  # etrace hidden variables
+        if isinstance(st, brainstate.HiddenState):  # etrace hidden variables
             hidden_states.append(st)
         elif isinstance(st, brainstate.ParamState):  # including all weight states, ParamState, ETraceParam
             param_states.append(st)
@@ -174,7 +174,7 @@ def split_states_v2(
     states: Sequence[brainstate.State]
 ) -> Tuple[
     List[ETraceParam],
-    List[ETraceState],
+    List[brainstate.HiddenState],
     List[brainstate.ParamState],
     List[brainstate.State]
 ]:
@@ -192,7 +192,7 @@ def split_states_v2(
 
     Returns
     --------
-    Tuple[List[ETraceParam], List[ETraceState], List[brainstate.ParamState], List[brainstate.State]]
+    Tuple[List[ETraceParam], List[brainstate.HiddenState], List[brainstate.ParamState], List[brainstate.State]]
         A tuple containing four lists:
         - etrace_param_states: The list of etrace parameter states.
         - hidden_states: The list of hidden states.
@@ -201,7 +201,7 @@ def split_states_v2(
     """
     etrace_param_states, hidden_states, param_states, other_states = [], [], [], []
     for st in states:
-        if isinstance(st, ETraceState):
+        if isinstance(st, brainstate.HiddenState):
             hidden_states.append(st)
         elif isinstance(st, ETraceParam):
             if st.is_etrace:
@@ -273,7 +273,7 @@ def sequence_split_state_values(
         for st, val in zip(states, state_values):
             if isinstance(st, brainstate.ParamState):
                 weight_vals.append(val)
-            elif isinstance(st, ETraceState):
+            elif isinstance(st, brainstate.HiddenState):
                 hidden_vals.append(val)
             else:
                 other_vals.append(val)
@@ -283,7 +283,7 @@ def sequence_split_state_values(
         for st, val in zip(states, state_values):
             if isinstance(st, brainstate.ParamState):
                 pass
-            elif isinstance(st, ETraceState):
+            elif isinstance(st, brainstate.HiddenState):
                 hidden_vals.append(val)
             else:
                 other_vals.append(val)
@@ -322,7 +322,7 @@ def dict_split_state_values(
         val = state_values[path]
         if isinstance(state, brainstate.ParamState):
             weight_vals[path] = val
-        elif isinstance(state, ETraceState):
+        elif isinstance(state, brainstate.HiddenState):
             hidden_vals[path] = val
         else:
             other_vals[path] = val
@@ -332,7 +332,7 @@ def dict_split_state_values(
 def split_dict_states_v1(
     states: Dict[Path, brainstate.State]
 ) -> Tuple[
-    Dict[Path, ETraceState],
+    Dict[Path, brainstate.HiddenState],
     Dict[Path, brainstate.ParamState],
     Dict[Path, brainstate.State]
 ]:
@@ -353,7 +353,7 @@ def split_dict_states_v1(
 
     Returns
     --------
-    Tuple[Dict[Path, ETraceState], Dict[Path, brainstate.ParamState], Dict[Path, brainstate.State]]
+    Tuple[Dict[Path, brainstate.HiddenState], Dict[Path, brainstate.ParamState], Dict[Path, brainstate.State]]
         A tuple containing three dictionaries:
         - hidden_states: The hidden states.
         - param_states: The other kinds of parameter states.
@@ -363,7 +363,7 @@ def split_dict_states_v1(
     param_states = dict()
     other_states = dict()
     for key, st in states.items():
-        if isinstance(st, ETraceState):
+        if isinstance(st, brainstate.HiddenState):
             hidden_states[key] = st
         elif isinstance(st, brainstate.ParamState):
             # The ParamState which is not an ETraceParam,
@@ -379,7 +379,7 @@ def split_dict_states_v2(
     states: Dict[Path, brainstate.State]
 ) -> Tuple[
     Dict[Path, ETraceParam],
-    Dict[Path, ETraceState],
+    Dict[Path, brainstate.HiddenState],
     Dict[Path, brainstate.ParamState],
     Dict[Path, brainstate.State]
 ]:
@@ -402,7 +402,7 @@ def split_dict_states_v2(
 
     Returns
     --------
-    Tuple[Dict[Path, ETraceParam], Dict[Path, ETraceState], Dict[Path, brainstate.ParamState], Dict[Path, brainstate.State]]
+    Tuple[Dict[Path, ETraceParam], Dict[Path, brainstate.HiddenState], Dict[Path, brainstate.ParamState], Dict[Path, brainstate.State]]
         A tuple containing four dictionaries:
         - etrace_param_states: The etrace parameter states.
         - hidden_states: The hidden states.
@@ -414,7 +414,7 @@ def split_dict_states_v2(
     param_states = dict()
     other_states = dict()
     for key, st in states.items():
-        if isinstance(st, ETraceState):
+        if isinstance(st, brainstate.HiddenState):
             hidden_states[key] = st
         elif isinstance(st, ETraceParam):
             if st.is_etrace:

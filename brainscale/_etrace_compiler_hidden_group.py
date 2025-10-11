@@ -66,10 +66,7 @@ from ._etrace_compiler_module_info import (
     extract_module_info,
     ModuleInfo,
 )
-from ._etrace_concepts import (
-    ETraceState,
-    ETraceGroupState,
-)
+from ._etrace_concepts import ETraceGroupState
 from ._misc import (
     NotSupportedError,
 )
@@ -117,7 +114,7 @@ class HiddenGroup(NamedTuple):
 
     # hidden states and their paths
     hidden_paths: List[Path]  # the hidden state paths
-    hidden_states: List[ETraceState]  # the hidden states
+    hidden_states: List[brainstate.HiddenState]  # the hidden states
 
     # the jax Var at the last time step
     hidden_invars: List[HiddenInVar]  # the input hidden states
@@ -390,7 +387,7 @@ def _simplify_hid2hid_tracer(
     tracer: HiddenToHiddenGroupTracer,
     hidden_invar_to_path: Dict[HiddenInVar, Path],
     hidden_outvar_to_path: Dict[HiddenOutVar, Path],
-    path_to_state: Dict[Path, ETraceState],
+    path_to_state: Dict[Path, brainstate.HiddenState],
 ) -> Hidden2GroupTransition:
     """
     Simplifying the hidden-to-hidden state tracer.
@@ -515,7 +512,7 @@ class JaxprEvalForHiddenGroup(JaxprEvaluation):
         weight_invars: Set[Var],
         invar_to_hidden_path: Dict[HiddenInVar, Path],
         outvar_to_hidden_path: Dict[HiddenOutVar, Path],
-        path_to_state: Dict[Path, ETraceState],
+        path_to_state: Dict[Path, brainstate.HiddenState],
     ):
         # the jaxpr of the original model, assuming that the model is well-defined,
         # see the doc for the model which can be online learning compiled.

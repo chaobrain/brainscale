@@ -92,7 +92,7 @@ class TestCompileGraphRNN(unittest.TestCase):
         self.assertTrue(len(graph.hidden_groups[0].hidden_paths) == 2)
         self.assertTrue(len(graph.module_info.compiled_model_states) == 6)
 
-        hid_states = lstm.states(brainscale.ETraceState)
+        hid_states = lstm.states(brainstate.HiddenState)
         self.assertTrue(len(hid_states) == len(graph.hid_path_to_group))
 
         param_states = lstm.states(brainstate.ParamState)

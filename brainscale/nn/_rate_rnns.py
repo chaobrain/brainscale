@@ -16,12 +16,11 @@
 
 from typing import Callable, Union
 
-import braintools
 import brainstate
+import braintools
 import brainunit as u
 
 from brainscale._etrace_concepts import (
-    ETraceState,
     ETraceParam,
     ElemWiseParam,
 )
@@ -90,7 +89,8 @@ class ValinaRNNCell(brainstate.nn.RNNCell):
         )
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.h = ETraceState(braintools.init.param(self._state_initializer, self.out_size, batch_size))
+        self.h = brainstate.HiddenState(
+            braintools.init.param(self._state_initializer, self.out_size, batch_size))
 
     def reset_state(self, batch_size: int = None, **kwargs):
         self.h.value = braintools.init.param(self._state_initializer, self.out_size, batch_size)
@@ -150,7 +150,7 @@ class GRUCell(brainstate.nn.RNNCell):
         self.Wh = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], **params)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.h = ETraceState(braintools.init.param(self._state_initializer, self.out_size, batch_size))
+        self.h = brainstate.HiddenState(braintools.init.param(self._state_initializer, self.out_size, batch_size))
 
     def reset_state(self, batch_size: int = None, **kwargs):
         self.h.value = braintools.init.param(self._state_initializer, self.out_size, batch_size)
@@ -215,7 +215,7 @@ class CFNCell(brainstate.nn.RNNCell):
         self.Wh = Linear(self.out_size[-1], self.out_size[-1], **params)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.h = ETraceState(braintools.init.param(self._state_initializer, self.out_size, batch_size))
+        self.h = brainstate.HiddenState(braintools.init.param(self._state_initializer, self.out_size, batch_size))
 
     def reset_state(self, batch_size: int = None, **kwargs):
         self.h.value = braintools.init.param(self._state_initializer, self.out_size, batch_size)
@@ -293,7 +293,7 @@ class MGUCell(brainstate.nn.RNNCell):
         self.Wh = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], **params)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.h = ETraceState(braintools.init.param(self._state_initializer, self.out_size, batch_size))
+        self.h = brainstate.HiddenState(braintools.init.param(self._state_initializer, self.out_size, batch_size))
 
     def reset_state(self, batch_size: int = None, **kwargs):
         self.h.value = braintools.init.param(self._state_initializer, self.out_size, batch_size)
@@ -400,8 +400,8 @@ class LSTMCell(brainstate.nn.RNNCell):
         self.Wo = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], **params)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.c = ETraceState(braintools.init.param(self._state_initializer, self.out_size, batch_size))
-        self.h = ETraceState(braintools.init.param(self._state_initializer, self.out_size, batch_size))
+        self.c = brainstate.HiddenState(braintools.init.param(self._state_initializer, self.out_size, batch_size))
+        self.h = brainstate.HiddenState(braintools.init.param(self._state_initializer, self.out_size, batch_size))
 
     def reset_state(self, batch_size: int = None, **kwargs):
         self.c.value = braintools.init.param(self._state_initializer, self.out_size, batch_size)
@@ -463,8 +463,10 @@ class URLSTMCell(brainstate.nn.RNNCell):
         return -u.math.log(1 / u - 1)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.c = ETraceState(braintools.init.param(self._state_initializer, self.out_size, batch_size))
-        self.h = ETraceState(braintools.init.param(self._state_initializer, self.out_size, batch_size))
+        self.c = brainstate.HiddenState(
+            braintools.init.param(self._state_initializer, self.out_size, batch_size))
+        self.h = brainstate.HiddenState(
+            braintools.init.param(self._state_initializer, self.out_size, batch_size))
 
     def reset_state(self, batch_size: int = None, **kwargs):
         self.c.value = braintools.init.param(self._state_initializer, self.out_size, batch_size)
@@ -558,7 +560,7 @@ class MinimalRNNCell(brainstate.nn.RNNCell):
         self.W_u = Linear(self.out_size[-1] * 2, self.out_size[-1], **params)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.h = ETraceState(braintools.init.param(self._state_initializer, self.out_size, batch_size))
+        self.h = brainstate.HiddenState(braintools.init.param(self._state_initializer, self.out_size, batch_size))
 
     def reset_state(self, batch_size: int = None, **kwargs):
         self.h.value = braintools.init.param(self._state_initializer, self.out_size, batch_size)
@@ -636,7 +638,7 @@ class MiniGRU(brainstate.nn.RNNCell):
         self.W_z = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], **params)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.h = ETraceState(braintools.init.param(self._state_initializer, self.out_size, batch_size))
+        self.h = brainstate.HiddenState(braintools.init.param(self._state_initializer, self.out_size, batch_size))
 
     def reset_state(self, batch_size: int = None, **kwargs):
         self.h.value = braintools.init.param(self._state_initializer, self.out_size, batch_size)
@@ -714,7 +716,7 @@ class MiniLSTM(brainstate.nn.RNNCell):
         self.W_i = Linear(self.in_size[-1] + self.out_size[-1], self.out_size[-1], **params)
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.h = ETraceState(braintools.init.param(self._state_initializer, self.out_size, batch_size))
+        self.h = brainstate.HiddenState(braintools.init.param(self._state_initializer, self.out_size, batch_size))
 
     def reset_state(self, batch_size: int = None, **kwargs):
         self.h.value = braintools.init.param(self._state_initializer, self.out_size, batch_size)
@@ -807,8 +809,8 @@ class LRUCell(brainstate.nn.Module):
         self.D = ElemWiseParam(brainstate.random.randn(d_model))
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.h_re = ETraceState(braintools.init.param(brainstate.init.ZeroInit(), self.d_hidden, batch_size))
-        self.h_im = ETraceState(braintools.init.param(brainstate.init.ZeroInit(), self.d_hidden, batch_size))
+        self.h_re = brainstate.HiddenState(braintools.init.param(brainstate.init.ZeroInit(), self.d_hidden, batch_size))
+        self.h_im = brainstate.HiddenState(braintools.init.param(brainstate.init.ZeroInit(), self.d_hidden, batch_size))
 
     def reset_state(self, batch_size: int = None, **kwargs):
         self.h_re.value = braintools.init.param(brainstate.init.ZeroInit(), self.d_hidden, batch_size)
