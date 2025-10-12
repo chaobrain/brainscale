@@ -62,6 +62,7 @@ from ._typing import (
 
 __all__ = [
     'HiddenParamOpRelation',
+    'find_hidden_param_op_relations_from_minfo',
     'find_hidden_param_op_relations_from_module',
 ]
 

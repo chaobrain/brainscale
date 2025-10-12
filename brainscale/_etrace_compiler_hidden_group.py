@@ -66,7 +66,7 @@ from ._etrace_compiler_module_info import (
     extract_module_info,
     ModuleInfo,
 )
-from ._etrace_concepts import ETraceGroupState
+from brainstate import ETraceGroupState
 from ._misc import (
     NotSupportedError,
 )
@@ -79,6 +79,7 @@ from ._typing import (
 
 __all__ = [
     'HiddenGroup',
+    'find_hidden_groups_from_minfo',
     'find_hidden_groups_from_module',
 ]
 

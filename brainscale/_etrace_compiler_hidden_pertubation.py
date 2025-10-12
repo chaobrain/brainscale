@@ -48,6 +48,7 @@ from ._typing import (
 
 __all__ = [
     'HiddenPerturbation',
+    'add_hidden_perturbation_from_minfo',
     'add_hidden_perturbation_in_module',
 ]
 

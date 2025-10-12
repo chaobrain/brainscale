@@ -19,76 +19,62 @@
 __version__ = "0.1.0"
 __version_info__ = (0, 1, 0)
 
-from brainscale._etrace_algorithms import (
-    ETraceAlgorithm,
-    EligibilityTrace,
-)
-from brainscale._etrace_compiler_graph import (
-    ETraceGraph,
-    compile_etrace_graph,
-)
-from brainscale._etrace_compiler_hid_param_op import (
-    HiddenParamOpRelation,
-    find_hidden_param_op_relations_from_minfo,
-    find_hidden_param_op_relations_from_module,
-)
-from brainscale._etrace_compiler_hidden_group import (
-    HiddenGroup,
-    find_hidden_groups_from_minfo,
-    find_hidden_groups_from_module,
-)
-from brainscale._etrace_compiler_hidden_pertubation import (
-    HiddenPerturbation,
-    add_hidden_perturbation_from_minfo,
-    add_hidden_perturbation_in_module,
-)
-from brainscale._etrace_compiler_module_info import (
-    ModuleInfo,
-    extract_module_info,
-)
-from brainscale._etrace_concepts import (
-    # state
-    ETraceState,
-    ETraceGroupState,
-    ETraceTreeState,
-    # parameter
-    ETraceParam,
-    ElemWiseParam,
-    NonTempParam,
-    # fake parameter
-    FakeETraceParam,
-    FakeElemWiseParam,
-)
-from brainscale._etrace_graph_executor import (
-    ETraceGraphExecutor,
-)
-from brainscale._etrace_input_data import (
-    SingleStepData,
-    MultiStepData,
-)
-from brainscale._etrace_operators import (
-    ETraceOp,
-    ElemWiseOp,
-    MatMulOp,
-    LoraOp,
-    ConvOp,
-    SpMatMulOp,
-    stop_param_gradients,
-)
-from brainscale._etrace_vjp_algorithms import (
-    ETraceVjpAlgorithm,
-    IODimVjpAlgorithm, ES_D_RTRL,
-    ParamDimVjpAlgorithm, D_RTRL,
-    HybridDimVjpAlgorithm,
-)
-from brainscale._etrace_vjp_graph_executor import (
-    ETraceVjpGraphExecutor,
-)
-from brainscale._grad_exponential import (
-    GradExpon,
-)
-from brainscale._misc import (
-    CompilationError,
-    NotSupportedError,
-)
+from brainscale._etrace_algorithms import *
+from brainscale._etrace_algorithms import __all__ as _alg_all
+from brainscale._etrace_compiler_graph import *
+from brainscale._etrace_compiler_graph import __all__ as _compiler_all
+from brainscale._etrace_compiler_hid_param_op import *
+from brainscale._etrace_compiler_hid_param_op import __all__ as _hid_param_all
+from brainscale._etrace_compiler_hidden_group import *
+from brainscale._etrace_compiler_hidden_group import __all__ as _hid_group_all
+from brainscale._etrace_compiler_hidden_pertubation import *
+from brainscale._etrace_compiler_hidden_pertubation import __all__ as _hid_pertub_all
+from brainscale._etrace_compiler_module_info import *
+from brainscale._etrace_compiler_module_info import __all__ as _mod_info_all
+from brainscale._etrace_concepts import *
+from brainscale._etrace_concepts import __all__ as _con_all
+from brainscale._etrace_graph_executor import *
+from brainscale._etrace_graph_executor import __all__ as _exec_all
+from brainscale._etrace_input_data import *
+from brainscale._etrace_input_data import __all__ as _data_all
+from brainscale._etrace_operators import *
+from brainscale._etrace_operators import __all__ as _op_all
+from brainscale._etrace_vjp_algorithms import *
+from brainscale._etrace_vjp_algorithms import __all__ as _vjp_all
+from brainscale._etrace_vjp_graph_executor import *
+from brainscale._etrace_vjp_graph_executor import __all__ as _vjp_graph_all
+from brainscale._grad_exponential import *
+from brainscale._grad_exponential import __all__ as _grad_exp_all
+from brainscale._misc import *
+from brainscale._misc import __all__ as _misc_all
 from . import nn
+
+__all__ = ['nn'] + _alg_all + _compiler_all + _hid_param_all + _hid_group_all + _hid_pertub_all
+__all__ += _mod_info_all + _con_all + _exec_all + _data_all + _op_all + _vjp_all
+__all__ += _vjp_graph_all + _grad_exp_all + _misc_all
+
+del _alg_all, _compiler_all, _hid_param_all, _hid_group_all, _hid_pertub_all
+del _mod_info_all, _con_all, _exec_all, _data_all, _op_all, _vjp_all
+del _vjp_graph_all, _grad_exp_all,
+del _misc_all
+
+
+def __getattr__(name):
+    if name in [
+        # eligibility trace states
+        'ETraceState',  # single hidden state for the etrace-based learning
+        'ETraceGroupState',  # multiple hidden state for the etrace-based learning
+        'ETraceTreeState',  # dictionary of hidden states for the etrace-based learning
+    ]:
+        import warnings
+        import brainstate
+
+        warnings.warn(
+            f"brainscale.{name} is deprecated and will be removed in a future release. "
+            f"Please use brainstate.{name} instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
+        return getattr(brainstate, name)
+    raise AttributeError(name)

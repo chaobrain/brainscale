@@ -26,6 +26,12 @@ from ._compatible_imports import Var
 from ._typing import Path, ETraceDF_Key, ETraceWG_Key
 
 
+__all__ = [
+    'NotSupportedError',
+    'CompilationError',
+]
+
+
 def _remove_quantity(tree):
     """
     Remove the quantity from the tree.
