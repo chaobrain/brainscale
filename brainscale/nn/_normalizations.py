@@ -21,17 +21,12 @@ from typing import Callable, Union, Sequence, Optional, Any
 import brainstate
 import brainunit as u
 import jax
-
-version = tuple(map(int, brainstate.__version__.split('.')))
-if version >= (0, 1, 3):
-    from brainstate.nn._normalizations import _BatchNorm
-else:
-    from brainstate.nn._interaction._normalizations import _BatchNorm
+from brainstate import BatchState
+from brainstate.nn._normalizations import _BatchNorm
 
 from brainscale._etrace_concepts import ETraceParam
 from brainscale._etrace_operators import ETraceOp, Y, W, general_y2w
 from brainscale._typing import ArrayLike, Size, Axes
-from brainstate._state import BatchState
 
 __all__ = [
     'BatchNorm0d',

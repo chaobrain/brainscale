@@ -13,44 +13,56 @@
 # limitations under the License.
 # ==============================================================================
 
+
 from ._conv import *
 from ._conv import __all__ as _conv_all
-from ._elementwise import *
-from ._elementwise import __all__ as elementwise_all
 from ._linear import *
 from ._linear import __all__ as _linear_all
-from ._neurons import *
-from ._neurons import __all__ as _neurons_all
 from ._normalizations import *
 from ._normalizations import __all__ as _normalizations_all
-from ._poolings import *
-from ._poolings import __all__ as _poolings_all
 from ._rate_rnns import *
 from ._rate_rnns import __all__ as _rate_rnns_all
 from ._readout import *
 from ._readout import __all__ as _readout_all
-from ._synapses import *
-from ._synapses import __all__ as _synapses_all
 
-__all__ = (
-    _conv_all +
-    elementwise_all +
-    _linear_all +
-    _neurons_all +
-    _normalizations_all +
-    _poolings_all +
-    _rate_rnns_all +
-    _readout_all +
-    _synapses_all
-)
-del (
-    _conv_all,
-    elementwise_all,
-    _linear_all,
-    _neurons_all,
-    _normalizations_all,
-    _poolings_all,
-    _rate_rnns_all,
-    _readout_all,
-    _synapses_all
-)
+__all__ = _conv_all + _linear_all + _normalizations_all + _rate_rnns_all + _readout_all
+del _conv_all, _linear_all, _normalizations_all, _rate_rnns_all, _readout_all,
+
+
+def __getattr__(name):
+    import warnings
+    if name in [
+        'IF', 'LIF', 'ALIF',
+        'Expon', 'Alpha', 'DualExpon', 'STP', 'STD',
+    ]:
+        warnings.warn(
+            f'brainscale.nn.{name} is deprecated. Use brainstate.state.{name} instead.',
+            DeprecationWarning,
+            stacklevel=2
+        )
+        import brainpy
+        return getattr(brainpy.state, name)
+
+    if name in [
+        'ReLU', 'RReLU', 'Hardtanh', 'ReLU6', 'Sigmoid', 'Hardsigmoid',
+        'Tanh', 'SiLU', 'Mish', 'Hardswish', 'ELU', 'CELU', 'SELU', 'GLU', 'GELU',
+        'Hardshrink', 'LeakyReLU', 'LogSigmoid', 'Softplus', 'Softshrink', 'PReLU',
+        'Softsign', 'Tanhshrink', 'Softmin', 'Softmax', 'Softmax2d', 'LogSoftmax',
+        'Dropout', 'Dropout1d', 'Dropout2d', 'Dropout3d',
+        'Identity', 'SpikeBitwise',
+
+        'Flatten', 'Unflatten',
+        'AvgPool1d', 'AvgPool2d', 'AvgPool3d',
+        'MaxPool1d', 'MaxPool2d', 'MaxPool3d',
+        'AdaptiveAvgPool1d', 'AdaptiveAvgPool2d', 'AdaptiveAvgPool3d',
+        'AdaptiveMaxPool1d', 'AdaptiveMaxPool2d', 'AdaptiveMaxPool3d',
+    ]:
+        warnings.warn(
+            f'brainscale.nn.{name} is deprecated. Use brainstate.nn.{name} instead.',
+            DeprecationWarning,
+            stacklevel=2
+        )
+        import brainstate
+        return getattr(brainstate.nn, name)
+
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
