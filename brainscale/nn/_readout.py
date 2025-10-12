@@ -75,30 +75,6 @@ class LeakyRateReadout(brainstate.nn.Module):
         r_initializer: Callable = braintools.init.ZeroInit(),
         name: Optional[str] = None,
     ):
-        """
-        Initializes the LeakyRateReadout module with specified parameters.
-
-        This constructor sets up the initial configuration for the LeakyRateReadout
-        module, including input and output sizes, time constant, weight initialization,
-        and state initialization.
-
-        Parameters
-        ----------
-        in_size : Size
-            The size of the input to the readout module. It can be an integer or a tuple
-            representing the dimensions of the input.
-        out_size : Size
-            The size of the output from the readout module. It can be an integer or a tuple
-            representing the dimensions of the output.
-        tau : ArrayLike, optional
-            The time constant for the leaky integration dynamics. Default is 5 milliseconds.
-        w_init : Callable, optional
-            A callable for initializing the weights of the readout module. Default is KaimingNormal.
-        r_initializer : Callable, optional
-            A callable for initializing the state of the readout module. Default is ZeroInit.
-        name : Optional[str], optional
-            An optional name for the module. Default is None.
-        """
         super().__init__(name=name)
 
         # parameters
@@ -222,33 +198,6 @@ class LeakySpikeReadout(brainpy.state.Neuron):
         spk_reset: str = 'soft',
         name: str = None,
     ):
-        """
-        Initializes the LeakySpikeReadout module with specified parameters.
-
-        This constructor sets up the initial configuration for the LeakySpikeReadout
-        module, including input size, time constant, threshold voltage, weight initialization,
-        and spike function.
-        
-        Parameters
-        ----------
-        in_size : Size
-            The size of the input to the readout module. It can be an integer or a tuple
-            representing the dimensions of the input.
-        tau : ArrayLike, optional
-            The time constant for the leaky integration dynamics. Default is 5 milliseconds.
-        V_th : ArrayLike, optional
-            The threshold voltage for spike generation. Default is 1 millivolt.
-        w_init : Callable, optional
-            A callable for initializing the weights of the readout module. Default is KaimingNormal.
-        V_initializer : Callable, optional
-            A callable for initializing the membrane potential. Default is ZeroInit.
-        spk_fun : Callable, optional
-            A callable representing the spike function. Default is ReluGrad.
-        spk_reset : str, optional
-            The method for resetting spikes. Default is 'soft'.
-        name : str, optional
-            An optional name for the module. Default is None.
-        """
         super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
         self.out_size = out_size
 
