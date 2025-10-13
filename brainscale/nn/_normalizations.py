@@ -346,7 +346,7 @@ class LayerNorm(brainstate.nn.LayerNorm):
 
     Parameters
     ----------
-    normalized_shape : int or sequence of int
+    in_size : int or sequence of int
         The shape of the input to be normalized. Can be a single integer (for 1D)
         or a tuple of integers (for multi-dimensional inputs).
     epsilon : float, optional
@@ -370,7 +370,7 @@ class LayerNorm(brainstate.nn.LayerNorm):
         >>> import brainstate
         >>>
         >>> # Create a LayerNorm layer
-        >>> ln = brainscale.nn.LayerNorm(normalized_shape=512)
+        >>> ln = brainscale.nn.LayerNorm(in_size=512)
         >>>
         >>> # Input with batch size 10 and sequence length 20
         >>> x = brainstate.random.randn(10, 20, 512)
@@ -404,7 +404,7 @@ class RMSNorm(brainstate.nn.RMSNorm):
 
     Parameters
     ----------
-    normalized_shape : int or sequence of int
+    in_size : int or sequence of int
         The shape of the input to be normalized. Can be a single integer (for 1D)
         or a tuple of integers (for multi-dimensional inputs).
     epsilon : float, optional
@@ -426,7 +426,7 @@ class RMSNorm(brainstate.nn.RMSNorm):
         >>> import brainstate
         >>>
         >>> # Create an RMSNorm layer
-        >>> rms = brainscale.nn.RMSNorm(normalized_shape=768)
+        >>> rms = brainscale.nn.RMSNorm(in_size=768)
         >>>
         >>> # Input with batch size 8 and sequence length 128
         >>> x = brainstate.random.randn(8, 128, 768)

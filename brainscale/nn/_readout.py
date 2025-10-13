@@ -18,13 +18,12 @@
 import numbers
 from typing import Callable, Optional
 
-import brainpy
 import brainstate
 import braintools
 import brainunit as u
 import jax
-import jax.numpy as jnp
 
+import brainpy
 from brainscale._etrace_concepts import ETraceParam
 from brainscale._etrace_operators import MatMulOp
 from brainscale._typing import Size, ArrayLike, Spike
@@ -119,7 +118,9 @@ class LeakyRateReadout(brainstate.nn.Module):
         self.in_size = (in_size,) if isinstance(in_size, numbers.Integral) else tuple(in_size)
         self.out_size = (out_size,) if isinstance(out_size, numbers.Integral) else tuple(out_size)
         self.tau = braintools.init.param(tau, self.in_size)
-        self.decay = jnp.exp(-brainstate.environ.get_dt() / self.tau)
+        # Compute decay handling units properly
+        tau_normalized = u.maybe_decimal(self.tau / brainstate.environ.get_dt())
+        self.decay = u.math.exp(-1.0 / tau_normalized)
         self.r_init = r_init
 
         # weights
@@ -229,8 +230,11 @@ class LeakySpikeReadout(brainpy.state.Neuron):
         spk_reset: str = 'soft',
         name: str = None,
     ):
-        super().__init__(in_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
-        self.out_size = out_size
+        # For readout layer, the state size should be out_size, not in_size
+        super().__init__(out_size, name=name, spk_fun=spk_fun, spk_reset=spk_reset)
+        # Store in_size separately
+        self.in_size = in_size
+        self.out_size = out_size  # varshape is already set to out_size by parent
 
         # parameters
         self.tau = braintools.init.param(tau, self.varshape)
@@ -241,12 +245,16 @@ class LeakySpikeReadout(brainpy.state.Neuron):
         weight = braintools.init.param(w_init, (self.in_size[0], self.out_size[0]))
         self.weight_op = ETraceParam({'weight': weight}, op=MatMulOp())
 
+    @property
+    def varshape(self):
+        return self.out_size
+
     def init_state(self, batch_size, **kwargs):
         self.V = brainstate.HiddenState(
-            braintools.init.param(self.V_init, self.varshape, batch_size))
+            braintools.init.param(self.V_init, self.out_size, batch_size))
 
     def reset_state(self, batch_size, **kwargs):
-        self.V.value = braintools.init.param(self.V_init, self.varshape, batch_size)
+        self.V.value = braintools.init.param(self.V_init, self.out_size, batch_size)
 
     @property
     def spike(self):
@@ -263,8 +271,8 @@ class LeakySpikeReadout(brainpy.state.Neuron):
         V_th = self.V_th if self.spk_reset == 'soft' else jax.lax.stop_gradient(last_V)
         V = last_V - V_th * last_spike
         # membrane potential
-        dv = lambda v, x: (-v + self.sum_current_inputs(x, v)) / self.tau
-        V = brainstate.nn.exp_euler_step(dv, V, self.weight_op.execute(spike))
-        V = self.sum_delta_inputs(V)
+        I_syn = self.weight_op.execute(spike)
+        dv = lambda v, x: (-v + x) / self.tau
+        V = brainstate.nn.exp_euler_step(dv, V, I_syn)
         self.V.value = V
         return self.get_spike(V)
