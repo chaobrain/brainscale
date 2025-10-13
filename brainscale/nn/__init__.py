@@ -20,13 +20,13 @@ from ._linear import *
 from ._linear import __all__ as _linear_all
 from ._normalizations import *
 from ._normalizations import __all__ as _normalizations_all
-from ._rate_rnns import *
-from ._rate_rnns import __all__ as _rate_rnns_all
 from ._readout import *
 from ._readout import __all__ as _readout_all
+from ._rnn import *
+from ._rnn import __all__ as _rnn_all
 
-__all__ = _conv_all + _linear_all + _normalizations_all + _rate_rnns_all + _readout_all
-del _conv_all, _linear_all, _normalizations_all, _rate_rnns_all, _readout_all,
+__all__ = _conv_all + _linear_all + _normalizations_all + _rnn_all + _readout_all
+del _conv_all, _linear_all, _normalizations_all, _rnn_all, _readout_all
 
 
 def __getattr__(name):

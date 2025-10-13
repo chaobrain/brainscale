@@ -36,8 +36,7 @@ __all__ = [
 
 
 class LeakyRateReadout(brainstate.nn.Module):
-    """
-    Leaky dynamics for the read-out module used in the Real-Time Recurrent Learning.
+    """Leaky dynamics for the read-out module used in Real-Time Recurrent Learning.
 
     The LeakyRateReadout class implements a leaky integration mechanism
     for processing continuous input signals in neural networks. It is
@@ -49,20 +48,59 @@ class LeakyRateReadout(brainstate.nn.Module):
     the Brain Dynamics Programming ecosystem, providing a biologically
     inspired approach to neural computation.
 
-    Attributes
+    Parameters
     ----------
     in_size : Size
         The size of the input to the readout module.
     out_size : Size
         The size of the output from the readout module.
-    tau : ArrayLike
-        The time constant for the leaky integration dynamics.
-    w_init : Callable
+    tau : ArrayLike, optional
+        The time constant for the leaky integration dynamics. Default is 5 ms.
+    w_init : Callable, optional
         A callable for initializing the weights of the readout module.
-    r_initializer : Callable
+        Default is KaimingNormal().
+    r_init : Callable, optional
         A callable for initializing the state of the readout module.
-    name : Optional[str]
-        An optional name for the module.
+        Default is ZeroInit().
+    name : str or None, optional
+        An optional name for the module. Default is None.
+
+    Attributes
+    ----------
+    in_size : tuple of int
+        The size of the input.
+    out_size : tuple of int
+        The size of the output.
+    tau : ArrayLike
+        The time constant for leaky integration.
+    decay : ArrayLike
+        The decay factor computed from tau.
+    r : HiddenState
+        The readout state variable.
+    weight_op : ETraceParam
+        The parameter object that holds the weights and operations.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainscale
+        >>> import brainstate
+        >>> import brainunit as u
+        >>>
+        >>> # Create a leaky rate readout layer
+        >>> readout = brainscale.nn.LeakyRateReadout(
+        ...     in_size=256,
+        ...     out_size=10,
+        ...     tau=5.0 * u.ms
+        ... )
+        >>> readout.init_state(batch_size=32)
+        >>>
+        >>> # Process input through the readout layer
+        >>> x = brainstate.random.randn(32, 256)
+        >>> output = readout(x)
+        >>> print(output.shape)
+        (32, 10)
     """
     __module__ = 'brainscale.nn'
 
@@ -72,7 +110,7 @@ class LeakyRateReadout(brainstate.nn.Module):
         out_size: Size,
         tau: ArrayLike = 5. * u.ms,
         w_init: Callable = braintools.init.KaimingNormal(),
-        r_initializer: Callable = braintools.init.ZeroInit(),
+        r_init: Callable = braintools.init.ZeroInit(),
         name: Optional[str] = None,
     ):
         super().__init__(name=name)
@@ -82,75 +120,27 @@ class LeakyRateReadout(brainstate.nn.Module):
         self.out_size = (out_size,) if isinstance(out_size, numbers.Integral) else tuple(out_size)
         self.tau = braintools.init.param(tau, self.in_size)
         self.decay = jnp.exp(-brainstate.environ.get_dt() / self.tau)
-        self.r_initializer = r_initializer
+        self.r_init = r_init
 
         # weights
         weight = braintools.init.param(w_init, (self.in_size[0], self.out_size[0]))
         self.weight_op = ETraceParam({'weight': weight}, op=MatMulOp())
 
     def init_state(self, batch_size=None, **kwargs):
-        """
-        Initializes the state of the readout module.
-
-        This function sets up the initial state for the readout module
-        using the specified batch size and any additional keyword arguments.
-
-        Parameters
-        ----------
-        batch_size : int, optional
-            The size of the batch for which the state is initialized. If not provided,
-            the default behavior is used.
-        **kwargs
-            Additional keyword arguments that may be used for state initialization.
-        """
         self.r = brainstate.HiddenState(
-            braintools.init.param(self.r_initializer, self.out_size, batch_size))
+            braintools.init.param(self.r_init, self.out_size, batch_size))
 
     def reset_state(self, batch_size=None, **kwargs):
-        """
-        Resets the state of the readout module.
-
-        This function resets the internal state of the readout module to its initial
-        configuration using the specified batch size and any additional keyword arguments.
-
-        Parameters
-        ----------
-        batch_size : int, optional
-            The size of the batch for which the state is reset. If not provided,
-            the default behavior is used.
-        **kwargs
-            Additional keyword arguments that may be used for state resetting.
-
-        """
-        self.r.value = braintools.init.param(self.r_initializer, self.out_size, batch_size)
+        self.r.value = braintools.init.param(self.r_init, self.out_size, batch_size)
 
     def update(self, x):
-        """
-        Updates the state of the readout module with the given input.
-
-        This function applies the leaky integration dynamics to the input
-        and updates the internal state accordingly.
-
-        Parameters
-        ----------
-        x : ArrayLike
-            The input to the readout module. It should be compatible with
-            the dimensions specified during the initialization of the module.
-
-        Returns
-        -------
-        ArrayLike
-            The updated state of the readout module after applying the
-            leaky integration dynamics.
-        """
         r = self.decay * self.r.value + self.weight_op.execute(x)
         self.r.value = r
         return r
 
 
 class LeakySpikeReadout(brainpy.state.Neuron):
-    """
-    Integrate-and-fire neuron model for spike-based readout.
+    """Integrate-and-fire neuron model for spike-based readout.
 
     The LeakySpikeReadout class implements a leaky integrate-and-fire
     neuron model used for spike-based readout in neural networks. It
@@ -162,26 +152,67 @@ class LeakySpikeReadout(brainpy.state.Neuron):
     integrate with the Brain Dynamics Programming ecosystem, providing
     a biologically inspired approach to neural computation.
 
-    Attributes
+    Parameters
     ----------
     in_size : Size
         The size of the input to the readout module.
-    keep_size : bool
-        A flag indicating whether to keep the input size unchanged.
-    tau : ArrayLike
-        The time constant for the leaky integration dynamics.
-    V_th : ArrayLike
-        The threshold voltage for spike generation.
-    w_init : Callable
+    out_size : Size
+        The size of the output from the readout module.
+    tau : ArrayLike, optional
+        The time constant for the leaky integration dynamics. Default is 5 ms.
+    V_th : ArrayLike, optional
+        The threshold voltage for spike generation. Default is 1 mV.
+    w_init : Callable, optional
         A callable for initializing the weights of the readout module.
-    V_initializer : Callable
-        A callable for initializing the membrane potential.
-    spk_fun : Callable
-        A callable representing the spike function.
-    spk_reset : str
-        The method for resetting spikes.
-    name : str
-        An optional name for the module.
+        Default is KaimingNormal(unit=u.mV).
+    V_init : Callable, optional
+        A callable for initializing the membrane potential. Default is ZeroInit(unit=u.mV).
+    spk_fun : Callable, optional
+        A callable representing the spike function (surrogate gradient).
+        Default is ReluGrad().
+    spk_reset : str, optional
+        The method for resetting spikes after firing. Can be 'soft' or 'hard'.
+        Default is 'soft'.
+    name : str or None, optional
+        An optional name for the module. Default is None.
+
+    Attributes
+    ----------
+    in_size : tuple of int
+        The size of the input.
+    out_size : tuple of int
+        The size of the output.
+    tau : ArrayLike
+        The time constant for membrane dynamics.
+    V_th : ArrayLike
+        The threshold voltage.
+    V : HiddenState
+        The membrane potential state variable.
+    weight_op : ETraceParam
+        The parameter object that holds the weights and operations.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainscale
+        >>> import brainstate
+        >>> import brainunit as u
+        >>>
+        >>> # Create a leaky spike readout layer
+        >>> readout = brainscale.nn.LeakySpikeReadout(
+        ...     in_size=512,
+        ...     out_size=10,
+        ...     tau=10.0 * u.ms,
+        ...     V_th=1.0 * u.mV
+        ... )
+        >>> readout.init_state(batch_size=64)
+        >>>
+        >>> # Process input spikes through the readout layer
+        >>> spike_input = brainstate.random.randn(64, 512) > 0.5
+        >>> spike_output = readout(spike_input)
+        >>> print(spike_output.shape)
+        (64, 10)
     """
 
     __module__ = 'brainscale.nn'
@@ -193,7 +224,7 @@ class LeakySpikeReadout(brainpy.state.Neuron):
         tau: ArrayLike = 5. * u.ms,
         V_th: ArrayLike = 1. * u.mV,
         w_init: Callable = braintools.init.KaimingNormal(unit=u.mV),
-        V_initializer: Callable = braintools.init.ZeroInit(unit=u.mV),
+        V_init: Callable = braintools.init.ZeroInit(unit=u.mV),
         spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
         name: str = None,
@@ -204,101 +235,28 @@ class LeakySpikeReadout(brainpy.state.Neuron):
         # parameters
         self.tau = braintools.init.param(tau, self.varshape)
         self.V_th = braintools.init.param(V_th, self.varshape)
-        self.V_initializer = V_initializer
+        self.V_init = V_init
 
         # weights
         weight = braintools.init.param(w_init, (self.in_size[0], self.out_size[0]))
         self.weight_op = ETraceParam({'weight': weight}, op=MatMulOp())
 
     def init_state(self, batch_size, **kwargs):
-        """
-        Initializes the state of the LeakySpikeReadout module.
-
-        This function sets up the initial membrane potential state for the
-        LeakySpikeReadout module using the specified batch size and any
-        additional keyword arguments.
-
-        Parameters
-        ----------
-        batch_size : int
-            The size of the batch for which the state is initialized.
-        **kwargs
-            Additional keyword arguments that may be used for state initialization.
-        """
         self.V = brainstate.HiddenState(
-            braintools.init.param(self.V_initializer, self.varshape, batch_size))
+            braintools.init.param(self.V_init, self.varshape, batch_size))
 
     def reset_state(self, batch_size, **kwargs):
-        """
-        Resets the state of the LeakySpikeReadout module.
-
-        This function resets the internal membrane potential state of the
-        LeakySpikeReadout module to its initial configuration using the
-        specified batch size and any additional keyword arguments.
-
-        Parameters
-        ----------
-        batch_size : int
-            The size of the batch for which the state is reset.
-        **kwargs
-            Additional keyword arguments that may be used for state resetting.
-
-        """
-        self.V.value = braintools.init.param(self.V_initializer, self.varshape, batch_size)
+        self.V.value = braintools.init.param(self.V_init, self.varshape, batch_size)
 
     @property
     def spike(self):
-        """
-        Computes the spike output of the LeakySpikeReadout module.
-
-        This property calculates the spike output based on the current
-        membrane potential value.
-
-        Returns
-        -------
-        Spike
-            The spike output of the module.
-        """
         return self.get_spike(self.V.value)
 
     def get_spike(self, V):
-        """
-        Computes the spike output based on the membrane potential.
-
-        This function calculates the spike output using the specified
-        spike function and the current membrane potential.
-
-        Parameters
-        ----------
-        V : ArrayLike
-            The current membrane potential.
-
-        Returns
-        -------
-        Spike
-            The computed spike output.
-        """
         v_scaled = (V - self.V_th) / self.V_th
         return self.spk_fun(v_scaled)
 
     def update(self, spike: Spike) -> Spike:
-        """
-        Updates the membrane potential and computes the spike output.
-
-        This function applies the leaky integrate-and-fire dynamics to
-        update the membrane potential and compute the resulting spike
-        output based on the input spike.
-
-        Parameters
-        ----------
-        spike : Spike
-            The input spike to the readout module.
-
-        Returns
-        -------
-        Spike
-            The updated spike output after applying the dynamics.
-        """
         # reset
         last_V = self.V.value
         last_spike = self.get_spike(last_V)

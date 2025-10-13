@@ -34,29 +34,57 @@ __all__ = [
 
 
 class Linear(brainstate.nn.Module):
-    """
-    A Linear layer that performs a linear transformation on the input data.
+    """A Linear layer that performs a linear transformation on the input data.
 
     This class represents a fully connected linear layer, which applies a linear
     transformation to the incoming data: `y = xW + b`, where `x` is the input,
     `W` is the weight matrix, and `b` is the bias vector.
 
+    Parameters
+    ----------
+    in_size : int or sequence of int
+        The size of the input features.
+    out_size : int or sequence of int
+        The size of the output features.
+    w_init : Callable or ArrayLike, optional
+        The initializer for the weights. Default is KaimingNormal().
+    b_init : Callable or ArrayLike or None, optional
+        The initializer for the bias. Default is ZeroInit().
+    w_mask : ArrayLike or Callable or None, optional
+        An optional mask for the weights. Default is None.
+    name : str or None, optional
+        The name of the layer. Default is None.
+    param_type : type, optional
+        The type of the parameter. Default is ETraceParam.
+
     Attributes
     ----------
-    in_size : Union[int, Sequence[int]]
+    in_size : int or sequence of int
         The size of the input features.
-    out_size : Union[int, Sequence[int]]
+    out_size : int or sequence of int
         The size of the output features.
-    w_mask : Optional[Union[ArrayLike, Callable]]
+    w_mask : ArrayLike or Callable or None
         An optional mask for the weights.
     weight_op : ETraceParam
         The parameter object that holds the weights and the operation to be
         performed on them.
-        
-    Methods
-    -------
-    update(x)
-        Applies the linear transformation to the input data.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainscale
+        >>> import brainstate
+        >>>
+        >>> # Create a linear layer
+        >>> brainstate.environ.set(precision=64)
+        >>> linear = brainscale.nn.Linear(in_size=128, out_size=64)
+        >>>
+        >>> # Input with batch size 10
+        >>> x = brainstate.random.randn(10, 128)
+        >>> y = linear(x)
+        >>> print(y.shape)
+        (10, 64)
     """
     __module__ = 'brainscale.nn'
 
@@ -70,27 +98,6 @@ class Linear(brainstate.nn.Module):
         name: Optional[str] = None,
         param_type: type = ETraceParam,
     ):
-        """
-        Initializes a Linear layer.
-
-        Parameters
-        ----------
-        in_size : Union[int, Sequence[int]]
-            The size of the input features.
-        out_size : Union[int, Sequence[int]]
-            The size of the output features.
-        w_init : Union[Callable, ArrayLike], optional
-            The initializer for the weights. Defaults to KaimingNormal.
-        b_init : Optional[Union[Callable, ArrayLike]], optional
-            The initializer for the bias. Defaults to ZeroInit.
-        w_mask : Optional[Union[ArrayLike, Callable]], optional
-            An optional mask for the weights.
-        name : Optional[str], optional
-            The name of the layer.
-        param_type : type, optional
-            The type of the parameter, defaults to ETraceParam.
-
-        """
         super().__init__(name=name)
 
         # input and output shape
@@ -111,44 +118,58 @@ class Linear(brainstate.nn.Module):
         self.weight_op = param_type(params, op=MatMulOp(self.w_mask))
 
     def update(self, x):
-        """
-        Updates the layer with the given input.
-
-        Parameters
-        ----------
-        x : ArrayLike
-            The input data to be processed by the layer.
-
-        Returns
-        -------
-        ArrayLike
-            The result of the linear transformation applied to the input.
-        """
         return self.weight_op.execute(x)
 
 
 class SignedWLinear(brainstate.nn.Module):
-    """
-    A Linear layer with signed weights.
+    """A Linear layer with signed weights.
 
     This class represents a linear layer where the weights can be constrained
     to have specific signs. It applies a linear transformation to the input
     data, with the option to mask the weights with a sign matrix.
 
+    Parameters
+    ----------
+    in_size : int or sequence of int
+        The size of the input features.
+    out_size : int or sequence of int
+        The size of the output features.
+    w_init : Callable or ArrayLike, optional
+        The initializer for the weights. Default is KaimingNormal().
+    w_sign : ArrayLike or None, optional
+        The sign matrix to constrain the weights. Default is None.
+    name : str or None, optional
+        The name of the layer. Default is None.
+    param_type : type, optional
+        The type of the parameter. Default is ETraceParam.
+
     Attributes
     ----------
-    in_size : Union[int, Sequence[int]]
+    in_size : int or sequence of int
         The size of the input features.
-    out_size : Union[int, Sequence[int]]
+    out_size : int or sequence of int
         The size of the output features.
     weight_op : ETraceParam
         The parameter object that holds the weights and the operation to be
         performed on them.
 
-    Methods
-    -------
-    update(x)
-        Applies the signed weight linear transformation to the input data.
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainscale
+        >>> import brainstate
+        >>>
+        >>> # Create a signed weight linear layer
+        >>> brainstate.environ.set(precision=64)
+        >>> w_sign = brainstate.random.choice([-1, 1], size=(64, 32))
+        >>> linear = brainscale.nn.SignedWLinear(in_size=64, out_size=32, w_sign=w_sign)
+        >>>
+        >>> # Input with batch size 5
+        >>> x = brainstate.random.randn(5, 64)
+        >>> y = linear(x)
+        >>> print(y.shape)
+        (5, 32)
     """
     __module__ = 'brainscale.nn'
 
@@ -177,47 +198,64 @@ class SignedWLinear(brainstate.nn.Module):
         self.weight_op = param_type({'weight': weight}, op=op)
 
     def update(self, x):
-        """
-        Applies the signed weight linear transformation to the input data.
-
-        Parameters
-        ----------
-        x : ArrayLike
-            The input data to be processed by the layer.
-
-        Returns
-        -------
-        ArrayLike
-            The result of the signed weight linear transformation applied to the input.
-        """
         return self.weight_op.execute(x)
 
 
 class ScaledWSLinear(brainstate.nn.Module):
-    """
-    Linear Layer with Weight Standardization.
+    """Linear layer with Weight Standardization.
 
     Applies weight standardization to the weights of the linear layer.
 
     Parameters
     ----------
-    in_size: int, sequence of int
-      The input size.
-    out_size: int, sequence of int
-      The output size.
-    w_init: Callable, ArrayLike
-      The initializer for the weights.
-    b_init: Callable, ArrayLike
-      The initializer for the bias.
-    w_mask: ArrayLike, Callable
-      The optional mask of the weights.
-    ws_gain: bool
-      Whether to use gain for the weights. The default is True.
-    eps: float
-      The epsilon value for the weight standardization.
-    name: str
-      The name of the object.
+    in_size : int or sequence of int
+        The input size.
+    out_size : int or sequence of int
+        The output size.
+    w_init : Callable or ArrayLike, optional
+        The initializer for the weights. Default is KaimingNormal().
+    b_init : Callable or ArrayLike, optional
+        The initializer for the bias. Default is ZeroInit().
+    w_mask : ArrayLike or Callable or None, optional
+        The optional mask of the weights. Default is None.
+    ws_gain : bool, optional
+        Whether to use gain for the weights. Default is True.
+    eps : float, optional
+        The epsilon value for the weight standardization. Default is 1e-4.
+    name : str or None, optional
+        The name of the object. Default is None.
+    param_type : type, optional
+        The type of the parameter. Default is ETraceParam.
 
+    Attributes
+    ----------
+    in_size : int or sequence of int
+        The input size.
+    out_size : int or sequence of int
+        The output size.
+    w_mask : ArrayLike or Callable or None
+        The optional mask of the weights.
+    eps : float
+        The epsilon value for the weight standardization.
+    weight_op : ETraceParam
+        The parameter object that holds the weights and the operation.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainscale
+        >>> import brainstate
+        >>>
+        >>> # Create a weight standardization linear layer
+        >>> brainstate.environ.set(precision=64)
+        >>> linear = brainscale.nn.ScaledWSLinear(in_size=256, out_size=128, ws_gain=True, eps=1e-4)
+        >>>
+        >>> # Input with batch size 16
+        >>> x = brainstate.random.randn(16, 256)
+        >>> y = linear(x)
+        >>> print(y.shape)
+        (16, 128)
     """
     __module__ = 'brainscale.nn'
 
@@ -258,8 +296,8 @@ class ScaledWSLinear(brainstate.nn.Module):
         # operation
         op = MatMulOp(
             weight_mask=self.w_mask,
-            weight_fn=lambda w: brainstate.functional.weight_standardization(w['weight'], self.eps,
-                                                                             w.get('gain', None)),
+            weight_fn=lambda w: brainstate.nn.weight_standardization(
+                w['weight'], self.eps, w.get('gain', None)),
             apply_weight_fn_before_mask=True
         )
 
@@ -271,21 +309,32 @@ class ScaledWSLinear(brainstate.nn.Module):
 
 
 class SparseLinear(brainstate.nn.Module):
-    """
-    A Linear layer that utilizes a sparse matrix for efficient computation.
+    """A Linear layer that utilizes a sparse matrix for efficient computation.
 
     This class represents a linear transformation layer where the weight matrix
     is sparse, allowing for efficient storage and computation. It supports various
     sparse matrix formats such as CSR, CSC, and COO, provided by the `brainunit.sparse`
     module.
 
-    Linear layer with Sparse Matrix (can be ``brainunit.sparse.CSR``,
-    ``brainunit.sparse.CSC``, ``brainunit.sparse.COO``, or any other sparse matrix).
-
+    Parameters
+    ----------
+    sparse_mat : brainunit.sparse.SparseMatrix
+        The sparse weight matrix to be used in the linear transformation.
+        Can be ``brainunit.sparse.CSR``, ``brainunit.sparse.CSC``,
+        ``brainunit.sparse.COO``, or any other sparse matrix format.
+    b_init : Callable or ArrayLike or None, optional
+        The initializer for the bias. If None, no bias is used. Default is None.
+    in_size : brainstate.typing.Size or None, optional
+        The size of the input features. If provided, it must match the first n-1
+        dimensions of the output size. Default is None.
+    name : str or None, optional
+        The name of the layer. Default is None.
+    param_type : type, optional
+        The type of the parameter. Default is ETraceParam.
 
     Attributes
     ----------
-    in_size : brainstate.typing.Size, optional
+    in_size : brainstate.typing.Size or None
         The size of the input features. If provided, it must match the first n-1
         dimensions of the output size.
     out_size : int
@@ -295,31 +344,34 @@ class SparseLinear(brainstate.nn.Module):
         The parameter object that holds the sparse weights and the operation to
         be performed on them.
 
-    Methods
-    -------
-    update(x)
-        Applies the sparse linear transformation to the input data.
-
-    Parameters
-    ----------
-    sparse_mat : u.sparse.SparseMatrix
-        The sparse weight matrix to be used in the linear transformation.
-    b_init : Optional[Union[Callable, ArrayLike]], optional
-        The initializer for the bias. If None, no bias is used.
-    in_size : brainstate.typing.Size, optional
-        The size of the input features. If provided, it must match the first n-1
-        dimensions of the output size.
-    name : Optional[str], optional
-        The name of the layer.
-    param_type : type, optional
-        The type of the parameter, defaults to ETraceParam.
-
     Raises
     ------
     AssertionError
         If the first n-1 dimensions of "in_size" and "out_size" do not match.
         If "sparse_mat" is not an instance of u.sparse.SparseMatrix.
 
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainscale
+        >>> import brainstate
+        >>> import brainunit as u
+        >>>
+        >>> # Create a sparse weight matrix
+        >>> brainstate.environ.set(precision=64)
+        >>> indices = brainstate.random.randint(0, 512, size=(2, 1000))
+        >>> values = brainstate.random.randn(1000)
+        >>> sparse_mat = u.sparse.COO((values, indices), shape=(512, 256))
+        >>>
+        >>> # Create a sparse linear layer
+        >>> linear = brainscale.nn.SparseLinear(sparse_mat, b_init=None)
+        >>>
+        >>> # Input with batch size 8
+        >>> x = brainstate.random.randn(8, 512)
+        >>> y = linear(x)
+        >>> print(y.shape)
+        (8, 256)
     """
     __module__ = 'brainscale.nn'
 
@@ -331,29 +383,6 @@ class SparseLinear(brainstate.nn.Module):
         name: Optional[str] = None,
         param_type: type = ETraceParam,
     ):
-        """
-        Initializes a SparseLinear layer with a sparse weight matrix.
-
-        Parameters
-        ----------
-        sparse_mat : u.sparse.SparseMatrix
-            The sparse weight matrix to be used in the linear transformation.
-        b_init : Optional[Union[Callable, ArrayLike]], optional
-            The initializer for the bias. If None, no bias is used.
-        in_size : brainstate.typing.Size, optional
-            The size of the input features. If provided, it must match the
-            first n-1 dimensions of the output size.
-        name : Optional[str], optional
-            The name of the layer.
-        param_type : type, optional
-            The type of the parameter, defaults to ETraceParam.
-
-        Raises
-        ------
-        AssertionError
-            If the first n-1 dimensions of "in_size" and "out_size" do not match.
-            If "sparse_mat" is not an instance of u.sparse.SparseMatrix.
-        """
         super().__init__(name=name)
 
         # input and output shape
@@ -375,19 +404,6 @@ class SparseLinear(brainstate.nn.Module):
         self.weight_op = param_type(params, op=op)
 
     def update(self, x):
-        """
-        Applies the sparse linear transformation to the input data.
-
-        Parameters
-        ----------
-        x : ArrayLike
-            The input data to be processed by the layer.
-
-        Returns
-        -------
-        ArrayLike
-            The result of the sparse linear transformation applied to the input.
-        """
         return self.weight_op.execute(x)
 
 
@@ -399,34 +415,32 @@ class LoRA(brainstate.nn.Module):
     allows for efficient fine-tuning of large models with a reduced number of
     parameters.
 
-    $$
-        W_\mathrm{L o R A}=W_{\text {orig }}+\frac{\alpha}{r} B A
-    $$
+    The LoRA layer modifies the original weight matrix :math:`W` by adding a
+    low-rank component :math:`\frac{\alpha}{r} B A`, where :math:`B` and :math:`A`
+    are learnable matrices of rank :math:`r`, and :math:`\alpha` is a scaling factor.
 
-    The LoRA layer modifies the original weight matrix $ W $ by adding a
-    low-rank component $ \frac{\alpha}{r} B A $, where $ B $ and $ A $
-    are learnable matrices of rank $ r $, and $ \alpha $ is a scaling factor.
+    .. math::
 
+        W_{\mathrm{LoRA}} = W_{\text{orig}} + \frac{\alpha}{r} B A
 
-    Example usage::
-
-        >>> import brainstate as brainstate
-        >>> import brainscale
-        >>> import jax, jax.numpy as jnp
-        >>> layer = brainscale.nn.LoRA(3, 2, 4)
-        >>> layer.weight_op.value
-        {'lora_a': Array([[ 0.25141352, -0.09826107],
-                [ 0.2328382 ,  0.38869813],
-                [ 0.27069277,  0.7678282 ]], dtype=float32),
-         'lora_b': Array([[-0.8372317 ,  0.21012013, -0.52999765, -0.31939325],
-                [ 0.64234126, -0.42980042,  1.2549229 , -0.47134295]],      dtype=float32)}
-        >>> # Wrap around existing layer
-        >>> linear = brainstate.nn.Linear(3, 4)
-        >>> wrapper = brainscale.nn.LoRA(3, 2, 4, base_module=linear)
-        >>> assert wrapper.base_module == linear
-        >>> y = layer(jnp.ones((16, 3)))
-        >>> y.shape
-        (16, 4)
+    Parameters
+    ----------
+    in_features : brainstate.typing.Size
+        The number of input features.
+    lora_rank : int
+        The rank of the LoRA dimension.
+    out_features : brainstate.typing.Size
+        The number of output features.
+    alpha : float, optional
+        A scaling factor for the LoRA operation. Default is 1.
+    base_module : Callable or None, optional
+        A base module to call and substitute, if possible. Default is None.
+    B_init : Callable or ArrayLike, optional
+        Initializer function for the weight matrix B. Default is ZeroInit().
+    A_init : Callable or ArrayLike, optional
+        Initializer function for the weight matrix A. Default is LecunNormal().
+    param_type : type, optional
+        The type of the LoRA parameters. Default is ETraceParam.
 
     Attributes
     ----------
@@ -438,35 +452,34 @@ class LoRA(brainstate.nn.Module):
         The number of output features.
     alpha : float
         A scaling factor for the LoRA operation.
-    base_module : Optional[Callable]
+    base_module : Callable or None
         A base module to call and substitute, if possible.
     weight_op : ETraceParam
         The parameter object that holds the LoRA weights and the operation to
         be performed on them.
 
-    Methods
-    -------
-    update(x)
-        Applies the LoRA transformation to the input data.
+    Examples
+    --------
+    .. code-block:: python
 
-    Parameters
-    ----------
-    in_features : brainstate.typing.Size
-        The number of input features.
-    lora_rank : int
-        The rank of the LoRA dimension.
-    out_features : brainstate.typing.Size
-        The number of output features.
-    alpha : float, optional
-        A scaling factor for the LoRA operation, by default 1.
-    base_module : Optional[Callable], optional
-        A base module to call and substitute, if possible, by default None.
-    B_init : Union[Callable, ArrayLike], optional
-        Initializer function for the weight matrix B, by default ZeroInit.
-    A_init : Union[Callable, ArrayLike], optional
-        Initializer function for the weight matrix A, by default LecunNormal.
-    param_type : type, optional
-        The type of the LoRA parameters, by default ETraceParam.
+        >>> import brainstate
+        >>> import brainscale
+        >>>
+        >>> # Create a standalone LoRA layer
+        >>> brainstate.environ.set(precision=64)
+        >>> layer = brainscale.nn.LoRA(3, 2, 4)
+        >>> x = brainstate.random.randn(16, 3)
+        >>> y = layer(x)
+        >>> print(y.shape)
+        (16, 4)
+        >>>
+        >>> # Wrap around existing linear layer
+        >>> linear = brainstate.nn.Linear(3, 4)
+        >>> wrapper = brainscale.nn.LoRA(3, 2, 4, base_module=linear)
+        >>> assert wrapper.base_module == linear
+        >>> y = wrapper(x)
+        >>> print(y.shape)
+        (16, 4)
     """
 
     def __init__(
@@ -481,33 +494,6 @@ class LoRA(brainstate.nn.Module):
         A_init: Union[Callable, ArrayLike] = init.LecunNormal(),
         param_type: type = ETraceParam,
     ):
-        """
-        Initializes a LoRA (Low-Rank Adaptation) layer.
-
-        This constructor sets up the LoRA layer with the specified input and output
-        features, LoRA rank, and other optional parameters. It initializes the
-        weight matrices B and A using the provided initializers and sets up the
-        LoRA operation.
-
-        Parameters
-        ----------
-        in_features : brainstate.typing.Size
-            The number of input features.
-        lora_rank : int
-            The rank of the LoRA dimension.
-        out_features : brainstate.typing.Size
-            The number of output features.
-        alpha : float, optional
-            A scaling factor for the LoRA operation, by default 1.
-        base_module : Optional[Callable], optional
-            A base module to call and substitute, if possible, by default None.
-        B_init : Union[Callable, ArrayLike], optional
-            Initializer function for the weight matrix B, by default ZeroInit.
-        A_init : Union[Callable, ArrayLike], optional
-            Initializer function for the weight matrix A, by default LecunNormal.
-        param_type : type, optional
-            The type of the LoRA parameters, by default ETraceParam.
-        """
         super().__init__()
 
         # input and output shape
@@ -532,23 +518,6 @@ class LoRA(brainstate.nn.Module):
         self.weight_op = param_type(param, op=op)
 
     def update(self, x: ArrayLike):
-        """
-        Applies the LoRA transformation to the input data.
-
-        This method executes the LoRA operation on the input data and, if a base
-        module is provided, adds its output to the result of the LoRA operation.
-
-        Parameters
-        ----------
-        x : ArrayLike
-            The input data to be processed by the LoRA layer.
-
-        Returns
-        -------
-        ArrayLike
-            The result of the LoRA transformation applied to the input, optionally
-            combined with the output of the base module if it is provided.
-        """
         out = self.weight_op.execute(x)
         if self.base_module is not None:
             out += self.base_module(x)

@@ -201,12 +201,64 @@ class _Conv(brainstate.nn.Module):
 
 class Conv1d(_Conv):
     """One-dimensional convolution.
-  
+
     The input should be a 3d array with the shape of ``[B, H, C]``.
-  
+
     Parameters
     ----------
-    %s
+    in_size : tuple of int
+        The input shape, without the batch size. This argument is important, since it is
+        used to evaluate the shape of the output.
+    out_channels : int
+        The number of output channels.
+    kernel_size : int or sequence of int
+        The shape of the convolutional kernel.
+        For 1D convolution, the kernel size can be passed as an integer.
+        For all other cases, it must be a sequence of integers.
+    stride : int or sequence of int, optional
+        An integer or a sequence of `n` integers, representing the inter-window strides (default: 1).
+    padding : str or int or sequence of int or sequence of tuple, optional
+        Either the string `'SAME'`, the string `'VALID'`, or a sequence of n `(low,
+        high)` integer pairs that give the padding to apply before and after each
+        spatial dimension. Default is 'SAME'.
+    lhs_dilation : int or sequence of int, optional
+        An integer or a sequence of `n` integers, giving the
+        dilation factor to apply in each spatial dimension of `inputs`
+        (default: 1). Convolution with input dilation `d` is equivalent to
+        transposed convolution with stride `d`.
+    rhs_dilation : int or sequence of int, optional
+        An integer or a sequence of `n` integers, giving the
+        dilation factor to apply in each spatial dimension of the convolution
+        kernel (default: 1). Convolution with kernel dilation
+        is also known as 'atrous convolution'.
+    groups : int, optional
+        If specified, divides the input features into groups. Default is 1.
+    w_init : Callable or ArrayLike, optional
+        The initializer for the convolutional kernel. Default is XavierNormal().
+    b_init : Callable or ArrayLike or None, optional
+        The initializer for the bias. Default is None.
+    w_mask : ArrayLike or Callable or None, optional
+        The optional mask of the weights. Default is None.
+    name : str or None, optional
+        The name of the object. Default is None.
+    param_type : type, optional
+        The parameter type. Default is ETraceParam.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainscale
+        >>> import brainstate
+        >>>
+        >>> # Create a 1D convolution layer
+        >>> conv1d = brainscale.nn.Conv1d(in_size=(10, 3), out_channels=16, kernel_size=3)
+        >>>
+        >>> # Input with batch size 4
+        >>> x = brainstate.random.randn(4, 10, 3)
+        >>> y = conv1d(x)
+        >>> print(y.shape)
+        (4, 10, 16)
     """
     __module__ = 'brainscale.nn'
     num_spatial_dims: int = 1
@@ -214,12 +266,64 @@ class Conv1d(_Conv):
 
 class Conv2d(_Conv):
     """Two-dimensional convolution.
-  
+
     The input should be a 4d array with the shape of ``[B, H, W, C]``.
-  
+
     Parameters
     ----------
-    %s
+    in_size : tuple of int
+        The input shape, without the batch size. This argument is important, since it is
+        used to evaluate the shape of the output.
+    out_channels : int
+        The number of output channels.
+    kernel_size : int or sequence of int
+        The shape of the convolutional kernel.
+        For 1D convolution, the kernel size can be passed as an integer.
+        For all other cases, it must be a sequence of integers.
+    stride : int or sequence of int, optional
+        An integer or a sequence of `n` integers, representing the inter-window strides (default: 1).
+    padding : str or int or sequence of int or sequence of tuple, optional
+        Either the string `'SAME'`, the string `'VALID'`, or a sequence of n `(low,
+        high)` integer pairs that give the padding to apply before and after each
+        spatial dimension. Default is 'SAME'.
+    lhs_dilation : int or sequence of int, optional
+        An integer or a sequence of `n` integers, giving the
+        dilation factor to apply in each spatial dimension of `inputs`
+        (default: 1). Convolution with input dilation `d` is equivalent to
+        transposed convolution with stride `d`.
+    rhs_dilation : int or sequence of int, optional
+        An integer or a sequence of `n` integers, giving the
+        dilation factor to apply in each spatial dimension of the convolution
+        kernel (default: 1). Convolution with kernel dilation
+        is also known as 'atrous convolution'.
+    groups : int, optional
+        If specified, divides the input features into groups. Default is 1.
+    w_init : Callable or ArrayLike, optional
+        The initializer for the convolutional kernel. Default is XavierNormal().
+    b_init : Callable or ArrayLike or None, optional
+        The initializer for the bias. Default is None.
+    w_mask : ArrayLike or Callable or None, optional
+        The optional mask of the weights. Default is None.
+    name : str or None, optional
+        The name of the object. Default is None.
+    param_type : type, optional
+        The parameter type. Default is ETraceParam.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainscale
+        >>> import brainstate
+        >>>
+        >>> # Create a 2D convolution layer
+        >>> conv2d = brainscale.nn.Conv2d(in_size=(28, 28, 1), out_channels=32, kernel_size=3, stride=1)
+        >>>
+        >>> # Input with batch size 8
+        >>> x = brainstate.random.randn(8, 28, 28, 1)
+        >>> y = conv2d(x)
+        >>> print(y.shape)
+        (8, 28, 28, 32)
     """
     __module__ = 'brainscale.nn'
     num_spatial_dims: int = 2
@@ -227,55 +331,65 @@ class Conv2d(_Conv):
 
 class Conv3d(_Conv):
     """Three-dimensional convolution.
-  
+
     The input should be a 5d array with the shape of ``[B, H, W, D, C]``.
-  
+
     Parameters
     ----------
-    %s
-    """
-    __module__ = 'brainscale.nn'
-    num_spatial_dims: int = 3
-
-
-_conv_doc = '''
-    in_size: tuple of int
+    in_size : tuple of int
         The input shape, without the batch size. This argument is important, since it is
         used to evaluate the shape of the output.
-    out_channels: int
+    out_channels : int
         The number of output channels.
-    kernel_size: int, sequence of int
+    kernel_size : int or sequence of int
         The shape of the convolutional kernel.
         For 1D convolution, the kernel size can be passed as an integer.
         For all other cases, it must be a sequence of integers.
-    stride: int, sequence of int
+    stride : int or sequence of int, optional
         An integer or a sequence of `n` integers, representing the inter-window strides (default: 1).
-    padding: str, int, sequence of int, sequence of tuple
+    padding : str or int or sequence of int or sequence of tuple, optional
         Either the string `'SAME'`, the string `'VALID'`, or a sequence of n `(low,
         high)` integer pairs that give the padding to apply before and after each
-        spatial dimension.
-    lhs_dilation: int, sequence of int
+        spatial dimension. Default is 'SAME'.
+    lhs_dilation : int or sequence of int, optional
         An integer or a sequence of `n` integers, giving the
         dilation factor to apply in each spatial dimension of `inputs`
         (default: 1). Convolution with input dilation `d` is equivalent to
         transposed convolution with stride `d`.
-    rhs_dilation: int, sequence of int
+    rhs_dilation : int or sequence of int, optional
         An integer or a sequence of `n` integers, giving the
         dilation factor to apply in each spatial dimension of the convolution
         kernel (default: 1). Convolution with kernel dilation
         is also known as 'atrous convolution'.
-    groups: int
-        If specified, divides the input features into groups. default 1.
-    w_init: Callable, ArrayLike, Initializer
-        The initializer for the convolutional kernel.
-    b_init: Optional, Callable, ArrayLike, Initializer
-        The initializer for the bias.
-    w_mask: ArrayLike, Callable, Optional
-        The optional mask of the weights.
-    name: str, Optional
-        The name of the object.
-'''
+    groups : int, optional
+        If specified, divides the input features into groups. Default is 1.
+    w_init : Callable or ArrayLike, optional
+        The initializer for the convolutional kernel. Default is XavierNormal().
+    b_init : Callable or ArrayLike or None, optional
+        The initializer for the bias. Default is None.
+    w_mask : ArrayLike or Callable or None, optional
+        The optional mask of the weights. Default is None.
+    name : str or None, optional
+        The name of the object. Default is None.
+    param_type : type, optional
+        The parameter type. Default is ETraceParam.
 
-Conv1d.__doc__ = Conv1d.__doc__ % _conv_doc
-Conv2d.__doc__ = Conv2d.__doc__ % _conv_doc
-Conv3d.__doc__ = Conv3d.__doc__ % _conv_doc
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> import brainscale
+        >>> import brainstate
+        >>>
+        >>> # Create a 3D convolution layer
+        >>> conv3d = brainscale.nn.Conv3d(in_size=(16, 16, 16, 3), out_channels=64, kernel_size=3, stride=2)
+        >>>
+        >>> # Input with batch size 2
+        >>> x = brainstate.random.randn(2, 16, 16, 16, 3)
+        >>> y = conv3d(x)
+        >>> print(y.shape)
+        (2, 8, 8, 8, 64)
+    """
+    __module__ = 'brainscale.nn'
+    num_spatial_dims: int = 3
+
