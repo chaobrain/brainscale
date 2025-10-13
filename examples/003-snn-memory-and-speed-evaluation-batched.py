@@ -19,10 +19,25 @@ import time
 from functools import reduce
 from typing import Callable, Union
 
+import brainpy
 import matplotlib.pyplot as plt
 import numpy as np
 
 from utils import MyArgumentParser
+# import builtins
+# import traceback
+#
+# _old_print = builtins.print
+#
+# def debug_print(*args, **kwargs):
+#     # 打印原信息
+#     _old_print(*args, **kwargs)
+#     # if args[0] == 6 and args[1] == 6:
+#     traceback.print_stack(limit=5)
+#
+#
+# builtins.print = debug_print
+
 
 parser = MyArgumentParser()
 
@@ -142,7 +157,7 @@ class _LIF_Delta_Dense_Layer(brainstate.nn.Module):
         ff_scale: float = 1.,
     ):
         super().__init__()
-        self.neu = brainscale.nn.LIF(
+        self.neu = brainpy.state.LIF(
             n_rec,
             R=1.,
             tau=tau_mem,
@@ -156,7 +171,7 @@ class _LIF_Delta_Dense_Layer(brainstate.nn.Module):
         rec_init: Callable = braintools.init.KaimingNormal(rec_scale)
         ff_init: Callable = braintools.init.KaimingNormal(ff_scale)
         w_init = jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0)
-        self.syn = brainstate.nn.DeltaProj(
+        self.syn = brainpy.state.DeltaProj(
             comm=brainscale.nn.Linear(n_in + n_rec, n_rec, w_init=w_init),
             post=self.neu
         )
@@ -186,7 +201,7 @@ class _LIF_ExpCu_Dense_Layer(brainstate.nn.Module):
         ff_scale: float = 1.,
     ):
         super().__init__()
-        self.neu = brainscale.nn.LIF(
+        self.neu = brainpy.state.LIF(
             n_rec,
             R=1.,
             tau=tau_mem,
@@ -200,10 +215,10 @@ class _LIF_ExpCu_Dense_Layer(brainstate.nn.Module):
         rec_init: Callable = braintools.init.KaimingNormal(rec_scale)
         ff_init: Callable = braintools.init.KaimingNormal(ff_scale)
         w_init = jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0)
-        self.syn = brainstate.nn.AlignPostProj(
+        self.syn = brainpy.state.AlignPostProj(
             comm=brainscale.nn.Linear(n_in + n_rec, n_rec, w_init),
-            syn=brainscale.nn.Expon(n_rec, tau=tau_syn, g_initializer=braintools.init.ZeroInit()),
-            out=brainstate.nn.CUBA(scale=1.),
+            syn=brainpy.state.Expon(n_rec, tau=tau_syn, g_initializer=braintools.init.ZeroInit()),
+            out=brainpy.state.CUBA(scale=1.),
             post=self.neu
         )
 
@@ -473,7 +488,7 @@ class Trainer(object):
         model.compile_graph(input_info)
 
         @brainstate.transform.jit
-        @brainstate.transform.vmap(in_states=model.states('new'))
+        @brainstate.transform.vmap(in_states=model.states('new'), axis_size=input_info.shape[0])
         def reset_state():
             brainstate.nn.reset_all_states(model)
 
@@ -495,7 +510,7 @@ class Trainer(object):
             i, inp = inputs
             # no need to return weights and states, since they are generated then no longer needed
             f_grad = brainstate.transform.grad(
-                _etrace_grad, grad_states=self.opt.param_states, has_aux=True, return_value=True)
+                _etrace_grad, grad_states=self.opt.param_states.to_pytree(), has_aux=True, return_value=True)
             cur_grads, local_loss, out = f_grad(i, inp, targets)
             next_grads = jax.tree.map(lambda a, b: a + b, prev_grads, cur_grads)
             return next_grads, (out, local_loss)
@@ -510,7 +525,7 @@ class Trainer(object):
         self._etrace_reset_fun()
 
         # initial gradients
-        grads = jax.tree.map(lambda a: jnp.zeros_like(a), self.opt.param_states.to_dict_values())
+        grads = jax.tree.map(lambda a: jnp.zeros_like(a), self.opt.param_states.to_pytree_value())
 
         # training
         indices = np.arange(inputs.shape[0])
@@ -525,7 +540,7 @@ class Trainer(object):
                 losses.append(loss)
 
         # gradient updates
-        grads = brainstate.functional.clip_grad_norm(grads, 1.)
+        grads = brainstate.nn.clip_grad_norm(grads, 1.)
         self.opt.update(grads)
 
         # accuracy

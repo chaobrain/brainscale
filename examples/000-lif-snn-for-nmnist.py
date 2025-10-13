@@ -43,8 +43,8 @@ if __name__ == '__main__':
         in_shape = NMNIST.sensor_size
         out_shape = 10
         data = NMNIST(
-            # save_to='D:/data/mnist',
-            save_to='/mnt/d/data/mnist',
+            save_to='D:/data/mnist',
+            # save_to='/mnt/d/data/mnist',
             train=True,
             first_saccade_only=True,
             transform=tonic.transforms.ToFrame(sensor_size=in_shape, n_time_bins=200)
@@ -68,7 +68,7 @@ if __name__ == '__main__':
             rec_scale=2.,
             ff_scale=6.,
         )
-        net.verify(next(iter(data))[0], num_show=5)
+        # net.verify(next(iter(data))[0], num_show=5)
 
         onliner = OnlineTrainer(
             target=net,

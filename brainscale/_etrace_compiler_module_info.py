@@ -337,10 +337,6 @@ class ModuleInfo(NamedTuple):
             old_state_vals = [st.value for st in self.compiled_model_states]
 
         # calling the function
-        a = len(self.closed_jaxpr.jaxpr.invars)
-        b = len(jax.tree.leaves((args, old_state_vals)))
-        print(a, b)
-        print()
         jaxpr_outs = jax.core.eval_jaxpr(
             self.closed_jaxpr.jaxpr,
             self.closed_jaxpr.consts,

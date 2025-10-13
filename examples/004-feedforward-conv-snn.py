@@ -20,6 +20,7 @@ import sys
 sys.path.append('../')
 
 import brainstate
+import brainpy
 import braintools
 import brainunit as u
 import jax
@@ -71,14 +72,14 @@ class ConvSNN(brainstate.nn.Module):
         self.layer1 = brainstate.nn.Sequential(
             brainscale.nn.Conv2d(in_size, n_channel, kernel_size=3, padding=1, **conv_inits),
             brainscale.nn.LayerNorm.desc(),
-            brainscale.nn.IF.desc(**if_param),
+            brainpy.state.IF.desc(**if_param),
             brainstate.nn.MaxPool2d.desc(kernel_size=2, stride=2)  # 14 * 14
         )
 
         self.layer2 = brainstate.nn.Sequential(
             brainscale.nn.Conv2d(self.layer1.out_size, n_channel, kernel_size=3, padding=1, **conv_inits),
             brainscale.nn.LayerNorm.desc(),
-            brainscale.nn.IF.desc(**if_param),
+            brainpy.state.IF.desc(**if_param),
         )
         self.layer3 = brainstate.nn.Sequential(
             brainstate.nn.MaxPool2d(kernel_size=2, stride=2, in_size=self.layer2.out_size),  # 7 * 7
@@ -86,7 +87,7 @@ class ConvSNN(brainstate.nn.Module):
         )
         self.layer4 = brainstate.nn.Sequential(
             brainscale.nn.Linear(self.layer3.out_size, n_channel * 4 * 4, **linear_inits),
-            brainscale.nn.IF.desc(**if_param),
+            brainpy.state.IF.desc(**if_param),
         )
         self.layer5 = brainscale.nn.LeakyRateReadout(self.layer4.out_size, out_sze, tau=tau_o)
 

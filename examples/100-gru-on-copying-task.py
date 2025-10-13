@@ -15,6 +15,8 @@
 
 # See brainscale documentation for more details:
 
+import os
+os.environ['JAX_TRACEBACK_FILTERING'] = 'off'
 
 import brainstate
 import braintools

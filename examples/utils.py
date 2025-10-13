@@ -47,7 +47,7 @@ class MyArgumentParser(argparse.ArgumentParser):
     def __init__(self, *args, gpu_pre_allocate=0.99, **kwargs):
         super().__init__(*args, **kwargs)
         self.add_argument('--devices', type=str, default='0', help='The GPU device ids.')
-        self.add_argument("--method", type=str, default='bptt', help="Training method.")
+        self.add_argument("--method", type=str, default='expsm_diag', help="Training method.")
         args, _ = self.parse_known_args()
 
         # device management
