@@ -60,21 +60,22 @@ del _misc_all
 
 
 def __getattr__(name):
-    if name in [
-        # eligibility trace states
-        'ETraceState',  # single hidden state for the etrace-based learning
-        'ETraceGroupState',  # multiple hidden state for the etrace-based learning
-        'ETraceTreeState',  # dictionary of hidden states for the etrace-based learning
-    ]:
+    mapping = {
+        'ETraceState': 'HiddenState',
+        'ETraceGroupState': 'HiddenGroupState',
+        'ETraceTreeState': 'HiddenTreeState',
+    }
+
+    if name in mapping:
         import warnings
         import brainstate
 
         warnings.warn(
             f"brainscale.{name} is deprecated and will be removed in a future release. "
-            f"Please use brainstate.{name} instead.",
+            f"Please use brainstate.{mapping[name]} instead.",
             DeprecationWarning,
             stacklevel=2,
         )
 
-        return getattr(brainstate, name)
+        return getattr(brainstate, mapping[name])
     raise AttributeError(name)

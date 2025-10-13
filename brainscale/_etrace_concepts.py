@@ -31,12 +31,10 @@
 # -*- coding: utf-8 -*-
 
 from enum import Enum
-from typing import Callable, Optional, Dict, Tuple, Sequence
+from typing import Callable, Optional
 
 import brainstate
-import brainunit as u
 import jax
-import numpy as np
 
 from ._etrace_operators import ETraceOp, ElemWiseOp
 from ._misc import BaseEnum
