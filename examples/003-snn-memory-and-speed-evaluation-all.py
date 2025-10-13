@@ -109,10 +109,10 @@ class _LIF_Delta_Dense_Layer(brainstate.nn.Module):
             V_th=V_th,
             V_reset=0.,
             V_rest=0.,
-            V_initializer=brainstate.init.ZeroInit(),
+            V_initializer=braintools.init.ZeroInit(),
         )
-        rec_init: Callable = brainstate.init.KaimingNormal(rec_scale)
-        ff_init: Callable = brainstate.init.KaimingNormal(ff_scale)
+        rec_init: Callable = braintools.init.KaimingNormal(rec_scale)
+        ff_init: Callable = braintools.init.KaimingNormal(ff_scale)
         w_init = jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0)
         self.syn = brainstate.nn.DeltaProj(
             comm=brainscale.nn.Linear(n_in + n_rec, n_rec, w_init=w_init),
@@ -153,14 +153,14 @@ class _LIF_ExpCu_Dense_Layer(brainstate.nn.Module):
             V_th=V_th,
             V_reset=0.,
             V_rest=0.,
-            V_initializer=brainstate.init.ZeroInit(),
+            V_initializer=braintools.init.ZeroInit(),
         )
-        rec_init: Callable = brainstate.init.KaimingNormal(rec_scale)
-        ff_init: Callable = brainstate.init.KaimingNormal(ff_scale)
+        rec_init: Callable = braintools.init.KaimingNormal(rec_scale)
+        ff_init: Callable = braintools.init.KaimingNormal(ff_scale)
         w_init = jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0)
         self.syn = brainstate.nn.AlignPostProj(
             comm=brainscale.nn.Linear(n_in + n_rec, n_rec, w_init),
-            syn=brainscale.nn.Expon(n_rec, tau=tau_syn, g_initializer=brainstate.init.ZeroInit()),
+            syn=brainscale.nn.Expon(n_rec, tau=tau_syn, g_initializer=braintools.init.ZeroInit()),
             out=brainstate.nn.CUBA(scale=1.),
             post=self.neu
         )
@@ -241,7 +241,7 @@ class ETraceNet(brainstate.nn.Module):
             in_size=n_rec,
             out_size=n_out,
             tau=args.tau_o,
-            w_init=brainstate.init.KaimingNormal()
+            w_init=braintools.init.KaimingNormal()
         )
 
     def update(self, x):
@@ -282,7 +282,7 @@ class Trainer(object):
     def __init__(
         self,
         target: ETraceNet,
-        opt: brainstate.optim.Optimizer,
+        opt: braintools.optim.Optimizer,
         args: argparse.Namespace,
     ):
         super().__init__()
@@ -523,11 +523,11 @@ def network_training(args):
 
     # optimizer
     if args.optimizer == 'adam':
-        opt_cls = brainstate.optim.Adam
+        opt_cls = braintools.optim.Adam
     elif args.optimizer == 'momentum':
-        opt_cls = brainstate.optim.Momentum
+        opt_cls = braintools.optim.Momentum
     elif args.optimizer == 'sgd':
-        opt_cls = brainstate.optim.SGD
+        opt_cls = braintools.optim.SGD
     else:
         raise ValueError(f'Unknown optimizer: {args.optimizer}')
     opt = opt_cls(lr=args.lr, weight_decay=args.weight_L2)

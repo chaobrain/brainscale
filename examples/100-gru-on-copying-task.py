@@ -66,7 +66,7 @@ class Trainer(object):
     def __init__(
         self,
         target: brainstate.nn.Module,
-        opt: brainstate.optim.Optimizer,
+        opt: braintools.optim.Optimizer,
         n_epochs: int,
         n_seq: int,
         batch_size: int = 128,
@@ -202,7 +202,7 @@ class BPTTTrainer(Trainer):
 
 online = OnlineTrainer(
     target=GRUNet(10, 200, 10, 1),
-    opt=brainstate.optim.Adam(0.001),
+    opt=braintools.optim.Adam(0.001),
     n_epochs=1000,
     n_seq=200,
     batch_size=128,
@@ -211,7 +211,7 @@ online_losses = online.f_train()
 
 bptt = BPTTTrainer(
     target=GRUNet(10, 200, 10, 1),
-    opt=brainstate.optim.Adam(0.001),
+    opt=braintools.optim.Adam(0.001),
     n_epochs=1000,
     n_seq=200,
     batch_size=128,

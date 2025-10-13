@@ -50,7 +50,7 @@ if __name__ == '__main__':
 
         onliner = OnlineTrainer(
             target=net,
-            opt=brainstate.optim.Adam(lr=1e-3),
+            opt=braintools.optim.Adam(lr=1e-3),
             dataset=data,
             n_sim=data.n_sim,
             x_fun=lambda x_local: np.transpose(x_local, (1, 0, 2))

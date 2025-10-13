@@ -159,8 +159,8 @@ class GIF(brainstate.nn.Neuron):
         tau=20. * u.ms,
         tau_I2=50. * u.ms,
         A2=0. * u.mA,
-        V_initializer: Callable = brainstate.init.ZeroInit(unit=u.mV),
-        I2_initializer: Callable = brainstate.init.ZeroInit(unit=u.mA),
+        V_initializer: Callable = braintools.init.ZeroInit(unit=u.mV),
+        I2_initializer: Callable = braintools.init.ZeroInit(unit=u.mA),
         spike_fun: Callable = brainstate.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
         name: str = None,
@@ -168,12 +168,12 @@ class GIF(brainstate.nn.Neuron):
         super().__init__(size, name=name, spk_fun=spike_fun, spk_reset=spk_reset)
 
         # parameters
-        self.V_rest = brainstate.init.param(V_rest, self.varshape, allow_none=False)
-        self.V_th_inf = brainstate.init.param(V_th_inf, self.varshape, allow_none=False)
-        self.R = brainstate.init.param(R, self.varshape, allow_none=False)
-        self.tau = brainstate.init.param(tau, self.varshape, allow_none=False)
-        self.tau_I2 = brainstate.init.param(tau_I2, self.varshape, allow_none=False)
-        self.A2 = brainstate.init.param(A2, self.varshape, allow_none=False)
+        self.V_rest = braintools.init.param(V_rest, self.varshape, allow_none=False)
+        self.V_th_inf = braintools.init.param(V_th_inf, self.varshape, allow_none=False)
+        self.R = braintools.init.param(R, self.varshape, allow_none=False)
+        self.tau = braintools.init.param(tau, self.varshape, allow_none=False)
+        self.tau_I2 = braintools.init.param(tau_I2, self.varshape, allow_none=False)
+        self.A2 = braintools.init.param(A2, self.varshape, allow_none=False)
 
         # initializers
         self._V_initializer = V_initializer
@@ -181,8 +181,8 @@ class GIF(brainstate.nn.Neuron):
 
     def init_state(self):
         # 将模型用于在线学习，需要初始化状态变量
-        self.V = brainstate.HiddenState(brainstate.init.param(self._V_initializer, self.varshape))
-        self.I2 = brainstate.HiddenState(brainstate.init.param(self._I2_initializer, self.varshape))
+        self.V = brainstate.HiddenState(braintools.init.param(self._V_initializer, self.varshape))
+        self.I2 = brainstate.HiddenState(braintools.init.param(self._I2_initializer, self.varshape))
 
     def update(self, x=0. * u.mA):
         # 如果前一时刻发放了脉冲，则将膜电位和适应性电流进行重置
@@ -237,18 +237,18 @@ class _SNNEINet(brainstate.nn.Module):
             comm=brainscale.nn.SignedWLinear(
                 n_in,
                 n_rec,
-                w_init=brainstate.init.KaimingNormal(ff_scale, unit=u.siemens)
+                w_init=braintools.init.KaimingNormal(ff_scale, unit=u.siemens)
             ),
             syn=brainscale.nn.Expon.desc(
                 n_rec,
                 tau=tau_syn,
-                g_initializer=brainstate.init.ZeroInit(unit=u.siemens)
+                g_initializer=braintools.init.ZeroInit(unit=u.siemens)
             ),
             out=(brainstate.nn.CUBA.desc() if E_exc is None else brainstate.nn.COBA.desc(E=E_exc)),
             post=self.pop
         )
         # recurrent
-        inh_init = brainstate.init.KaimingNormal(scale=rec_scale * w_ei_ratio, unit=u.siemens)
+        inh_init = braintools.init.KaimingNormal(scale=rec_scale * w_ei_ratio, unit=u.siemens)
         inh2r_conn = brainscale.nn.SignedWLinear(
             self.n_inh,
             n_rec,
@@ -260,19 +260,19 @@ class _SNNEINet(brainstate.nn.Module):
             syn=brainscale.nn.Expon.desc(
                 n_rec,
                 tau=tau_syn,
-                g_initializer=brainstate.init.ZeroInit(unit=u.siemens)
+                g_initializer=braintools.init.ZeroInit(unit=u.siemens)
             ),
             out=(brainstate.nn.CUBA.desc() if E_inh is None else brainstate.nn.COBA.desc(E=E_inh)),
             post=self.pop
         )
-        exc_init = brainstate.init.KaimingNormal(scale=rec_scale, unit=u.siemens)
+        exc_init = braintools.init.KaimingNormal(scale=rec_scale, unit=u.siemens)
         exc2r_conn = brainscale.nn.SignedWLinear(self.n_exc, n_rec, w_init=exc_init)
         self.exc2r = brainstate.nn.AlignPostProj(
             comm=exc2r_conn,
             syn=brainscale.nn.Expon.desc(
                 n_rec,
                 tau=tau_syn,
-                g_initializer=brainstate.init.ZeroInit(unit=u.siemens)
+                g_initializer=braintools.init.ZeroInit(unit=u.siemens)
             ),
             out=(brainstate.nn.CUBA.desc() if E_exc is None else brainstate.nn.COBA.desc(E=E_exc)),
             post=self.pop
@@ -389,7 +389,7 @@ class Trainer:
     def __init__(
         self,
         target_net: _SNNEINet,
-        optimizer: brainstate.optim.Optimizer,
+        optimizer: braintools.optim.Optimizer,
         loader: Iterable,
         n_sim: int,
         n_epochs: int = 1000,
@@ -547,7 +547,7 @@ def training(
     # trainer
     trainer = Trainer(
         net,
-        brainstate.optim.Adam(lr=lr),
+        braintools.optim.Adam(lr=lr),
         loader,
         loader.n_sim,
         n_epochs=1000,
