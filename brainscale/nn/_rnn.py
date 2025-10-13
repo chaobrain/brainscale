@@ -88,9 +88,9 @@ class ValinaRNNCell(brainstate.nn.RNNCell):
         self,
         in_size: brainstate.typing.Size,
         out_size: brainstate.typing.Size,
-        state_init: Union[ArrayLike, Callable] = brainstate.init.ZeroInit(),
-        w_init: Union[ArrayLike, Callable] = brainstate.init.XavierNormal(),
-        b_init: Union[ArrayLike, Callable] = brainstate.init.ZeroInit(),
+        state_init: Union[ArrayLike, Callable] = braintools.init.ZeroInit(),
+        w_init: Union[ArrayLike, Callable] = braintools.init.XavierNormal(),
+        b_init: Union[ArrayLike, Callable] = braintools.init.ZeroInit(),
         activation: str | Callable = 'relu',
         name: str = None,
         param_type: type = ETraceParam,
@@ -179,9 +179,9 @@ class GRUCell(brainstate.nn.RNNCell):
         self,
         in_size: brainstate.typing.Size,
         out_size: brainstate.typing.Size,
-        w_init: Union[ArrayLike, Callable] = brainstate.init.Orthogonal(),
-        b_init: Union[ArrayLike, Callable] = brainstate.init.ZeroInit(),
-        state_init: Union[ArrayLike, Callable] = brainstate.init.ZeroInit(),
+        w_init: Union[ArrayLike, Callable] = braintools.init.Orthogonal(),
+        b_init: Union[ArrayLike, Callable] = braintools.init.ZeroInit(),
+        state_init: Union[ArrayLike, Callable] = braintools.init.ZeroInit(),
         activation: str | Callable = 'tanh',
         name: str = None,
         param_type: type = ETraceParam,
@@ -272,9 +272,9 @@ class CFNCell(brainstate.nn.RNNCell):
         self,
         in_size: brainstate.typing.Size,
         out_size: brainstate.typing.Size,
-        w_init: Union[ArrayLike, Callable] = brainstate.init.Orthogonal(),
-        b_init: Union[ArrayLike, Callable] = brainstate.init.ZeroInit(),
-        state_init: Union[ArrayLike, Callable] = brainstate.init.ZeroInit(),
+        w_init: Union[ArrayLike, Callable] = braintools.init.Orthogonal(),
+        b_init: Union[ArrayLike, Callable] = braintools.init.ZeroInit(),
+        state_init: Union[ArrayLike, Callable] = braintools.init.ZeroInit(),
         activation: str | Callable = 'tanh',
         name: str = None,
         param_type: type = ETraceParam,
@@ -379,9 +379,9 @@ class MGUCell(brainstate.nn.RNNCell):
         self,
         in_size: brainstate.typing.Size,
         out_size: brainstate.typing.Size,
-        w_init: Union[ArrayLike, Callable] = brainstate.init.Orthogonal(),
-        b_init: Union[ArrayLike, Callable] = brainstate.init.ZeroInit(),
-        state_init: Union[ArrayLike, Callable] = brainstate.init.ZeroInit(),
+        w_init: Union[ArrayLike, Callable] = braintools.init.Orthogonal(),
+        b_init: Union[ArrayLike, Callable] = braintools.init.ZeroInit(),
+        state_init: Union[ArrayLike, Callable] = braintools.init.ZeroInit(),
         activation: str | Callable = 'tanh',
         name: str = None,
         param_type: type = ETraceParam,
@@ -500,9 +500,9 @@ class LSTMCell(brainstate.nn.RNNCell):
         self,
         in_size: brainstate.typing.Size,
         out_size: brainstate.typing.Size,
-        w_init: Union[ArrayLike, Callable] = brainstate.init.XavierNormal(),
-        b_init: Union[ArrayLike, Callable] = brainstate.init.ZeroInit(),
-        state_init: Union[ArrayLike, Callable] = brainstate.init.ZeroInit(),
+        w_init: Union[ArrayLike, Callable] = braintools.init.XavierNormal(),
+        b_init: Union[ArrayLike, Callable] = braintools.init.ZeroInit(),
+        state_init: Union[ArrayLike, Callable] = braintools.init.ZeroInit(),
         activation: str | Callable = 'tanh',
         name: str = None,
         param_type: type = ETraceParam,
@@ -598,8 +598,8 @@ class URLSTMCell(brainstate.nn.RNNCell):
         self,
         in_size: brainstate.typing.Size,
         out_size: brainstate.typing.Size,
-        w_init: Union[ArrayLike, Callable] = brainstate.init.XavierNormal(),
-        state_init: Union[ArrayLike, Callable] = brainstate.init.ZeroInit(),
+        w_init: Union[ArrayLike, Callable] = braintools.init.XavierNormal(),
+        state_init: Union[ArrayLike, Callable] = braintools.init.ZeroInit(),
         activation: str | Callable = 'tanh',
         name: str = None,
         param_type: type = ETraceParam,
@@ -722,9 +722,9 @@ class MinimalRNNCell(brainstate.nn.RNNCell):
         self,
         in_size: brainstate.typing.Size,
         out_size: brainstate.typing.Size,
-        w_init: Union[ArrayLike, Callable] = brainstate.init.Orthogonal(),
-        b_init: Union[ArrayLike, Callable] = brainstate.init.ZeroInit(),
-        state_init: Union[ArrayLike, Callable] = brainstate.init.ZeroInit(),
+        w_init: Union[ArrayLike, Callable] = braintools.init.Orthogonal(),
+        b_init: Union[ArrayLike, Callable] = braintools.init.ZeroInit(),
+        state_init: Union[ArrayLike, Callable] = braintools.init.ZeroInit(),
         phi: Callable = None,
         name: str = None,
         param_type: type = ETraceParam,
@@ -815,9 +815,9 @@ class MiniGRU(brainstate.nn.RNNCell):
         self,
         in_size: brainstate.typing.Size,
         out_size: brainstate.typing.Size,
-        w_init: Union[ArrayLike, Callable] = brainstate.init.Orthogonal(),
-        b_init: Union[ArrayLike, Callable] = brainstate.init.ZeroInit(),
-        state_init: Union[ArrayLike, Callable] = brainstate.init.ZeroInit(),
+        w_init: Union[ArrayLike, Callable] = braintools.init.Orthogonal(),
+        b_init: Union[ArrayLike, Callable] = braintools.init.ZeroInit(),
+        state_init: Union[ArrayLike, Callable] = braintools.init.ZeroInit(),
         name: str = None,
         param_type: type = ETraceParam,
     ):
@@ -903,9 +903,9 @@ class MiniLSTM(brainstate.nn.RNNCell):
         self,
         in_size: brainstate.typing.Size,
         out_size: brainstate.typing.Size,
-        w_init: Union[ArrayLike, Callable] = brainstate.init.Orthogonal(),
-        b_init: Union[ArrayLike, Callable] = brainstate.init.ZeroInit(),
-        state_init: Union[ArrayLike, Callable] = brainstate.init.ZeroInit(),
+        w_init: Union[ArrayLike, Callable] = braintools.init.Orthogonal(),
+        b_init: Union[ArrayLike, Callable] = braintools.init.ZeroInit(),
+        state_init: Union[ArrayLike, Callable] = braintools.init.ZeroInit(),
         name: str = None,
         param_type: type = ETraceParam,
     ):
@@ -1038,12 +1038,12 @@ class LRUCell(brainstate.nn.Module):
         self.D = ElemWiseParam(brainstate.random.randn(d_model))
 
     def init_state(self, batch_size: int = None, **kwargs):
-        self.h_re = brainstate.HiddenState(braintools.init.param(brainstate.init.ZeroInit(), self.d_hidden, batch_size))
-        self.h_im = brainstate.HiddenState(braintools.init.param(brainstate.init.ZeroInit(), self.d_hidden, batch_size))
+        self.h_re = brainstate.HiddenState(braintools.init.param(braintools.init.ZeroInit(), self.d_hidden, batch_size))
+        self.h_im = brainstate.HiddenState(braintools.init.param(braintools.init.ZeroInit(), self.d_hidden, batch_size))
 
     def reset_state(self, batch_size: int = None, **kwargs):
-        self.h_re.value = braintools.init.param(brainstate.init.ZeroInit(), self.d_hidden, batch_size)
-        self.h_im.value = braintools.init.param(brainstate.init.ZeroInit(), self.d_hidden, batch_size)
+        self.h_re.value = braintools.init.param(braintools.init.ZeroInit(), self.d_hidden, batch_size)
+        self.h_im.value = braintools.init.param(braintools.init.ZeroInit(), self.d_hidden, batch_size)
 
     def update(self, inputs):
         a = u.math.exp(-u.math.exp(self.nu_log.execute()))

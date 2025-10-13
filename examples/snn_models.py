@@ -41,21 +41,21 @@ class GIF(brainstate.nn.Neuron):
         tau=20. * u.ms,
         tau_I2=50. * u.ms,
         A2=0. * u.mA,
-        V_initializer: Callable = brainstate.init.ZeroInit(unit=u.mV),
-        I2_initializer: Callable = brainstate.init.ZeroInit(unit=u.mA),
-        spike_fun: Callable = brainstate.surrogate.ReluGrad(),
+        V_initializer: Callable = braintools.init.ZeroInit(unit=u.mV),
+        I2_initializer: Callable = braintools.init.ZeroInit(unit=u.mA),
+        spike_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
         name: str = None,
     ):
         super().__init__(size, name=name, spk_fun=spike_fun, spk_reset=spk_reset)
 
         # parameters
-        self.V_rest = brainstate.init.param(V_rest, self.varshape, allow_none=False)
-        self.V_th_inf = brainstate.init.param(V_th_inf, self.varshape, allow_none=False)
-        self.R = brainstate.init.param(R, self.varshape, allow_none=False)
-        self.tau = brainstate.init.param(tau, self.varshape, allow_none=False)
-        self.tau_I2 = brainstate.init.param(tau_I2, self.varshape, allow_none=False)
-        self.A2 = brainstate.init.param(A2, self.varshape, allow_none=False)
+        self.V_rest = braintools.init.param(V_rest, self.varshape, allow_none=False)
+        self.V_th_inf = braintools.init.param(V_th_inf, self.varshape, allow_none=False)
+        self.R = braintools.init.param(R, self.varshape, allow_none=False)
+        self.tau = braintools.init.param(tau, self.varshape, allow_none=False)
+        self.tau_I2 = braintools.init.param(tau_I2, self.varshape, allow_none=False)
+        self.A2 = braintools.init.param(A2, self.varshape, allow_none=False)
 
         # initializers
         self._V_initializer = V_initializer
@@ -63,8 +63,8 @@ class GIF(brainstate.nn.Neuron):
 
     def init_state(self):
         # 将模型用于在线学习，需要初始化状态变量
-        self.V = brainstate.HiddenState(brainstate.init.param(self._V_initializer, self.varshape))
-        self.I2 = brainstate.HiddenState(brainstate.init.param(self._I2_initializer, self.varshape))
+        self.V = brainstate.HiddenState(braintools.init.param(self._V_initializer, self.varshape))
+        self.I2 = brainstate.HiddenState(braintools.init.param(self._I2_initializer, self.varshape))
 
     def update(self, x=0.):
         # 如果前一时刻发放了脉冲，则将膜电位和适应性电流进行重置
@@ -106,8 +106,8 @@ class GifNet(brainstate.nn.Module):
         super().__init__()
 
         # 初始化权重
-        ff_init = brainstate.init.KaimingNormal(ff_scale, unit=u.mA)
-        rec_init = brainstate.init.KaimingNormal(rec_scale, unit=u.mA)
+        ff_init = braintools.init.KaimingNormal(ff_scale, unit=u.mA)
+        rec_init = braintools.init.KaimingNormal(rec_scale, unit=u.mA)
         w = u.math.concatenate([ff_init((n_in, n_rec)), rec_init((n_rec, n_rec))], axis=0)
 
         # 参数
@@ -116,8 +116,8 @@ class GifNet(brainstate.nn.Module):
         self.n_out = n_out
 
         # 模型层
-        self.ir2r = brainscale.nn.Linear(n_in + n_rec, n_rec, w_init=w, b_init=brainstate.init.ZeroInit(unit=u.mA))
-        self.exp = brainscale.nn.Expon(n_rec, tau=tau_syn, g_initializer=brainstate.init.ZeroInit(unit=u.mA))
+        self.ir2r = brainscale.nn.Linear(n_in + n_rec, n_rec, w_init=w, b_init=braintools.init.ZeroInit(unit=u.mA))
+        self.exp = brainscale.nn.Expon(n_rec, tau=tau_syn, g_initializer=braintools.init.ZeroInit(unit=u.mA))
         self.r = GIF(
             n_rec,
             V_rest=0. * u.mV,
@@ -126,7 +126,7 @@ class GifNet(brainstate.nn.Module):
             tau=tau_neu,
             tau_I2=brainstate.random.uniform(100. * u.ms, tau_I2 * 1.5, n_rec),
         )
-        self.out = brainscale.nn.LeakyRateReadout(n_rec, n_out, tau=tau_o, w_init=brainstate.init.KaimingNormal())
+        self.out = brainscale.nn.LeakyRateReadout(n_rec, n_out, tau=tau_o, w_init=braintools.init.KaimingNormal())
 
     def update(self, spikes):
         cond = self.ir2r(u.math.concatenate([spikes, self.r.get_spike()], axis=-1))
@@ -339,7 +339,7 @@ class Trainer(object):
     def __init__(
         self,
         target: brainstate.nn.Module,
-        opt: brainstate.optim.Optimizer,
+        opt: braintools.optim.Optimizer,
         dataset: Iterable,
         x_fun: Callable,
         n_sim: int = 0,
@@ -492,26 +492,26 @@ class LIF_Delta_Net(brainstate.nn.Module):
         tau_mem=5. * u.ms,
         tau_o=5. * u.ms,
         V_th=1. * u.mV,
-        spk_fun: Callable = brainstate.surrogate.ReluGrad(),
+        spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
         rec_scale: float = 1.,
         ff_scale: float = 1.,
     ):
         super().__init__()
         self.neu = brainscale.nn.LIF(n_rec, tau=tau_mem, spk_fun=spk_fun, spk_reset=spk_reset, V_th=V_th)
-        rec_init: Callable = brainstate.init.KaimingNormal(rec_scale, unit=u.mV)
-        ff_init: Callable = brainstate.init.KaimingNormal(ff_scale, unit=u.mV)
+        rec_init: Callable = braintools.init.KaimingNormal(rec_scale, unit=u.mV)
+        ff_init: Callable = braintools.init.KaimingNormal(ff_scale, unit=u.mV)
         w_init = u.math.concatenate([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0)
         self.syn = brainstate.nn.DeltaProj(
             comm=brainscale.nn.Linear(n_in + n_rec, n_rec,
                                       w_init=w_init,
-                                      b_init=brainstate.init.ZeroInit(unit=u.mV)),
+                                      b_init=braintools.init.ZeroInit(unit=u.mV)),
             post=self.neu
         )
         self.out = brainscale.nn.LeakyRateReadout(in_size=n_rec,
                                                   out_size=n_out,
                                                   tau=tau_o,
-                                                  w_init=brainstate.init.KaimingNormal())
+                                                  w_init=braintools.init.KaimingNormal())
 
     def update(self, spk):
         self.syn(u.math.concatenate([spk, self.neu.get_spike()], axis=-1))

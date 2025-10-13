@@ -63,7 +63,7 @@ class ConvSNN(brainstate.nn.Module):
         if_param = dict(
             V_th=v_th,
             tau=tau_v,
-            spk_fun=brainstate.surrogate.Arctan(),
+            spk_fun=braintools.surrogate.Arctan(),
             V_initializer=braintools.init.ZeroInit(),
             R=1.
         )

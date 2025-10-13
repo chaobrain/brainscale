@@ -161,7 +161,7 @@ class GIF(brainstate.nn.Neuron):
         A2=0. * u.mA,
         V_initializer: Callable = braintools.init.ZeroInit(unit=u.mV),
         I2_initializer: Callable = braintools.init.ZeroInit(unit=u.mA),
-        spike_fun: Callable = brainstate.surrogate.ReluGrad(),
+        spike_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
         name: str = None,
     ):

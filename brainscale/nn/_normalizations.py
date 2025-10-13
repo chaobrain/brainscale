@@ -19,6 +19,7 @@ from functools import partial
 from typing import Callable, Union, Sequence, Optional, Any
 
 import brainstate
+import braintools
 import brainunit as u
 import jax
 from brainstate import BatchState
@@ -67,8 +68,8 @@ class _BatchNormETrace(_BatchNorm):
         epsilon: float = 1e-5,
         momentum: float = 0.99,
         affine: bool = True,
-        bias_initializer: Union[ArrayLike, Callable] = brainstate.init.Constant(0.),
-        scale_initializer: Union[ArrayLike, Callable] = brainstate.init.Constant(1.),
+        bias_initializer: Union[ArrayLike, Callable] = braintools.init.Constant(0.),
+        scale_initializer: Union[ArrayLike, Callable] = braintools.init.Constant(1.),
         axis_name: Optional[Union[str, Sequence[str]]] = None,
         axis_index_groups: Optional[Sequence[Sequence[int]]] = None,
         name: Optional[str] = None,

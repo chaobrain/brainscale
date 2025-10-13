@@ -132,7 +132,7 @@ class _LIF_Delta_Dense_Layer(brainstate.nn.Module):
         n_rec,
         tau_mem=5.,
         V_th=1.,
-        spk_fun: Callable = brainstate.surrogate.ReluGrad(),
+        spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
         rec_scale: float = 1.,
         ff_scale: float = 1.,
@@ -176,7 +176,7 @@ class _LIF_ExpCu_Dense_Layer(brainstate.nn.Module):
         tau_mem=5.,
         tau_syn=10.,
         V_th=1.,
-        spk_fun: Callable = brainstate.surrogate.ReluGrad(),
+        spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
         rec_scale: float = 1.,
         ff_scale: float = 1.,
@@ -227,11 +227,11 @@ class ETraceNet(brainstate.nn.Module):
         self.n_layer = n_layer
 
         if args.spk_fun == 's2nn':
-            spk_fun = brainstate.surrogate.S2NN()
+            spk_fun = braintools.surrogate.S2NN()
         elif args.spk_fun == 'relu':
-            spk_fun = brainstate.surrogate.ReluGrad()
+            spk_fun = braintools.surrogate.ReluGrad()
         elif args.spk_fun == 'multi_gaussian':
-            spk_fun = brainstate.surrogate.MultiGaussianGrad()
+            spk_fun = braintools.surrogate.MultiGaussianGrad()
         else:
             raise ValueError('Unknown spiking surrogate gradient function.')
 
