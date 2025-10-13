@@ -1,8 +1,8 @@
 ``brainscale.nn`` for neural network building
 =============================================
 
-.. currentmodule:: brainscale.nn 
-.. automodule:: brainscale.nn 
+.. currentmodule:: brainscale.nn
+.. automodule:: brainscale.nn
 
 
 
@@ -51,102 +51,8 @@ Normalization Layers
    GroupNorm
 
 
-Element-wise Operation
-----------------------
-
-.. autosummary::
-   :toctree: generated/
-   :nosignatures:
-   :template: classtemplate.rst
-
-   ReLU
-   RReLU
-   Hardtanh
-   ReLU6
-   Sigmoid
-   Hardsigmoid
-   Tanh
-   SiLU
-   Mish
-   Hardswish
-   ELU
-   CELU
-   SELU
-   GLU
-   GELU
-   Hardshrink
-   LeakyReLU
-   LogSigmoid
-   Softplus
-   Softshrink
-   PReLU
-   Softsign
-   Tanhshrink
-   Softmin
-   Softmax
-   Softmax2d
-   LogSoftmax
-   Dropout
-   Dropout1d
-   Dropout2d
-   Dropout3d
-   Identity
-   SpikeBitwise
-
-
-Neuronal Dynamics
------------------
-
-.. autosummary::
-   :toctree: generated/
-   :nosignatures:
-   :template: classtemplate.rst
-
-   IF
-   LIF
-   ALIF
-
-
-Synaptic Dynamics
------------------
-
-.. autosummary::
-   :toctree: generated/
-   :nosignatures:
-   :template: classtemplate.rst
-
-   Expon
-   STP
-   STD
-
-
-
-Pooling Operation
------------------
-
-.. autosummary::
-   :toctree: generated/
-   :nosignatures:
-   :template: classtemplate.rst
-
-   Flatten
-   Unflatten
-   AvgPool1d
-   AvgPool2d
-   AvgPool3d
-   MaxPool1d
-   MaxPool2d
-   MaxPool3d
-   AdaptiveAvgPool1d
-   AdaptiveAvgPool2d
-   AdaptiveAvgPool3d
-   AdaptiveMaxPool1d
-   AdaptiveMaxPool2d
-   AdaptiveMaxPool3d
-
-
-Rate RNNs
----------
+Recurrent Neural Networks
+--------------------------
 
 .. autosummary::
    :toctree: generated/
@@ -159,6 +65,9 @@ Rate RNNs
    LSTMCell
    URLSTMCell
    MinimalRNNCell
+   MiniGRU
+   MiniLSTM
+   LRUCell
 
 
 Readout Layers
