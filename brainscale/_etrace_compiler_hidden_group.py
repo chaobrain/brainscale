@@ -53,23 +53,10 @@ import jax.core
 import numpy as np
 from brainstate import HiddenGroupState
 
-from ._compatible_imports import (
-    Var,
-    Literal,
-    JaxprEqn,
-    Jaxpr,
-)
-from ._etrace_compiler_base import (
-    JaxprEvaluation,
-    find_matched_vars,
-)
-from ._etrace_compiler_module_info import (
-    extract_module_info,
-    ModuleInfo,
-)
-from ._misc import (
-    NotSupportedError,
-)
+from ._compatible_imports import Var, Literal, JaxprEqn, Jaxpr
+from ._etrace_compiler_base import JaxprEvaluation, find_matched_vars
+from ._etrace_compiler_module_info import extract_module_info, ModuleInfo
+from ._misc import NotSupportedError
 from ._typing import (
     PyTree,
     HiddenInVar,

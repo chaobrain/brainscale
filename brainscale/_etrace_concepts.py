@@ -38,10 +38,7 @@ import brainunit as u
 import jax
 import numpy as np
 
-from ._etrace_operators import (
-    ETraceOp,
-    ElemWiseOp,
-)
+from ._etrace_operators import ETraceOp, ElemWiseOp
 from ._misc import BaseEnum
 
 __all__ = [
