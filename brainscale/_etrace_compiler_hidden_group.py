@@ -36,7 +36,7 @@
 #   [2025-02-06]
 #       - [x] unify model retrieved states (brainstate.graph.states)
 #             and compiled states (brainstate.transform.StatefulFunction)
-#       - [x] add the support for the "ETraceGroupState" and "ETraceTreeState"
+#       - [x] add the support for the "HiddenGroupState" and "ETraceTreeState"
 #       - [x] add the support for the "ElemWiseParam"
 #       - [x] split into "_etrace_compiler.py", "_etrace_vjp_compiler_graph.py", and "_etrace_compiler_hidden_group.py",
 #
@@ -51,28 +51,12 @@ import brainstate
 import brainunit as u
 import jax.core
 import numpy as np
+from brainstate import HiddenGroupState
 
-from ._compatible_imports import (
-    Var,
-    Literal,
-    JaxprEqn,
-    Jaxpr,
-)
-from ._etrace_compiler_base import (
-    JaxprEvaluation,
-    find_matched_vars,
-)
-from ._etrace_compiler_module_info import (
-    extract_module_info,
-    ModuleInfo,
-)
-from ._etrace_concepts import (
-    ETraceState,
-    ETraceGroupState,
-)
-from ._misc import (
-    NotSupportedError,
-)
+from ._compatible_imports import Var, Literal, JaxprEqn, Jaxpr
+from ._etrace_compiler_base import JaxprEvaluation, find_matched_vars
+from ._etrace_compiler_module_info import extract_module_info, ModuleInfo
+from ._misc import NotSupportedError
 from ._typing import (
     PyTree,
     HiddenInVar,
@@ -82,6 +66,7 @@ from ._typing import (
 
 __all__ = [
     'HiddenGroup',
+    'find_hidden_groups_from_minfo',
     'find_hidden_groups_from_module',
 ]
 
@@ -117,7 +102,7 @@ class HiddenGroup(NamedTuple):
 
     # hidden states and their paths
     hidden_paths: List[Path]  # the hidden state paths
-    hidden_states: List[ETraceState]  # the hidden states
+    hidden_states: List[brainstate.HiddenState]  # the hidden states
 
     # the jax Var at the last time step
     hidden_invars: List[HiddenInVar]  # the input hidden states
@@ -206,7 +191,7 @@ class HiddenGroup(NamedTuple):
         Concatenate split hidden state values into a single array.
 
         This function takes a sequence of split hidden state values and concatenates them
-        along the last axis. For non-ETraceGroupState values, it adds an extra dimension
+        along the last axis. For non-HiddenGroupState values, it adds an extra dimension
         before concatenation.
 
         Args:
@@ -219,7 +204,7 @@ class HiddenGroup(NamedTuple):
         """
         splitted_hid_vals = [
             val
-            if isinstance(st, ETraceGroupState) else
+            if isinstance(st, HiddenGroupState) else
             u.math.expand_dims(val, axis=-1)
             for val, st in zip(splitted_hid_vals, self.hidden_states)
         ]
@@ -231,14 +216,14 @@ class HiddenGroup(NamedTuple):
 
         This function takes a concatenated array of hidden state values and splits it
         into separate arrays for each hidden state in the group. It handles both
-        ETraceGroupState and non-ETraceGroupState values differently.
+        HiddenGroupState and non-HiddenGroupState values differently.
 
         Args:
             concat_hid_vals (jax.Array): A concatenated array of hidden state values.
                 The last dimension is assumed to contain the concatenated states.
 
         Returns:
-            List[jax.Array]: A list of split hidden state arrays. For non-ETraceGroupState
+            List[jax.Array]: A list of split hidden state arrays. For non-HiddenGroupState
             values, the last dimension is squeezed.
         """
         num_states = [st.num_state for st in self.hidden_states]
@@ -246,7 +231,7 @@ class HiddenGroup(NamedTuple):
         splitted_hid_vals = u.math.split(concat_hid_vals, indices, axis=-1)
         splitted_hid_vals = [
             val
-            if isinstance(st, ETraceGroupState) else
+            if isinstance(st, HiddenGroupState) else
             u.math.squeeze(val, axis=-1)
             for val, st in zip(splitted_hid_vals, self.hidden_states)
         ]
@@ -390,7 +375,7 @@ def _simplify_hid2hid_tracer(
     tracer: HiddenToHiddenGroupTracer,
     hidden_invar_to_path: Dict[HiddenInVar, Path],
     hidden_outvar_to_path: Dict[HiddenOutVar, Path],
-    path_to_state: Dict[Path, ETraceState],
+    path_to_state: Dict[Path, brainstate.HiddenState],
 ) -> Hidden2GroupTransition:
     """
     Simplifying the hidden-to-hidden state tracer.
@@ -515,7 +500,7 @@ class JaxprEvalForHiddenGroup(JaxprEvaluation):
         weight_invars: Set[Var],
         invar_to_hidden_path: Dict[HiddenInVar, Path],
         outvar_to_hidden_path: Dict[HiddenOutVar, Path],
-        path_to_state: Dict[Path, ETraceState],
+        path_to_state: Dict[Path, brainstate.HiddenState],
     ):
         # the jaxpr of the original model, assuming that the model is well-defined,
         # see the doc for the model which can be online learning compiled.

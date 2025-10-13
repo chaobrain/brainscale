@@ -25,10 +25,7 @@ from ._compatible_imports import (
     Jaxpr,
     ClosedJaxpr,
 )
-from ._etrace_concepts import (
-    ETraceParam,
-    ETraceState,
-)
+from ._etrace_concepts import ETraceParam
 from ._misc import (
     NotSupportedError,
     unknown_state_path,
@@ -340,10 +337,6 @@ class ModuleInfo(NamedTuple):
             old_state_vals = [st.value for st in self.compiled_model_states]
 
         # calling the function
-        a = len(self.closed_jaxpr.jaxpr.invars)
-        b = len(jax.tree.leaves((args, old_state_vals)))
-        print(a, b)
-        print()
         jaxpr_outs = jax.core.eval_jaxpr(
             self.closed_jaxpr.jaxpr,
             self.closed_jaxpr.consts,
@@ -369,7 +362,7 @@ class ModuleInfo(NamedTuple):
         }
         # 3. "etrace state" old values
         for st, val in zip(self.compiled_model_states, self.state_tree_invars):
-            if isinstance(st, ETraceState):
+            if isinstance(st, brainstate.HiddenState):
                 temps[val] = u.get_mantissa(st.value)
 
         #
@@ -390,7 +383,7 @@ class ModuleInfo(NamedTuple):
         etrace_vals = dict()
         oth_state_vals = dict()
         for st, st_val in zip(self.compiled_model_states, new_state_vals):
-            if isinstance(st, ETraceState):
+            if isinstance(st, brainstate.HiddenState):
                 etrace_vals[self.state_id_to_path[id(st)]] = st_val
             elif isinstance(st, brainstate.ParamState):
                 # assume they are not changed
@@ -487,7 +480,7 @@ def extract_module_info(
     hidden_path_to_invar = {  # one-to-many mapping
         state_id_to_path[id(st)]: invar  # ETraceState only contains one Array, "invar" is the jaxpr var
         for invar, st in zip(state_tree_invars, compiled_states)
-        if isinstance(st, ETraceState)
+        if isinstance(st, brainstate.HiddenState)
     }
     hidden_path_to_invar = brainstate.util.PrettyDict(hidden_path_to_invar)
 
@@ -508,7 +501,7 @@ def extract_module_info(
     hidden_path_to_outvar = {  # one-to-one mapping
         state_id_to_path[id(st)]: outvar  # ETraceState only contains one Array, "outvar" is the jaxpr var
         for outvar, st in zip(state_tree_outvars, compiled_states)
-        if isinstance(st, ETraceState)
+        if isinstance(st, brainstate.HiddenState)
     }
     hidden_path_to_outvar = brainstate.util.PrettyDict(hidden_path_to_outvar)
 

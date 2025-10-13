@@ -19,10 +19,25 @@ import time
 from functools import reduce
 from typing import Callable, Union
 
+import brainpy
 import matplotlib.pyplot as plt
 import numpy as np
 
 from utils import MyArgumentParser
+# import builtins
+# import traceback
+#
+# _old_print = builtins.print
+#
+# def debug_print(*args, **kwargs):
+#     # 打印原信息
+#     _old_print(*args, **kwargs)
+#     # if args[0] == 6 and args[1] == 6:
+#     traceback.print_stack(limit=5)
+#
+#
+# builtins.print = debug_print
+
 
 parser = MyArgumentParser()
 
@@ -136,13 +151,13 @@ class _LIF_Delta_Dense_Layer(brainstate.nn.Module):
         n_rec,
         tau_mem=5.,
         V_th=1.,
-        spk_fun: Callable = brainstate.surrogate.ReluGrad(),
+        spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
         rec_scale: float = 1.,
         ff_scale: float = 1.,
     ):
         super().__init__()
-        self.neu = brainscale.nn.LIF(
+        self.neu = brainpy.state.LIF(
             n_rec,
             R=1.,
             tau=tau_mem,
@@ -151,12 +166,12 @@ class _LIF_Delta_Dense_Layer(brainstate.nn.Module):
             V_th=V_th,
             V_reset=0.,
             V_rest=0.,
-            V_initializer=brainstate.init.ZeroInit(),
+            V_initializer=braintools.init.ZeroInit(),
         )
-        rec_init: Callable = brainstate.init.KaimingNormal(rec_scale)
-        ff_init: Callable = brainstate.init.KaimingNormal(ff_scale)
+        rec_init: Callable = braintools.init.KaimingNormal(rec_scale)
+        ff_init: Callable = braintools.init.KaimingNormal(ff_scale)
         w_init = jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0)
-        self.syn = brainstate.nn.DeltaProj(
+        self.syn = brainpy.state.DeltaProj(
             comm=brainscale.nn.Linear(n_in + n_rec, n_rec, w_init=w_init),
             post=self.neu
         )
@@ -180,13 +195,13 @@ class _LIF_ExpCu_Dense_Layer(brainstate.nn.Module):
         tau_mem=5.,
         tau_syn=10.,
         V_th=1.,
-        spk_fun: Callable = brainstate.surrogate.ReluGrad(),
+        spk_fun: Callable = braintools.surrogate.ReluGrad(),
         spk_reset: str = 'soft',
         rec_scale: float = 1.,
         ff_scale: float = 1.,
     ):
         super().__init__()
-        self.neu = brainscale.nn.LIF(
+        self.neu = brainpy.state.LIF(
             n_rec,
             R=1.,
             tau=tau_mem,
@@ -195,15 +210,15 @@ class _LIF_ExpCu_Dense_Layer(brainstate.nn.Module):
             V_th=V_th,
             V_reset=0.,
             V_rest=0.,
-            V_initializer=brainstate.init.ZeroInit(),
+            V_initializer=braintools.init.ZeroInit(),
         )
-        rec_init: Callable = brainstate.init.KaimingNormal(rec_scale)
-        ff_init: Callable = brainstate.init.KaimingNormal(ff_scale)
+        rec_init: Callable = braintools.init.KaimingNormal(rec_scale)
+        ff_init: Callable = braintools.init.KaimingNormal(ff_scale)
         w_init = jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0)
-        self.syn = brainstate.nn.AlignPostProj(
+        self.syn = brainpy.state.AlignPostProj(
             comm=brainscale.nn.Linear(n_in + n_rec, n_rec, w_init),
-            syn=brainscale.nn.Expon(n_rec, tau=tau_syn, g_initializer=brainstate.init.ZeroInit()),
-            out=brainstate.nn.CUBA(scale=1.),
+            syn=brainpy.state.Expon(n_rec, tau=tau_syn, g_initializer=braintools.init.ZeroInit()),
+            out=brainpy.state.CUBA(scale=1.),
             post=self.neu
         )
 
@@ -231,11 +246,11 @@ class ETraceNet(brainstate.nn.Module):
         self.n_layer = n_layer
 
         if args.spk_fun == 's2nn':
-            spk_fun = brainstate.surrogate.S2NN()
+            spk_fun = braintools.surrogate.S2NN()
         elif args.spk_fun == 'relu':
-            spk_fun = brainstate.surrogate.ReluGrad()
+            spk_fun = braintools.surrogate.ReluGrad()
         elif args.spk_fun == 'multi_gaussian':
-            spk_fun = brainstate.surrogate.MultiGaussianGrad()
+            spk_fun = braintools.surrogate.MultiGaussianGrad()
         else:
             raise ValueError('Unknown spiking surrogate gradient function.')
 
@@ -283,7 +298,7 @@ class ETraceNet(brainstate.nn.Module):
             in_size=n_rec,
             out_size=n_out,
             tau=args.tau_o,
-            w_init=brainstate.init.KaimingNormal()
+            w_init=braintools.init.KaimingNormal()
         )
 
     def update(self, x):
@@ -389,7 +404,7 @@ class Trainer(object):
     def __init__(
         self,
         target: ETraceNet,
-        opt: brainstate.optim.Optimizer,
+        opt: braintools.optim.Optimizer,
         args: argparse.Namespace,
     ):
         super().__init__()
@@ -473,7 +488,7 @@ class Trainer(object):
         model.compile_graph(input_info)
 
         @brainstate.transform.jit
-        @brainstate.transform.vmap(in_states=model.states('new'))
+        @brainstate.transform.vmap(in_states=model.states('new'), axis_size=input_info.shape[0])
         def reset_state():
             brainstate.nn.reset_all_states(model)
 
@@ -495,7 +510,7 @@ class Trainer(object):
             i, inp = inputs
             # no need to return weights and states, since they are generated then no longer needed
             f_grad = brainstate.transform.grad(
-                _etrace_grad, grad_states=self.opt.param_states, has_aux=True, return_value=True)
+                _etrace_grad, grad_states=self.opt.param_states.to_pytree(), has_aux=True, return_value=True)
             cur_grads, local_loss, out = f_grad(i, inp, targets)
             next_grads = jax.tree.map(lambda a, b: a + b, prev_grads, cur_grads)
             return next_grads, (out, local_loss)
@@ -510,7 +525,7 @@ class Trainer(object):
         self._etrace_reset_fun()
 
         # initial gradients
-        grads = jax.tree.map(lambda a: jnp.zeros_like(a), self.opt.param_states.to_dict_values())
+        grads = jax.tree.map(lambda a: jnp.zeros_like(a), self.opt.param_states.to_pytree_value())
 
         # training
         indices = np.arange(inputs.shape[0])
@@ -525,7 +540,7 @@ class Trainer(object):
                 losses.append(loss)
 
         # gradient updates
-        grads = brainstate.functional.clip_grad_norm(grads, 1.)
+        grads = brainstate.nn.clip_grad_norm(grads, 1.)
         self.opt.update(grads)
 
         # accuracy
@@ -702,11 +717,11 @@ def network_training():
 
     # optimizer
     if global_args.optimizer == 'adam':
-        opt_cls = brainstate.optim.Adam
+        opt_cls = braintools.optim.Adam
     elif global_args.optimizer == 'momentum':
-        opt_cls = brainstate.optim.Momentum
+        opt_cls = braintools.optim.Momentum
     elif global_args.optimizer == 'sgd':
-        opt_cls = brainstate.optim.SGD
+        opt_cls = braintools.optim.SGD
     else:
         raise ValueError(f'Unknown optimizer: {global_args.optimizer}')
     opt = opt_cls(lr=global_args.lr, weight_decay=global_args.weight_L2)

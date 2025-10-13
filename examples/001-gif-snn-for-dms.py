@@ -21,9 +21,12 @@ import brainunit as u
 import matplotlib.pyplot as plt
 import numpy as np
 
-from snn_models import DMSDataset, GifNet, OnlineTrainer
+from snn_models import DMSDataset, GifNet, OnlineTrainer, BPTTTrainer
 
 if __name__ == '__main__':
+    OnlineTrainer, BPTTTrainer
+
+
     with brainstate.environ.context(dt=1. * u.ms):
         data = DMSDataset(
             bg_fr=1. * u.Hz,
@@ -46,11 +49,11 @@ if __name__ == '__main__':
             tau_I2=1500. * u.ms,
             A2=1. * u.mA,
         )
-        net.verify(next(iter(data))[0], num_show=2)
+        # net.verify(next(iter(data))[0], num_show=2)
 
-        onliner = OnlineTrainer(
+        onliner = BPTTTrainer(
             target=net,
-            opt=brainstate.optim.Adam(lr=1e-3),
+            opt=braintools.optim.Adam(lr=1e-3),
             dataset=data,
             n_sim=data.n_sim,
             x_fun=lambda x_local: np.transpose(x_local, (1, 0, 2))

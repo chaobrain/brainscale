@@ -37,9 +37,6 @@ from ._etrace_compiler_module_info import (
     extract_module_info,
     ModuleInfo,
 )
-from ._etrace_concepts import (
-    ETraceState,
-)
 from ._misc import (
     git_issue_addr,
 )
@@ -51,6 +48,7 @@ from ._typing import (
 
 __all__ = [
     'HiddenPerturbation',
+    'add_hidden_perturbation_from_minfo',
     'add_hidden_perturbation_in_module',
 ]
 
@@ -96,7 +94,7 @@ class HiddenPerturbation(NamedTuple):
     """
     perturb_vars: Sequence[Var]  # the perturbation variables
     perturb_hidden_paths: Sequence[Path]  # the hidden state paths that are perturbed
-    perturb_hidden_states: Sequence[ETraceState]  # the hidden states that are perturbed
+    perturb_hidden_states: Sequence[brainstate.HiddenState]  # the hidden states that are perturbed
     perturb_jaxpr: ClosedJaxpr  # the perturbed jaxpr
 
     def eval_jaxpr(
@@ -181,7 +179,7 @@ class JaxprEvalForHiddenPerturbation(JaxprEvaluation):
         weight_invars: Set[Var],
         invar_to_hidden_path: Dict[HiddenInVar, Path],
         outvar_to_hidden_path: Dict[Var, Path],
-        path_to_state: Dict[Path, ETraceState],
+        path_to_state: Dict[Path, brainstate.HiddenState],
     ):
         # necessary data structures
         self.closed_jaxpr = closed_jaxpr
@@ -312,7 +310,7 @@ def add_hidden_perturbation_in_jaxpr(
     weight_invars: Set[Var],
     invar_to_hidden_path: Dict[HiddenInVar, Path],
     outvar_to_hidden_path: Dict[Var, Path],
-    path_to_state: Dict[Path, ETraceState],
+    path_to_state: Dict[Path, brainstate.HiddenState],
 ) -> HiddenPerturbation:
     """
     Adding perturbations to the hidden states in the jaxpr, and replacing the hidden states with the perturbed states.

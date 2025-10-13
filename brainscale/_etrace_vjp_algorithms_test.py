@@ -16,6 +16,7 @@
 import brainstate
 import brainunit as u
 import pytest
+
 import brainscale
 from brainscale._etrace_model_test import (
     IF_Delta_Dense_Layer,

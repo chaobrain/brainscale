@@ -631,7 +631,15 @@ class ConvOp(ETraceOp):
             weights['weight'] = weights['weight'] * self.weight_mask
         weights['weight'] = self.weight_fn(weights['weight'])
         # convolution
-        return self._pure_convolution_without_batch(inputs, weights)
+        if inputs.ndim == self.xinfo.ndim:
+            return self._pure_convolution_without_batch(inputs, weights)
+        elif inputs.ndim == self.xinfo.ndim + 1:
+            return jax.vmap(self._pure_convolution_without_batch, in_axes=(0, None))(inputs, weights)
+        else:
+            raise ValueError(
+                f'The inputs must have the same number of dimensions as xinfo or xinfo + 1. '
+                f'Got {inputs.ndim} and {self.xinfo.ndim}'
+            )
 
     def yw_to_w(
         self,

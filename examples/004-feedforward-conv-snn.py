@@ -20,6 +20,7 @@ import sys
 sys.path.append('../')
 
 import brainstate
+import brainpy
 import braintools
 import brainunit as u
 import jax
@@ -58,27 +59,27 @@ class ConvSNN(brainstate.nn.Module):
     ):
         super().__init__()
 
-        conv_inits = dict(w_init=brainstate.init.XavierNormal(scale=ff_wscale), b_init=None)
-        linear_inits = dict(w_init=brainstate.init.KaimingNormal(scale=ff_wscale), b_init=None)
+        conv_inits = dict(w_init=braintools.init.XavierNormal(scale=ff_wscale), b_init=None)
+        linear_inits = dict(w_init=braintools.init.KaimingNormal(scale=ff_wscale), b_init=None)
         if_param = dict(
             V_th=v_th,
             tau=tau_v,
-            spk_fun=brainstate.surrogate.Arctan(),
-            V_initializer=brainstate.init.ZeroInit(),
+            spk_fun=braintools.surrogate.Arctan(),
+            V_initializer=braintools.init.ZeroInit(),
             R=1.
         )
 
         self.layer1 = brainstate.nn.Sequential(
             brainscale.nn.Conv2d(in_size, n_channel, kernel_size=3, padding=1, **conv_inits),
             brainscale.nn.LayerNorm.desc(),
-            brainscale.nn.IF.desc(**if_param),
+            brainpy.state.IF.desc(**if_param),
             brainstate.nn.MaxPool2d.desc(kernel_size=2, stride=2)  # 14 * 14
         )
 
         self.layer2 = brainstate.nn.Sequential(
             brainscale.nn.Conv2d(self.layer1.out_size, n_channel, kernel_size=3, padding=1, **conv_inits),
             brainscale.nn.LayerNorm.desc(),
-            brainscale.nn.IF.desc(**if_param),
+            brainpy.state.IF.desc(**if_param),
         )
         self.layer3 = brainstate.nn.Sequential(
             brainstate.nn.MaxPool2d(kernel_size=2, stride=2, in_size=self.layer2.out_size),  # 7 * 7
@@ -86,7 +87,7 @@ class ConvSNN(brainstate.nn.Module):
         )
         self.layer4 = brainstate.nn.Sequential(
             brainscale.nn.Linear(self.layer3.out_size, n_channel * 4 * 4, **linear_inits),
-            brainscale.nn.IF.desc(**if_param),
+            brainpy.state.IF.desc(**if_param),
         )
         self.layer5 = brainscale.nn.LeakyRateReadout(self.layer4.out_size, out_sze, tau=tau_o)
 
@@ -105,7 +106,7 @@ class Trainer(object):
 
     Args:
         target (brainstate.nn.Module): The neural network model to be trained.
-        opt (brainstate.optim.Optimizer): Optimizer for updating model parameters.
+        opt (braintools.optim.Optimizer): Optimizer for updating model parameters.
         train_loader (Iterable): DataLoader for training data.
         test_loader (Iterable): DataLoader for test data.
         x_fun (Callable): Function to preprocess input data batches.
@@ -116,13 +117,13 @@ class Trainer(object):
         test_loader (Iterable): Test data loader.
         x_fun (Callable): Input preprocessing function.
         target (brainstate.nn.Module): The model being trained.
-        opt (brainstate.optim.Optimizer): Optimizer instance.
+        opt (braintools.optim.Optimizer): Optimizer instance.
         n_epoch (int): Number of epochs to train.
     """
     def __init__(
         self,
         target: brainstate.nn.Module,
-        opt: brainstate.optim.Optimizer,
+        opt: braintools.optim.Optimizer,
         train_loader: Iterable,
         test_loader: Iterable,
         x_fun: Callable,
@@ -445,7 +446,7 @@ if __name__ == '__main__':
         # Online Trainer
         r = OnlineVmapTrainer(
             target=net,
-            opt=brainstate.optim.Adam(lr=1e-3),
+            opt=braintools.optim.Adam(lr=1e-3),
             train_loader=data.train_loader,
             test_loader=data.test_loader,
             x_fun=data_processing,
@@ -455,7 +456,7 @@ if __name__ == '__main__':
         # Online Trainer
         r = OnlineVmapTrainer(
             target=net,
-            opt=brainstate.optim.Adam(lr=1e-3),
+            opt=braintools.optim.Adam(lr=1e-3),
             train_loader=data.train_loader,
             test_loader=data.test_loader,
             x_fun=data_processing,
@@ -465,7 +466,7 @@ if __name__ == '__main__':
         # Offline Trainer
         r = BPTTTrainer(
             target=net,
-            opt=brainstate.optim.Adam(lr=1e-3),
+            opt=braintools.optim.Adam(lr=1e-3),
             train_loader=data.train_loader,
             test_loader=data.test_loader,
             x_fun=data_processing,

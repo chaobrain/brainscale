@@ -24,7 +24,6 @@ from typing import Dict, Any, Optional
 import brainstate
 
 from ._etrace_compiler_graph import ETraceGraph
-from ._etrace_concepts import ETraceState
 from ._etrace_graph_executor import ETraceGraphExecutor
 from ._typing import Path
 
@@ -69,7 +68,7 @@ class ETraceAlgorithm(brainstate.nn.Module):
         The etrace graph.
     param_states : Dict[Hashable, brainstate.ParamState]
         The weight states.
-    hidden_states : Dict[Hashable, ETraceState]
+    hidden_states : Dict[Hashable, brainstate.HiddenState]
         The hidden states.
     other_states : Dict[Hashable, brainstate.State]
         The other states.
@@ -154,13 +153,13 @@ class ETraceAlgorithm(brainstate.nn.Module):
         return self._param_states
 
     @property
-    def hidden_states(self) -> brainstate.util.FlattedDict[Path, ETraceState]:
+    def hidden_states(self) -> brainstate.util.FlattedDict[Path, brainstate.HiddenState]:
         """
         Get the hidden states.
 
         Returns
         -------
-        brainstate.util.FlattedDict[Path, ETraceState]
+        brainstate.util.FlattedDict[Path, brainstate.HiddenState]
             The hidden states.
         """
         if self._hidden_states is None:
@@ -197,7 +196,7 @@ class ETraceAlgorithm(brainstate.nn.Module):
             self._param_states,
             self._hidden_states,
             self._other_states
-        ) = self.graph.module_info.retrieved_model_states.split(brainstate.ParamState, ETraceState, ...)
+        ) = self.graph.module_info.retrieved_model_states.split(brainstate.ParamState, brainstate.HiddenState, ...)
 
     def compile_graph(self, *args) -> None:
         r"""
