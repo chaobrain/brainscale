@@ -294,7 +294,7 @@ class _SNNEINet(brainstate.nn.Module):
         n_seq = inputs.shape[0]
         batch_size = inputs.shape[1]
 
-        @brainstate.augment.vmap_new_states(state_tag='new', axis_size=batch_size)
+        @brainstate.transform.vmap_new_states(state_tag='new', axis_size=batch_size)
         def init():
             brainstate.nn.init_all_states(self)
 
@@ -438,7 +438,7 @@ class Trainer:
         else:
             raise ValueError(f'Unknown online learning methods: {self.method}.')
 
-        @brainstate.augment.vmap_new_states(state_tag='new', axis_size=inputs.shape[1])
+        @brainstate.transform.vmap_new_states(state_tag='new', axis_size=inputs.shape[1])
         def init():
             brainstate.nn.init_all_states(self.target)
             model.compile_graph(inputs[0, 0])

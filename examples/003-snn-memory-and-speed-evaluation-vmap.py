@@ -138,7 +138,7 @@ class _LIF_Delta_Dense_Layer(brainstate.nn.Module):
         ff_scale: float = 1.,
     ):
         super().__init__()
-        self.neu = brainscale.nn.LIF(
+        self.neu = brainpy.state.LIF(
             n_rec,
             R=1.,
             tau=tau_mem,
@@ -152,7 +152,7 @@ class _LIF_Delta_Dense_Layer(brainstate.nn.Module):
         rec_init: Callable = braintools.init.KaimingNormal(rec_scale)
         ff_init: Callable = braintools.init.KaimingNormal(ff_scale)
         w_init = jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0)
-        self.syn = brainstate.nn.DeltaProj(
+        self.syn = brainpy.state.DeltaProj(
             comm=brainscale.nn.Linear(n_in + n_rec, n_rec, w_init=w_init),
             post=self.neu
         )
@@ -182,7 +182,7 @@ class _LIF_ExpCu_Dense_Layer(brainstate.nn.Module):
         ff_scale: float = 1.,
     ):
         super().__init__()
-        self.neu = brainscale.nn.LIF(
+        self.neu = brainpy.state.LIF(
             n_rec,
             R=1.,
             tau=tau_mem,
@@ -196,10 +196,10 @@ class _LIF_ExpCu_Dense_Layer(brainstate.nn.Module):
         rec_init: Callable = braintools.init.KaimingNormal(rec_scale)
         ff_init: Callable = braintools.init.KaimingNormal(ff_scale)
         w_init = jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0)
-        self.syn = brainstate.nn.AlignPostProj(
+        self.syn = brainpy.state.AlignPostProj(
             comm=brainscale.nn.Linear(n_in + n_rec, n_rec, w_init),
-            syn=brainscale.nn.Expon(n_rec, tau=tau_syn, g_initializer=braintools.init.ZeroInit()),
-            out=brainstate.nn.CUBA(scale=1.),
+            syn=brainpy.state.Expon(n_rec, tau=tau_syn, g_initializer=braintools.init.ZeroInit()),
+            out=brainpy.state.CUBA(scale=1.),
             post=self.neu
         )
 
@@ -292,7 +292,7 @@ class ETraceNet(brainstate.nn.Module):
         loss = 0.
         if factor > 0.:
             # extract all Neuron models
-            neurons = self.nodes().subset(brainstate.nn.Neuron).unique().values()
+            neurons = self.nodes().subset(brainpy.state.Neuron).unique().values()
             # evaluate the membrane potential
             for l in neurons:
                 loss += jnp.square(
@@ -309,7 +309,7 @@ class ETraceNet(brainstate.nn.Module):
         loss = 0.
         if factor > 0.:
             # extract all Neuron models
-            neurons = self.nodes().subset(brainstate.nn.Neuron).unique().values()
+            neurons = self.nodes().subset(brainpy.state.Neuron).unique().values()
             # evaluate the spiking dynamics
             for l in neurons:
                 loss += (jnp.mean(l.get_spike()) - target_fr / 1e3 * brainstate.environ.get_dt()) ** 2

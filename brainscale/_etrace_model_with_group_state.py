@@ -25,7 +25,7 @@ import brainscale
 import braintools
 
 
-class ALIF(brainstate.nn.Neuron):
+class ALIF(brainpy.state.Neuron):
     """
     Adaptive Leaky Integrate-and-Fire (LIF) neuron model.
     """
@@ -122,14 +122,14 @@ class ALIF_ExpCu_Dense_Layer(brainstate.nn.Module):
             spk_fun=spk_fun, spk_reset=spk_reset,
             V_th=V_th
         )
-        self.syn = brainstate.nn.AlignPostProj(
+        self.syn = brainpy.state.AlignPostProj(
             comm=brainscale.nn.Linear(
                 n_in + n_rec, n_rec,
                 jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0) * u.mS,
                 b_init=braintools.init.ZeroInit(unit=u.mS)
             ),
-            syn=brainscale.nn.Expon.desc(n_rec, tau=tau_syn),
-            out=brainstate.nn.CUBA.desc(),
+            syn=brainpy.state.Expon.desc(n_rec, tau=tau_syn),
+            out=brainpy.state.CUBA.desc(),
             post=self.neu
         )
 
@@ -163,7 +163,7 @@ class ALIF_Delta_Dense_Layer(brainstate.nn.Module):
             beta=beta
         )
         w_init = jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0)
-        self.syn = brainstate.nn.DeltaProj(
+        self.syn = brainpy.state.DeltaProj(
             comm=brainscale.nn.Linear(n_in + n_rec, n_rec, w_init=w_init * u.mV,
                                       b_init=braintools.init.ZeroInit(unit=u.mV)),
             post=self.neu
@@ -192,20 +192,20 @@ class ALIF_STDExpCu_Dense_Layer(brainstate.nn.Module):
     ):
         super().__init__()
         self.neu = ALIF(n_rec, tau=tau_mem, spk_fun=spk_fun, spk_reset=spk_reset, V_th=V_th, beta=beta)
-        self.std = brainscale.nn.STD(n_rec, tau=tau_std, U=0.1)
+        self.std = brainpy.state.STD(n_rec, tau=tau_std, U=0.1)
         if inp_std:
-            self.std_inp = brainscale.nn.STD(n_in, tau=tau_std, U=0.1)
+            self.std_inp = brainpy.state.STD(n_in, tau=tau_std, U=0.1)
         else:
             self.std_inp = None
 
-        self.syn = brainstate.nn.AlignPostProj(
+        self.syn = brainpy.state.AlignPostProj(
             comm=brainscale.nn.Linear(
                 n_in + n_rec, n_rec,
                 jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0) * u.mS,
                 b_init=braintools.init.ZeroInit(unit=u.mS)
             ),
-            syn=brainscale.nn.Expon.desc(n_rec, tau=tau_syn),
-            out=brainstate.nn.CUBA.desc(),
+            syn=brainpy.state.Expon.desc(n_rec, tau=tau_syn),
+            out=brainpy.state.CUBA.desc(),
             post=self.neu
         )
 
@@ -241,18 +241,18 @@ class ALIF_STPExpCu_Dense_Layer(brainstate.nn.Module):
             tau_a=tau_a,
             beta=beta,
         )
-        self.stp = brainscale.nn.STP(n_rec, tau_f=tau_f, tau_d=tau_d)
+        self.stp = brainpy.state.STP(n_rec, tau_f=tau_f, tau_d=tau_d)
         if inp_stp:
-            self.stp_inp = brainscale.nn.STP(n_in, tau_f=tau_f, tau_d=tau_d)
+            self.stp_inp = brainpy.state.STP(n_in, tau_f=tau_f, tau_d=tau_d)
 
-        self.syn = brainstate.nn.AlignPostProj(
+        self.syn = brainpy.state.AlignPostProj(
             comm=brainscale.nn.Linear(
                 n_in + n_rec, n_rec,
                 jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])]) * u.mS,
                 b_init=braintools.init.ZeroInit(unit=u.mS)
             ),
-            syn=brainscale.nn.Expon.desc(n_rec, tau=tau_syn),
-            out=brainstate.nn.CUBA.desc(),
+            syn=brainpy.state.Expon.desc(n_rec, tau=tau_syn),
+            out=brainpy.state.CUBA.desc(),
             post=self.neu
         )
 

@@ -347,7 +347,7 @@ class ALIF_Delta_Dense_Layer(brainstate.nn.Module):
             beta=beta
         )
         w_init = jnp.concat([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0)
-        self.syn = brainstate.nn.DeltaProj(
+        self.syn = brainpy.state.DeltaProj(
             comm=brainscale.nn.Linear(n_in + n_rec, n_rec, w_init=w_init * u.mV,
                                       b_init=braintools.init.ZeroInit(unit=u.mV)),
             post=self.neu

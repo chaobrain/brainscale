@@ -503,7 +503,7 @@ class LIF_Delta_Net(brainstate.nn.Module):
         rec_init: Callable = braintools.init.KaimingNormal(rec_scale, unit=u.mV)
         ff_init: Callable = braintools.init.KaimingNormal(ff_scale, unit=u.mV)
         w_init = u.math.concatenate([ff_init([n_in, n_rec]), rec_init([n_rec, n_rec])], axis=0)
-        self.syn = brainstate.nn.DeltaProj(
+        self.syn = brainpy.state.DeltaProj(
             comm=brainscale.nn.Linear(n_in + n_rec, n_rec,
                                       w_init=w_init,
                                       b_init=braintools.init.ZeroInit(unit=u.mV)),
