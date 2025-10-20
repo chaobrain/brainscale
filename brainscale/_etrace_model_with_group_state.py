@@ -16,6 +16,7 @@
 
 from typing import Callable
 
+import brainpy
 import brainstate
 import brainunit as u
 import jax
